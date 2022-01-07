@@ -1,0 +1,381 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectOptions>
+    <Version Value="10"/>
+    <PathDelim Value="\"/>
+    <General>
+      <Flags>
+        <LRSInOutputDirectory Value="False"/>
+      </Flags>
+      <MainUnit Value="0"/>
+    </General>
+    <VersionInfo>
+      <Language Value=""/>
+      <CharSet Value=""/>
+      <StringTable ProductVersion=""/>
+    </VersionInfo>
+    <BuildModes Count="1">
+      <Item1 Name="default" Default="True"/>
+    </BuildModes>
+    <PublishOptions>
+      <Version Value="2"/>
+      <IgnoreBinaries Value="False"/>
+      <IncludeFileFilter Value="*.(pas|pp|inc|lfm|lpr|lrs|lpi|lpk|sh|xml)"/>
+      <ExcludeFileFilter Value="*.(bak|ppu|ppw|o|so);*~;backup"/>
+    </PublishOptions>
+    <RunParams>
+      <local>
+        <FormatVersion Value="1"/>
+        <CommandLineParams Value="reent_cilk.cpp reent1.cpp"/>
+        <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T 'Lazarus Run Output' -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
+      </local>
+    </RunParams>
+    <Units Count="22">
+      <Unit0>
+        <Filename Value="Reenterable.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="1297"/>
+        <CursorPos X="38" Y="1305"/>
+        <UsageCount Value="201"/>
+        <Bookmarks Count="1">
+          <Item0 Y="1172" ID="1"/>
+        </Bookmarks>
+        <Loaded Value="True"/>
+      </Unit0>
+      <Unit1>
+        <Filename Value="LEXIQUE.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Lexique"/>
+        <EditorIndex Value="12"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="237"/>
+        <CursorPos X="41" Y="259"/>
+        <UsageCount Value="201"/>
+        <Loaded Value="True"/>
+      </Unit1>
+      <Unit2>
+        <Filename Value="EVALUAT.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Evaluat"/>
+        <EditorIndex Value="11"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="415"/>
+        <CursorPos X="6" Y="422"/>
+        <UsageCount Value="186"/>
+        <Loaded Value="True"/>
+      </Unit2>
+      <Unit3>
+        <Filename Value="TS_SYNTX.PAS"/>
+        <UnitName Value="Ts_syntx"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="30"/>
+        <CursorPos X="73" Y="43"/>
+        <UsageCount Value="10"/>
+      </Unit3>
+      <Unit4>
+        <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\classes\classesh.inc"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="630"/>
+        <CursorPos X="14" Y="643"/>
+        <UsageCount Value="8"/>
+      </Unit4>
+      <Unit5>
+        <Filename Value="TOPO.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Topo"/>
+        <EditorIndex Value="10"/>
+        <WindowIndex Value="1"/>
+        <CursorPos X="15"/>
+        <UsageCount Value="143"/>
+        <Loaded Value="True"/>
+      </Unit5>
+      <Unit6>
+        <Filename Value="COMMON.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Common"/>
+        <EditorIndex Value="7"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="290"/>
+        <CursorPos X="3" Y="92"/>
+        <UsageCount Value="143"/>
+        <Loaded Value="True"/>
+      </Unit6>
+      <Unit7>
+        <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\sysutils\sysstrh.inc"/>
+        <WindowIndex Value="1"/>
+        <CursorPos X="11" Y="70"/>
+        <UsageCount Value="8"/>
+      </Unit7>
+      <Unit8>
+        <Filename Value="PROLOG.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Prolog"/>
+        <EditorIndex Value="9"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="640"/>
+        <CursorPos X="11" Y="10"/>
+        <UsageCount Value="143"/>
+        <Loaded Value="True"/>
+      </Unit8>
+      <Unit9>
+        <Filename Value="PREPROC.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Preproc"/>
+        <IsVisibleTab Value="True"/>
+        <EditorIndex Value="5"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="775"/>
+        <CursorPos X="13" Y="797"/>
+        <UsageCount Value="158"/>
+        <Bookmarks Count="1">
+          <Item0 X="37" Y="1155"/>
+        </Bookmarks>
+        <Loaded Value="True"/>
+      </Unit9>
+      <Unit10>
+        <Filename Value="SHMEM.PAS"/>
+        <EditorIndex Value="4"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="3360"/>
+        <CursorPos X="27"/>
+        <UsageCount Value="75"/>
+        <Loaded Value="True"/>
+      </Unit10>
+      <Unit11>
+        <Filename Value="LISTS.PAS"/>
+        <EditorIndex Value="3"/>
+        <WindowIndex Value="1"/>
+        <CursorPos X="32" Y="9"/>
+        <UsageCount Value="72"/>
+        <Loaded Value="True"/>
+      </Unit11>
+      <Unit12>
+        <Filename Value="MACROSES.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Macroses"/>
+        <EditorIndex Value="2"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="223"/>
+        <CursorPos X="27" Y="241"/>
+        <UsageCount Value="143"/>
+        <Loaded Value="True"/>
+      </Unit12>
+      <Unit13>
+        <Filename Value="CONSTS.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Consts"/>
+        <EditorIndex Value="1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="16"/>
+        <CursorPos X="37" Y="25"/>
+        <UsageCount Value="143"/>
+        <Loaded Value="True"/>
+      </Unit13>
+      <Unit14>
+        <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\classes\stringl.inc"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="770"/>
+        <CursorPos X="5" Y="772"/>
+        <UsageCount Value="10"/>
+      </Unit14>
+      <Unit15>
+        <Filename Value="..\Ecology\Droplets\Soiled\DropsSoiledOptim.spline.lpr"/>
+        <UnitName Value="DropsSoiledOptim"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <CursorPos X="28" Y="10"/>
+        <UsageCount Value="1"/>
+      </Unit15>
+      <Unit16>
+        <Filename Value="..\Ecology\Droplets\Soiled\Перебор\Spline.coalesc.lpr"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="293"/>
+        <CursorPos X="23" Y="313"/>
+        <UsageCount Value="2"/>
+      </Unit16>
+      <Unit17>
+        <Filename Value="xpath.pas"/>
+        <UnitName Value="XPath"/>
+        <EditorIndex Value="6"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="1593"/>
+        <CursorPos X="25" Y="1604"/>
+        <UsageCount Value="52"/>
+        <Loaded Value="True"/>
+      </Unit17>
+      <Unit18>
+        <Filename Value="regexpr.pas"/>
+        <UnitName Value="RegExpr"/>
+        <EditorIndex Value="8"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="6398"/>
+        <CursorPos X="34" Y="6419"/>
+        <UsageCount Value="52"/>
+        <Loaded Value="True"/>
+      </Unit18>
+      <Unit19>
+        <Filename Value="D:\lazarus\fpc\3.0.2\source\rtl\inc\objpash.inc"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="179"/>
+        <CursorPos X="23" Y="193"/>
+        <UsageCount Value="8"/>
+      </Unit19>
+      <Unit20>
+        <Filename Value="D:\lazarus\fpc\3.0.2\source\rtl\inc\objpas.inc"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="279"/>
+        <CursorPos X="9" Y="281"/>
+        <UsageCount Value="5"/>
+      </Unit20>
+      <Unit21>
+        <Filename Value="D:\lazarus\fpc\3.0.2\source\rtl\win32\system.pp"/>
+        <UnitName Value="System"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <CursorPos Y="16"/>
+        <UsageCount Value="6"/>
+      </Unit21>
+    </Units>
+    <JumpHistory Count="29" HistoryIndex="28">
+      <Position1>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="1294" Column="63" TopLine="1272"/>
+      </Position1>
+      <Position2>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="1347" Column="89" TopLine="1325"/>
+      </Position2>
+      <Position3>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="37" Column="88" TopLine="12"/>
+      </Position3>
+      <Position4>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="27" Column="3" TopLine="16"/>
+      </Position4>
+      <Position5>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="30" Column="31" TopLine="16"/>
+      </Position5>
+      <Position6>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="59" Column="31" TopLine="37"/>
+      </Position6>
+      <Position7>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="69" Column="32" TopLine="47"/>
+      </Position7>
+      <Position8>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="78" Column="32" TopLine="56"/>
+      </Position8>
+      <Position9>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="82" Column="32" TopLine="60"/>
+      </Position9>
+      <Position10>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="113" Column="31" TopLine="91"/>
+      </Position10>
+      <Position11>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="126" Column="30" TopLine="104"/>
+      </Position11>
+      <Position12>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="141" Column="32" TopLine="119"/>
+      </Position12>
+      <Position13>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="146" Column="31" TopLine="124"/>
+      </Position13>
+      <Position14>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="168" Column="32" TopLine="146"/>
+      </Position14>
+      <Position15>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="172" Column="32" TopLine="150"/>
+      </Position15>
+      <Position16>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="178" Column="31" TopLine="156"/>
+      </Position16>
+      <Position17>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="188" Column="32" TopLine="166"/>
+      </Position17>
+      <Position18>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="193" Column="32" TopLine="171"/>
+      </Position18>
+      <Position19>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="198" Column="31" TopLine="176"/>
+      </Position19>
+      <Position20>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="207" Column="31" TopLine="185"/>
+      </Position20>
+      <Position21>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="218" Column="31" TopLine="196"/>
+      </Position21>
+      <Position22>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="247" Column="28" TopLine="225"/>
+      </Position22>
+      <Position23>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="252" Column="32" TopLine="230"/>
+      </Position23>
+      <Position24>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="257" Column="32" TopLine="235"/>
+      </Position24>
+      <Position25>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="260" Column="27" TopLine="238"/>
+      </Position25>
+      <Position26>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="264" Column="26" TopLine="242"/>
+      </Position26>
+      <Position27>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="267" Column="26" TopLine="245"/>
+      </Position27>
+      <Position28>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="10" Column="30"/>
+      </Position28>
+      <Position29>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="804" Column="35" TopLine="798"/>
+      </Position29>
+    </JumpHistory>
+  </ProjectOptions>
+  <CompilerOptions>
+    <Version Value="11"/>
+    <PathDelim Value="\"/>
+  </CompilerOptions>
+  <Debugging>
+    <Watches Count="3">
+      <Item1>
+        <Expression Value="HayStack[M]"/>
+      </Item1>
+      <Item2>
+        <Expression Value="HayStack[G]"/>
+      </Item2>
+      <Item3>
+        <Expression Value="S"/>
+      </Item3>
+    </Watches>
+  </Debugging>
+</CONFIG>

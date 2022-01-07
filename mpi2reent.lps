@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <PathDelim Value="\"/>
+    <Version Value="9"/>
+    <BuildModes Active="Default"/>
+    <Units Count="8">
+      <Unit0>
+        <Filename Value="mpi2reent.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="192"/>
+        <CursorPos X="8" Y="206"/>
+        <UsageCount Value="50"/>
+        <Bookmarks Count="2">
+          <Item0 Y="684"/>
+          <Item1 X="11" Y="206" ID="1"/>
+        </Bookmarks>
+        <Loaded Value="True"/>
+      </Unit0>
+      <Unit1>
+        <Filename Value="COMMON.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Common"/>
+        <EditorIndex Value="3"/>
+        <TopLine Value="332"/>
+        <CursorPos X="6" Y="343"/>
+        <UsageCount Value="50"/>
+        <Loaded Value="True"/>
+      </Unit1>
+      <Unit2>
+        <Filename Value="CONSTS.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Consts"/>
+        <EditorIndex Value="4"/>
+        <UsageCount Value="50"/>
+        <Loaded Value="True"/>
+      </Unit2>
+      <Unit3>
+        <Filename Value="PRE_MPI2REENT.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Pre_MPI2REENT"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="321"/>
+        <CursorPos X="32" Y="325"/>
+        <UsageCount Value="50"/>
+        <Loaded Value="True"/>
+      </Unit3>
+      <Unit4>
+        <Filename Value="EVALUAT.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="-1"/>
+        <TopLine Value="-1"/>
+        <CursorPos X="-1" Y="-1"/>
+        <UsageCount Value="50"/>
+      </Unit4>
+      <Unit5>
+        <Filename Value="LEXIQUE.PAS"/>
+        <IsPartOfProject Value="True"/>
+        <UnitName Value="Lexique"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="612"/>
+        <CursorPos Y="635"/>
+        <UsageCount Value="47"/>
+        <Loaded Value="True"/>
+      </Unit5>
+      <Unit6>
+        <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\sysutils\sysstrh.inc"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="52"/>
+        <CursorPos X="10" Y="66"/>
+        <UsageCount Value="9"/>
+      </Unit6>
+      <Unit7>
+        <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\sysutils\sysstr.inc"/>
+        <EditorIndex Value="-1"/>
+        <TopLine Value="25"/>
+        <CursorPos X="3" Y="27"/>
+        <UsageCount Value="9"/>
+      </Unit7>
+    </Units>
+    <JumpHistory Count="30" HistoryIndex="29">
+      <Position1>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="439" Column="56" TopLine="425"/>
+      </Position1>
+      <Position2>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="36" TopLine="30"/>
+      </Position2>
+      <Position3>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="106" Column="24" TopLine="92"/>
+      </Position3>
+      <Position4>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="101" Column="17" TopLine="87"/>
+      </Position4>
+      <Position5>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="106" Column="51" TopLine="101"/>
+      </Position5>
+      <Position6>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="110" Column="8" TopLine="101"/>
+      </Position6>
+      <Position7>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="108" Column="7" TopLine="102"/>
+      </Position7>
+      <Position8>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="107" Column="8" TopLine="102"/>
+      </Position8>
+      <Position9>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="109" Column="45" TopLine="92"/>
+      </Position9>
+      <Position10>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="105" Column="49" TopLine="92"/>
+      </Position10>
+      <Position11>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="86" Column="28" TopLine="84"/>
+      </Position11>
+      <Position12>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="107" Column="23" TopLine="91"/>
+      </Position12>
+      <Position13>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="419" Column="49" TopLine="406"/>
+      </Position13>
+      <Position14>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="537" Column="64" TopLine="523"/>
+      </Position14>
+      <Position15>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="551" Column="52" TopLine="537"/>
+      </Position15>
+      <Position16>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="534" Column="34" TopLine="517"/>
+      </Position16>
+      <Position17>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="565" Column="49" TopLine="552"/>
+      </Position17>
+      <Position18>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="177" TopLine="159"/>
+      </Position18>
+      <Position19>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="561" Column="34" TopLine="548"/>
+      </Position19>
+      <Position20>
+        <Filename Value="mpi2reent.lpr"/>
+      </Position20>
+      <Position21>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="134" Column="22" TopLine="111"/>
+      </Position21>
+      <Position22>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="444" Column="37" TopLine="421"/>
+      </Position22>
+      <Position23>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="134" Column="36" TopLine="127"/>
+      </Position23>
+      <Position24>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="34" Column="54" TopLine="33"/>
+      </Position24>
+      <Position25>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="281" Column="10" TopLine="267"/>
+      </Position25>
+      <Position26>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="288" Column="55" TopLine="266"/>
+      </Position26>
+      <Position27>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="651" Column="42" TopLine="627"/>
+      </Position27>
+      <Position28>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="325" Column="12" TopLine="304"/>
+      </Position28>
+      <Position29>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="206" Column="11" TopLine="194"/>
+      </Position29>
+      <Position30>
+        <Filename Value="mpi2reent.lpr"/>
+        <Caret Line="684" TopLine="670"/>
+      </Position30>
+    </JumpHistory>
+  </ProjectSession>
+</CONFIG>
