@@ -13,11 +13,24 @@
 компилятором C++. Поэтому, для компиляции транслированных Planning C-программ Вам потребуется
 компилятор C++.
 
-   Примеры содержатся в каталоге Examples.
+   Пример инсталляции для Linux
+
+Инсталлировать Free Pascal
+fpc -B Reenterable.lpr
+fpc -B mpi2reent.lpr
+cd Predicates
+g++ -o main.o -c main.cpp -fPIC
+g++ -shared -o libPredicates.so main.o
+cp libPredicates.so ../
+cd ..
+Инсталлировать GNU Prolog
+chmod +x *.sh   
+
+   Примеры программ на Planning C содержатся в каталоге Examples.
 
    Для компиляции произвольного (с именем файла, не начинающимся с mpi_) примера EXAMPLE.cpp необходимо:
 1. Провести трансляцию на C++, с генерацией выходного файла (например, out.cpp):
-   Reenterable EXAMPLE.cpp out.cpp
+   ./Reenterable EXAMPLE.cpp out.cpp
 2. Скомпилировать выходной файл (например, out.cpp) в запускаемый файл (например, EXAMPLE),
 например, компилятором g++:
    g++ -o EXAMPLE out.cpp -lm -lpthread -fopenmp --std=c++0x -fpermissive -fgnu-tm
@@ -29,7 +42,7 @@
 
    Для компиляции произвольного примера с трансляцией MPI->Planning C, например mpi_example.cpp для исполнения
 на 5 процессорах, необходим предварительный шаг:
-0. mpi2reent 5 mpi_example.cpp EXAMPLE.cpp
+0. ./mpi2reent 5 mpi_example.cpp EXAMPLE.cpp
 При этом будет получен Planning C-файл EXAMPLE.cpp, который компилируется по описанной выше двухходовой схеме.
 Обращаем внимание, что после такой трансляции наличие среды MPI НЕ ТРЕБУЕТСЯ, все вызовы MPI будут эмулироваться
 стандартными средствами Planning C.

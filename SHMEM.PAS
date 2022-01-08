@@ -3506,7 +3506,7 @@ Const Transact: PChar =
 '			auto make_pump = [&]() {'+CRLF+
 '				omp_set_lock(&__lock_atomics__);'+CRLF+
 '				for (int i = __joined; i < __nthreads; i++) {'+CRLF+
-'					if (pump_jobs(info->__funs[i], info->parents[i], info->parent_ids[i])) __joined++;'+CRLF+
+'					if (pump_jobs(info->__funs[i], info->parents[i], info->parent_ids[i])) this->__joined++;'+CRLF+
 '				}'+CRLF+
 '				omp_unset_lock(&__lock_atomics__);'+CRLF+
 '			};'+CRLF+
@@ -3547,12 +3547,12 @@ Const Transact: PChar =
 '			   }'+CRLF+
 '             omp_set_lock(&__join_lock__);'+CRLF+
 '			 omp_set_lock(&__lock_atomics__);'+CRLF+
-'			 __joined = 0;'+CRLF+
+'			 this->__joined = 0;'+CRLF+
 '             for (int i = 0; i < __nthreads; i++)'+CRLF+
 '                 if (info->__funs[i] != nullptr) {'+CRLF+
-'                    info->parents[__joined] = info->parents[i];'+CRLF+
-'                    info->parent_ids[__joined] = info->parent_ids[i];'+CRLF+
-'                    info->__funs[__joined++] = info->__funs[i];'+CRLF+
+'                    info->parents[this->__joined] = info->parents[i];'+CRLF+
+'                    info->parent_ids[this->__joined] = info->parent_ids[i];'+CRLF+
+'                    info->__funs[this->__joined++] = info->__funs[i];'+CRLF+
 '                 }'+CRLF+
 '			 omp_unset_lock(&__lock_atomics__);'+CRLF+
 '			 make_pump();'+CRLF+

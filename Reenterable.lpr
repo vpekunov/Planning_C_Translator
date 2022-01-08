@@ -287,6 +287,9 @@ program Reenterable;
 {$H+}
 
 uses
+{$IF (DEFINED(UNIX) OR DEFINED(LINUX)) AND DEFINED(FPC)}
+  cthreads, cmem,
+{$ENDIF}
   SysUtils,
   Classes,
   Math,
