@@ -40,17 +40,23 @@ using namespace std;
 };
 
 #def_module() make_std_topo(ID, NAME, TParams, ParamTypes, ParamNames, FUN, BODY) {
+@p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
+@p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
+@p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
+@p_read('$defined$',V):-predicate_property(defined(_),'dynamic')->once(defined(V));=(V,0).
+@p_read('$cdefined$',V):-predicate_property(cdefined(_),'dynamic')->once(cdefined(V));=(V,0).
+@p_read('$fdefined$',V):-predicate_property(fdefined(_),'dynamic')->once(fdefined(V));=(V,0).
 @goal:-brackets_off.
 @goal:-
     (
-     g_read('$cdefined$', CDEFS),
+     p_read('$cdefined$', CDEFS),
      (
       member(def(ID, _, _, _, _, _, _), CDEFS)->
        true;
        (
         (
          (
-          g_read('$fdefined$', [fun(GID, _, _)|_])->
+          p_read('$fdefined$', [fun(GID, _, _)|_])->
             true;
             =(GID,10000)
          ),
@@ -63,7 +69,7 @@ using namespace std;
             asserta(cfuns(GID, [ID]))
          )
         ),
-        g_assign('$cdefined$', [def(ID, ID, ParamTypes, ParamNames, FUN, ParamTypes, ParamNames)|CDEFS])
+        p_assign('$cdefined$', [def(ID, ID, ParamTypes, ParamNames, FUN, ParamTypes, ParamNames)|CDEFS])
        )
      )
     ).

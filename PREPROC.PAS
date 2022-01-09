@@ -55,6 +55,9 @@ Const BracketsOff = '$brackets_off$';
       PrefixOff   = '$prefix_off$';
       Pruning     = '$prune$';
 
+Const aliveDB = '_alive.pl';
+      phoenixDB = '_phoenix.pl';
+
 Const Predicates: PChar =
 'brackets_off:-write('''+BracketsOff+''').'+CRLF+
 'prefix_off:-write('''+PrefixOff+''').'+CRLF+
@@ -684,7 +687,7 @@ end;
 
 procedure MakeConsultation(Const FL, GOAL: String);
 
-Var S: String;
+Var S, L: String;
     I: Integer;
 Begin
   S:=StringReplace(ExcludeTrailingBackSlash(ExtractFilePath(ParamStr(0))),'\','/',[rfReplaceAll]);
@@ -721,10 +724,31 @@ Begin
      end
   Else
   (* *)
-     WriteLn(RunExtCommand(
-        {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_gprolog.sh'{$ELSE}'run_gprolog.bat'{$ENDIF},
-        S+' '+FL+' _.out '+GOAL+' _.info',
-        '_.info'));
+     Begin
+       WriteLn(RunExtCommand(
+          {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_gprolog.sh'{$ELSE}'run_gprolog.bat'{$ENDIF},
+          S+' '+FL+' _.out '+GOAL+' _.info',
+          '_.info'));
+       With TStringList.Create Do
+         Begin
+           LoadFromFile(S + {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'/'{$ELSE}'\'{$ENDIF} + aliveDB);
+           Insert(0, 'phoenix:-');
+           For I := 1 To Count-1 Do
+               Begin
+                 L := Trim(Strings[I]);
+                 if Length(L) <> 0 Then
+                    If L[1] <> '%' Then
+                       If L[Length(L)] = '.' Then
+                          Begin
+                            L[Length(L)] := ')';
+                            L := 'assertz(' + L + ','
+                          End;
+                 Strings[I] := L;
+               End;
+           Add('true,!.');
+           SaveToFile(S + {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'/'{$ELSE}'\'{$ENDIF} + phoenixDB)
+         End
+     End 
 End;
 
 procedure PreprocStage1a(Var Restrictions: TRestrictions);
@@ -1295,11 +1319,13 @@ begin
                   End
            End;
 
-        Facts := 'init_facts:-' + MakeReplacements(Map, Begs, Ends, Replacers, HayStack) + 'true.';
+        Facts := 'init_facts:-consult('''+phoenixDB+'''),phoenix,' + MakeReplacements(Map, Begs, Ends, Replacers, HayStack) + 'true.';
         Replacers.Free;
 
         LL := TStringList.Create;
         LL.Text := Facts;
+        LL.Add('saveLF :- current_predicate(P), ''$predicate_property_pi''(P,''dynamic''), listing(P), fail.');
+        LL.Add('saveLF :- true,!.');
         LL.SaveToFile('_.pl');
         LL.Free;
         MakeConsultation('_.pl', 'init_facts');
@@ -1576,10 +1602,12 @@ begin
                    End;
                  // Create consult file
                  For K := 0 To Goals.Count-1 Do
-                     Consult := Consult + 'goal'+IntToStr(K)+':-'+Goals.Strings[K]+',!.'+CRLF;
+                     Consult := Consult + 'goal'+IntToStr(K)+':-consult('''+phoenixDB+'''),phoenix,'+Goals.Strings[K]+',!.'+CRLF;
                  AssignFile(ConsultFile, '_.pl');
                  Rewrite(ConsultFile);
                  WriteLn(ConsultFile, Consult);
+                 WriteLn(ConsultFile, 'saveLF :- current_predicate(P), ''$predicate_property_pi''(P,''dynamic''), listing(P), fail.');
+                 WriteLn(ConsultFile, 'saveLF :- true,!.');
                  CloseFile(ConsultFile);
                  // Execute goals and substitute results into TextModule at characters[1..31]
                  For K := 0 To Goals.Count-1 Do
@@ -1699,10 +1727,18 @@ end;
 
 (* *)
 Var doner: switch_gprolog7;
+    ExePath: String;
 (* *)
 
 Initialization
   PatternsOrder := TStringList.Create;
+  ExePath:=StringReplace(ExcludeTrailingBackSlash(ExtractFilePath(ParamStr(0))),'\','/',[rfReplaceAll]);
+  With TStringList.Create Do
+    Begin
+      Add('phoenix:-!.');
+      SaveToFile(ExePath + {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'/'{$ELSE}'\'{$ENDIF} + phoenixDB);
+      Free
+    End;
 
 Finalization
   (* *)

@@ -62,6 +62,12 @@ using namespace std;
 
 #def_module() make_fdef(GID, NAME, HEAD) {
 @goal:-brackets_off.
+@p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
+@p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
+@p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
+@p_read('$defined$',V):-predicate_property(defined(_),'dynamic')->once(defined(V));=(V,0).
+@p_read('$cdefined$',V):-predicate_property(cdefined(_),'dynamic')->once(cdefined(V));=(V,0).
+@p_read('$fdefined$',V):-predicate_property(fdefined(_),'dynamic')->once(fdefined(V));=(V,0).
 @make_params([Type], [Name], Params, Name):-
     atom_concat(Type, ' ', P1),
     atom_concat(P1, Name, Params),
@@ -252,7 +258,7 @@ using namespace std;
 @write_defs(GID):-
   funs(GID, LAMBDAS),
   cfuns(GID, CLAMBDAS),
-  (g_read('$defined$', [HDEFS|TDEFS])->
+  (p_read('$defined$', [HDEFS|TDEFS])->
      (
       reverse([HDEFS|TDEFS], DEFS1),
       (
@@ -265,10 +271,10 @@ using namespace std;
        true
       )
      );
-     g_assign('$defined$', [])
+     p_assign('$defined$', [])
   ),
   !,
-  (g_read('$cdefined$', [HCDEFS|TCDEFS])->
+  (p_read('$cdefined$', [HCDEFS|TCDEFS])->
      (
       (
        reverse([HCDEFS|TCDEFS], CDEFS1),
@@ -279,28 +285,28 @@ using namespace std;
       );
       true
      );
-     g_assign('$cdefined$', [])
+     p_assign('$cdefined$', [])
   ),
   !.
 @goal:-
-    (g_read('$defined$', [_|_])->
+    (p_read('$defined$', [_|_])->
        true;
-       g_assign('$defined$', [])
+       p_assign('$defined$', [])
     ),
     !,
-    (g_read('$cdefined$', [_|_])->
+    (p_read('$cdefined$', [_|_])->
        true;
-       g_assign('$cdefined$', [])
+       p_assign('$cdefined$', [])
     ),
     !,
     (
-     g_read('$fdefined$', [HDEFS|TDEFS])->
+     p_read('$fdefined$', [HDEFS|TDEFS])->
      (
       member(fun(GID, _, _), [HDEFS|TDEFS])->
        write_defs(GID);
-       ( g_assign('$fdefined$', [fun(GID, NAME, HEAD),HDEFS|TDEFS]), asserta(funs(GID, [])), asserta(cfuns(GID, [])) )
+       ( p_assign('$fdefined$', [fun(GID, NAME, HEAD),HDEFS|TDEFS]), asserta(funs(GID, [])), asserta(cfuns(GID, [])) )
      );
-     ( g_assign('$fdefined$', [fun(GID, NAME, HEAD)]), asserta(funs(GID, [])), asserta(cfuns(GID, [])) )
+     ( p_assign('$fdefined$', [fun(GID, NAME, HEAD)]), asserta(funs(GID, [])), asserta(cfuns(GID, [])) )
     ).
 @goal:-
     nl,
@@ -357,17 +363,23 @@ using namespace std;
 };
 
 #def_module() make_reent(ID, ParamTypes, ParamNames, NAME, RetType, BODY) {
+@p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
+@p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
+@p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
+@p_read('$defined$',V):-predicate_property(defined(_),'dynamic')->once(defined(V));=(V,0).
+@p_read('$cdefined$',V):-predicate_property(cdefined(_),'dynamic')->once(cdefined(V));=(V,0).
+@p_read('$fdefined$',V):-predicate_property(fdefined(_),'dynamic')->once(fdefined(V));=(V,0).
 @goal:-brackets_off.
 @goal:-
     (
-     g_read('$defined$', DEFS),
+     p_read('$defined$', DEFS),
      (
       member(def(ID, _, _, _), DEFS)->
        true;
        (
         (
          (
-          g_read('$fdefined$', [fun(GID, _, _)|_])->
+          p_read('$fdefined$', [fun(GID, _, _)|_])->
             true;
             =(GID,10000)
          ),
@@ -380,7 +392,7 @@ using namespace std;
             asserta(funs(GID, [ID]))
          )
         ),
-        g_assign('$defined$', [def(ID, ParamTypes, ParamNames, spec(NAME, RetType))|DEFS])
+        p_assign('$defined$', [def(ID, ParamTypes, ParamNames, spec(NAME, RetType))|DEFS])
        )
      )
     ).
@@ -469,17 +481,23 @@ using namespace std;
 };
 
 #def_module() make_simple_chain(ID, NP, ParamTypes, ParamNames, NAME, BODY) {
+@p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
+@p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
+@p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
+@p_read('$defined$',V):-predicate_property(defined(_),'dynamic')->once(defined(V));=(V,0).
+@p_read('$cdefined$',V):-predicate_property(cdefined(_),'dynamic')->once(cdefined(V));=(V,0).
+@p_read('$fdefined$',V):-predicate_property(fdefined(_),'dynamic')->once(fdefined(V));=(V,0).
 @goal:-brackets_off.
 @goal:-
     (
-     g_read('$cdefined$', CDEFS),
+     p_read('$cdefined$', CDEFS),
      (
       member(def(ID, _, _, _, _, _, _), CDEFS)->
        true;
        (
         (
          (
-          g_read('$fdefined$', [fun(GID, _, _)|_])->
+          p_read('$fdefined$', [fun(GID, _, _)|_])->
             true;
             =(GID,10000)
          ),
@@ -492,7 +510,7 @@ using namespace std;
             asserta(cfuns(GID, [ID]))
          )
         ),
-        g_assign('$cdefined$', [def(ID, ID, ParamTypes, ParamNames, NAME, ParamTypes, ParamNames)|CDEFS])
+        p_assign('$cdefined$', [def(ID, ID, ParamTypes, ParamNames, NAME, ParamTypes, ParamNames)|CDEFS])
        )
      )
     ).
@@ -568,6 +586,12 @@ using namespace std;
 };
 
 #def_module() make_complex_chain(CID, CParamTypes, CParamNames, CInit, CBODY) {
+@p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
+@p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
+@p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
+@p_read('$defined$',V):-predicate_property(defined(_),'dynamic')->once(defined(V));=(V,0).
+@p_read('$cdefined$',V):-predicate_property(cdefined(_),'dynamic')->once(cdefined(V));=(V,0).
+@p_read('$fdefined$',V):-predicate_property(fdefined(_),'dynamic')->once(fdefined(V));=(V,0).
 @goal:-brackets_off.
 @get_chain_items([], [], []):-
     !.
@@ -615,14 +639,14 @@ using namespace std;
     ),
     number_atom(NXT, NNXT),
     atom_concat(ID1, NNXT, ID2),
-    g_read('$cdefined$', CDEFS),
+    p_read('$cdefined$', CDEFS),
     (
      member(def(ID, ID2, _, _, _, _, _), CDEFS)->
       true;
       (
        (
         (
-         g_read('$fdefined$', [fun(GID, _, _)|_])->
+         p_read('$fdefined$', [fun(GID, _, _)|_])->
            true;
            =(GID,10000)
         ),
@@ -637,8 +661,8 @@ using namespace std;
        ),
        (
         =(PT,[])->
-         g_assign('$cdefined$', [def(ID, ID2, ParamTypes, ParamNames, Init, ParamTypes, ParamNames)|CDEFS]);
-         (=([TT|_],PT), =([TN|_], PN), g_assign('$cdefined$', [def(ID, ID2, ParamTypes, ParamNames, Init, TT, TN)|CDEFS]))
+         p_assign('$cdefined$', [def(ID, ID2, ParamTypes, ParamNames, Init, ParamTypes, ParamNames)|CDEFS]);
+         (=([TT|_],PT), =([TN|_], PN), p_assign('$cdefined$', [def(ID, ID2, ParamTypes, ParamNames, Init, TT, TN)|CDEFS]))
        )
       )
     ),
@@ -727,17 +751,23 @@ using namespace std;
 };
 
 #def_module() make_general_topo(ID, DESC, ParamTypes, ParamNames, NAME, BODY) {
+@p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
+@p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
+@p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
+@p_read('$defined$',V):-predicate_property(defined(_),'dynamic')->once(defined(V));=(V,0).
+@p_read('$cdefined$',V):-predicate_property(cdefined(_),'dynamic')->once(cdefined(V));=(V,0).
+@p_read('$fdefined$',V):-predicate_property(fdefined(_),'dynamic')->once(fdefined(V));=(V,0).
 @goal:-brackets_off.
 @goal:-
     (
-     g_read('$cdefined$', CDEFS),
+     p_read('$cdefined$', CDEFS),
      (
       member(def(ID, _, _, _, _, _, _), CDEFS)->
        true;
        (
         (
          (
-          g_read('$fdefined$', [fun(GID, _, _)|_])->
+          p_read('$fdefined$', [fun(GID, _, _)|_])->
             true;
             =(GID,10000)
          ),
@@ -750,7 +780,7 @@ using namespace std;
             asserta(cfuns(GID, [ID]))
          )
         ),
-        g_assign('$cdefined$', [def(ID, ID, ParamTypes, ParamNames, NAME, ParamTypes, ParamNames)|CDEFS])
+        p_assign('$cdefined$', [def(ID, ID, ParamTypes, ParamNames, NAME, ParamTypes, ParamNames)|CDEFS])
        )
      )
     ).
