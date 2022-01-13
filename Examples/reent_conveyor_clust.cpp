@@ -34,8 +34,8 @@ chain B() {
 }
 
 chain A1() throw(int DATA) {
-  Sleep(1000);
-  throw_last(1);
+  for (int i = 0; i < 30; i++)
+      throw_last(i);
 }
 
 chain B1(int DATA) {
