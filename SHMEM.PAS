@@ -3550,9 +3550,9 @@ Const Transact: PChar =
 '			 this->__joined = 0;'+CRLF+
 '             for (int i = 0; i < __nthreads; i++)'+CRLF+
 '                 if (info->__funs[i] != nullptr) {'+CRLF+
-'                    info->parents[this->__joined] = info->parents[i];'+CRLF+
-'                    info->parent_ids[this->__joined] = info->parent_ids[i];'+CRLF+
-'                    info->__funs[this->__joined++] = info->__funs[i];'+CRLF+
+'                    info->parents[__joined] = info->parents[i];'+CRLF+
+'                    info->parent_ids[__joined] = info->parent_ids[i];'+CRLF+
+'                    info->__funs[__joined++] = info->__funs[i];'+CRLF+
 '                 }'+CRLF+
 '			 omp_unset_lock(&__lock_atomics__);'+CRLF+
 '			 make_pump();'+CRLF+
