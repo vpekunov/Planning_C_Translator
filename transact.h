@@ -1147,7 +1147,7 @@ private:
 			auto make_pump = [&]() {
 				omp_set_lock(&__lock_atomics__);
 				for (int i = __joined; i < __nthreads; i++) {
-					if (pump_jobs(info->__funs[i], info->parents[i], info->parent_ids[i])) __joined++;
+					if (pump_jobs(info->__funs[i], info->parents[i], info->parent_ids[i])) this->__joined++;
 				}
 				omp_unset_lock(&__lock_atomics__);
 			};
