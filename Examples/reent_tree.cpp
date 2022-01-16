@@ -5,7 +5,7 @@
 
 using namespace std;
 
-chain A(bool init, input_proc Ref, float Result) {
+chain A(bool init, input_proc Ref, int Result) {
   static int leafs = 0;
 
   input_proc incoming[128];

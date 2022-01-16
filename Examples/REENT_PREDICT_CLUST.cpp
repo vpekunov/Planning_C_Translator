@@ -4,8 +4,6 @@
 #include <omp.h>
 #include <time.h>
 
-const bool EXPLICIT_PERCEPTRON = false;
-
 const int N = 26;
 
 chain sender() {

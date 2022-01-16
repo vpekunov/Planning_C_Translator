@@ -23,7 +23,7 @@ const double RightT = 350.0;
 const double InitT  = 273.0;
 
 #ifdef __THOROW__
-const int N = 4*5000+2;
+const int N = 4*9000+2;
 #else
 const int N = 4*12+2;
 #endif
@@ -47,6 +47,12 @@ double * _M[MAX_PROCS] = {NULL};
 
 int FirstIdx[MAX_PROCS];
 int LastIdx[MAX_PROCS];
+
+char * itoa(int n, char * buf, int radix) {
+ sprintf(buf, "%i", n);
+ return buf;
+}
+
 chain ThermalEquation(int NProcs, double Time)
 {
  int stage = throw_stage();
@@ -154,11 +160,9 @@ void IntegrateThermal(char NProcs)
      delete[] _L[i];
      delete[] _M[i];
  }
- #ifndef __THOROW__
  for (i=0; i<N; i++)
      cout<<Therm[i]<<" ";
  cout<<"\n";
- #endif
  delete[] Therm;
 }
 
@@ -243,11 +247,9 @@ void gIntegrateThermal(char NProcs)
      delete[] _L[i];
      delete[] _M[i];
  }
- #ifndef __THOROW__
  for (i=0; i<N; i++)
      cout<<Therm[i]<<" ";
  cout<<"\n";
- #endif
  delete[] Therm;
 }
 
@@ -283,11 +285,9 @@ void SingleIntegrateThermal()
          Therm[i-1] = Therm[i]*L[i-1]+M[i-1];
  }
  cout<<"1 proc. Time = "<<time()-T1<<" sec\n";
- #ifndef __THOROW__
  for (i=0; i<N; i++)
      cout<<Therm[i]<<" ";
  cout<<"\n";
- #endif
  delete[] Therm;
 }
 
