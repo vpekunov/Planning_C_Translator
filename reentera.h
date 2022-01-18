@@ -574,10 +574,11 @@ using namespace std;
   @begin
     (
      (\s|\\n|\\t)*
-     (
-      (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
-      (\s|\\n|\\t)*
-     )?
+     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (\s|\\n|\\t)*
+    )?
+    (
+     (\s|\\n|\\t)*
      chain
      (\s|\\n|\\t)*
      \<

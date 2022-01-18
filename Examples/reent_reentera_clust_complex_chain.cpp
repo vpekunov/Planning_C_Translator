@@ -16,7 +16,7 @@ int main() {
        reent_next_first(false, N+1);
     }
   }
-  chain<bool init, int N> (true, 0, NULL) {
+  chain<bool init, int N> (true, 0) {
     if (!init) {
        cout<<"Calculated: "<<N;
     }
