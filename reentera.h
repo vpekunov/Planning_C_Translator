@@ -109,7 +109,7 @@ using namespace std;
   write(Params), write(')> reentera_function_'), write(ID), write(';'), nl,
   write('reenterable '),
   write(RetType),
-  write(' reentera_'), write(ID), write('(reentera_function_'), write(ID), write(' worker, '), write(Params), write(') {'), nl,
+  write(' reentera_'), write(ID), write('(reentera_function_'), write(ID), write(' * &worker, '), write(Params), write(') {'), nl,
   write('    auto reent_sa = [&] ()->int {'), nl,
   write('      return plan_group_soft_atomize;'), nl,
   write('    };'), nl,
@@ -140,7 +140,7 @@ using namespace std;
   (
    =(RetType, '') -> true ; write('return')
   ),
-  write('    worker(reent_pf, reent_pl, reent_sa, reent_gf, reent_gl, reent_gp, reent_cp, reent_pi, reent_pp, '), write(Names), write(');'), nl,
+  write('    (*worker)(reent_pf, reent_pl, reent_sa, reent_gf, reent_gl, reent_gp, reent_cp, reent_pi, reent_pp, '), write(Names), write(');'), nl,
   write('}'), nl.
 @make_chain_def(ID, ID2, ParamTypes, ParamNames, ThrowTypes, ThrowNames):-
   once(make_params(ParamTypes, ParamNames, Params, Names)),
@@ -174,7 +174,7 @@ using namespace std;
   write(' reentera_ptq_'), write(ID), write(' reent_ptq, '),
   write(' reentera_pnb_'), write(ID), write(' reent_pnb, '),
   write(Params), write(')> reentera_function_'), write(ID), write(';'), nl,
-  write('reentera_function_'), write(ID), write(' worker_'), write(ID), write(';'), nl,
+  write('reentera_function_'), write(ID), write(' * worker_'), write(ID), write(' = new reentera_function_'), write(ID), write(';'), nl,
   write('typedef std::function<void(reentera_pf_'), write(ID), write(' reent_pf, reentera_pl_'), write(ID),
   write(' reent_pl, reentera_sa_'), write(ID), write(' reent_sa, reentera_gf_'), write(ID),
   write(' reent_gf, reentera_gl_'), write(ID), write(' reent_gl, reentera_gp_'), write(ID), write(' reent_gp, '),
@@ -187,11 +187,11 @@ using namespace std;
   write(' reentera_ptq_'), write(ID), write(' reent_ptq, '),
   write(' reentera_pnb_'), write(ID), write(' reent_pnb, '),
   write(Throws), write(')> reentera_function_n'), write(ID), write(';'), nl,
-  write('chain chain_'), write(ID), write('(reentera_function_'), write(ID), write(' worker, '), write(Params), write(')'),
+  write('chain chain_'), write(ID), write('(reentera_function_'), write(ID), write(' * &worker, '), write(Params), write(')'),
   (
    =(Throws, Params)->
     true;
-    (write(' throw(reentera_function_'), write(ID2), write(' worker, '), write(Throws), write(')'))
+    (write(' throw(reentera_function_'), write(ID2), write(' * &worker, '), write(Throws), write(')'))
   ),
   write(' {'), nl,
   write('    auto reent_sa = [&] ()->int {'), nl,
@@ -253,7 +253,7 @@ using namespace std;
   write('    auto reent_pnb = [&] (bool incoming, input_proc Ref, int * n, input_proc * refs) {'), nl,
   write('      plan_neighbours(incoming, Ref, n, refs);'), nl,
   write('    };'), nl,
-  write('    worker(reent_pf, reent_pl, reent_sa, reent_gf, reent_gl, reent_gp, reent_cp, reent_pi, reent_pp, reent_tf, reent_tl, reent_ts, reent_tn, reent_pln, reent_ptn, reent_ptq, reent_pnb, '), write(Names), write(');'), nl,
+  write('    (*worker)(reent_pf, reent_pl, reent_sa, reent_gf, reent_gl, reent_gp, reent_cp, reent_pi, reent_pp, reent_tf, reent_tl, reent_ts, reent_tn, reent_pln, reent_ptn, reent_ptq, reent_pnb, '), write(Names), write(');'), nl,
   write('}'), nl.
 @write_defs(GID):-
   funs(GID, LAMBDAS),
@@ -417,7 +417,8 @@ using namespace std;
 @make_reentera_body:-
     make_params2(ParamTypes, ParamNames, Params, Names),
     !,
-    write('reentera_function_'), write(ID), write(' worker_'), write(ID),
+    write('reentera_function_'), write(ID), write(' * worker_'), write(ID), write(' = new reentera_function_'), write(ID), write(';'), nl,
+    write('*worker_'), write(ID),
     write(' = [&] (reentera_pf_'), write(ID), write(' reent_first, reentera_pf_'), write(ID),
     write(' reent_last, reentera_sa_'), write(ID),
     write(' _reent_group_soft_atomize, reentera_gf_'), write(ID),
@@ -454,7 +455,7 @@ using namespace std;
 @goal:-make_reentera_body, !.
 };
 
-#def_pattern scan_simple_chain => make_simple_chain (gid(), /root/NP/@Value, //ParamType/@Value, //ParamName/@Value, /root/Name/@Value, /root/Body/@Value) {
+#def_pattern scan_simple_chain => make_simple_chain (gid(), /root/CLUSTERED/@Value, /root/NP/@Value, //ParamType/@Value, //ParamName/@Value, /root/Name/@Value, /root/Body/@Value) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     auto
@@ -463,6 +464,10 @@ using namespace std;
     (\s|\\n|\\t)*
     \=
     (\s|\\n|\\t)*
+    (
+     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (\s|\\n|\\t)*
+    )?
     chain
     (\s|\\n|\\t)*
     \[
@@ -480,7 +485,7 @@ using namespace std;
   @end
 };
 
-#def_module() make_simple_chain(ID, NP, ParamTypes, ParamNames, NAME, BODY) {
+#def_module() make_simple_chain(ID, CLUSTERED, NP, ParamTypes, ParamNames, NAME, BODY) {
 @p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
 @p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
 @p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
@@ -535,7 +540,7 @@ using namespace std;
 @make_simple_body:-
     make_params3(ParamTypes, ParamNames, Params, Names),
     !,
-    write('worker_'), write(ID),
+    write('*worker_'), write(ID),
     write(' = [&] (reentera_pf_'), write(ID), write(' reent_first, reentera_pf_'), write(ID),
     write(' reent_last, reentera_sa_'), write(ID),
     write(' _reent_group_soft_atomize, reentera_gf_'), write(ID),
@@ -558,17 +563,21 @@ using namespace std;
     write('};'), nl,
     write('auto '), write(NAME), write(' = [&] ('), write(Params), write(')'),
     write(' {'), nl,
-    write(' plan_parallel_chain(1, '), write(NP), write(', chain_'), write(ID), write('(worker_'), write(ID), write(','), write(Names), write('));'),
+    write(' '),write(CLUSTERED), write(' plan_parallel_chain(1, '), write(NP), write(', chain_'), write(ID), write('(worker_'), write(ID), write(','), write(Names), write('));'),
     write('};'),
     nl.
 @goal:-make_simple_body, !.
 };
 
-#def_pattern scan_complex_chain => make_complex_chain (gid(), //ParamType/@Value, //ParamName/@Value, /root/InitVals/@Value, /root/Body/@Value) {
+#def_pattern scan_complex_chain => make_complex_chain (gid(), //CLUSTERED/@Value, //ParamType/@Value, //ParamName/@Value, /root/InitVals/@Value, /root/Body/@Value) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (
      (\s|\\n|\\t)*
+     (
+      (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+      (\s|\\n|\\t)*
+     )?
      chain
      (\s|\\n|\\t)*
      \<
@@ -585,7 +594,7 @@ using namespace std;
   @end
 };
 
-#def_module() make_complex_chain(CID, CParamTypes, CParamNames, CInit, CBODY) {
+#def_module() make_complex_chain(CID, CLUSTERED, CParamTypes, CParamNames, CInit, CBODY) {
 @p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
 @p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
 @p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
@@ -668,7 +677,7 @@ using namespace std;
     ),
     make_params4(ParamTypes, ParamNames, Params),
     !,
-    write('worker_'), write(ID),
+    write('*worker_'), write(ID),
     write(' = [&] (reentera_pf_'), write(ID), write(' reent_first, reentera_pf_'), write(ID),
     write(' reent_last, reentera_sa_'), write(ID),
     write(' _reent_group_soft_atomize, reentera_gf_'), write(ID),
@@ -709,7 +718,7 @@ using namespace std;
     make_chain(N1, PT, PN, IN, CB),
     !.
 @make_complex_call(PT, PN, IN, CB):-
-    write('  plan_parallel_chain(1, '),
+    write(' '), write(CLUSTERED), write(' plan_parallel_chain(1, '),
     make_chain(1, PT, PN, IN, CB),
     write(');'), nl.
 @goal:-
@@ -720,7 +729,7 @@ using namespace std;
     !.
 };
 
-#def_pattern scan_general_topo => make_general_topo (gid(), /root/DESC/@Value, //ParamType/@Value, //ParamName/@Value, /root/Name/@Value, /root/Body/@Value) {
+#def_pattern scan_general_topo => make_general_topo (gid(), /root/CLUSTERED/@Value, /root/DESC/@Value, //ParamType/@Value, //ParamName/@Value, /root/Name/@Value, /root/Body/@Value) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     auto
@@ -729,6 +738,10 @@ using namespace std;
     (\s|\\n|\\t)*
     \=
     (\s|\\n|\\t)*
+    (
+     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (\s|\\n|\\t)*
+    )?
     chain
     (\s|\\n|\\t)*
     \[
@@ -750,7 +763,7 @@ using namespace std;
   @end
 };
 
-#def_module() make_general_topo(ID, DESC, ParamTypes, ParamNames, NAME, BODY) {
+#def_module() make_general_topo(ID, CLUSTERED, DESC, ParamTypes, ParamNames, NAME, BODY) {
 @p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
 @p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
 @p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
@@ -824,7 +837,7 @@ using namespace std;
 @make_gen_body:-
     make_params5(ParamTypes, ParamNames, Params, Names),
     !,
-    write('worker_'), write(ID),
+    write('*worker_'), write(ID),
     write(' = [&] (reentera_pf_'), write(ID), write(' reent_first, reentera_pf_'), write(ID),
     write(' reent_last, reentera_sa_'), write(ID),
     write(' _reent_group_soft_atomize, reentera_gf_'), write(ID),
@@ -850,7 +863,7 @@ using namespace std;
     write('};'), nl,
     write('auto '), write(NAME), write(' = [&] ('), write(Params), write(')'),
     write(' {'), nl,
-    write(' plan_topology {'),
+    write(' '), write(CLUSTERED), write(' plan_topology {'),
     make_line(DESC, Names),
     write(' };'), nl,
     write('};'),

@@ -129,7 +129,7 @@ begin
    Result := '';
    For F := High(FileIdx) DownTo Low(FileIdx) Do
      Begin
-       S := Copy(Files.Strings[FileIdx[F]],2,255);
+       S := StringReplace(Copy(Files.Strings[FileIdx[F]],2,255),'"','*',[rfReplaceAll]);
        If (Length(S) > 0) And (S[Length(S)] = '\') Then
           S := S + ' ';
        Result := Result + '#line '+IntToStr(LineNum[F])+' "'+S+'"' + CRLF

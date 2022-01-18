@@ -660,7 +660,8 @@ Begin
   WriteLn(Out,'#define soft_transact_array(Type) TArray<Type>');
   WriteLn(Out,'#define soft_transact_var(Type) TScalar<Type>');
   WriteLn(Out,'#define soft_transact_in(Type) TIn<Type>');
-  WriteLn(Out,'#define soft_transact_out(Type) TOut<Type>')
+  WriteLn(Out,'#define soft_transact_out(Type) TOut<Type>');
+  WriteLn(Out,'#define reduction(A) /* reduction */')
 End;
 
 End.

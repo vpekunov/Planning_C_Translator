@@ -11,7 +11,7 @@
 
 using namespace std;
 
-#def_pattern scan_stdtopo => make_std_topo (gid(), /root/Name/@Value, /root/TParams/@Value, //ParamType/@Value, //ParamName/@Value, /root/FUN/@Value, /root/Body/@Value) {
+#def_pattern scan_stdtopo => make_std_topo (gid(), /root/CLUSTERED/@Value, /root/Name/@Value, /root/TParams/@Value, //ParamType/@Value, //ParamName/@Value, /root/FUN/@Value, /root/Body/@Value) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     auto
@@ -20,6 +20,10 @@ using namespace std;
     (\s|\\n|\\t)*
     \=
     (\s|\\n|\\t)*
+    (
+     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (\s|\\n|\\t)*
+    )?
     topology
     (\s|\\n|\\t)*
     (\w+)->{Name}
@@ -39,7 +43,7 @@ using namespace std;
   @end
 };
 
-#def_module() make_std_topo(ID, NAME, TParams, ParamTypes, ParamNames, FUN, BODY) {
+#def_module() make_std_topo(ID, CLUSTERED, NAME, TParams, ParamTypes, ParamNames, FUN, BODY) {
 @p_assign('$defined$',V):-retractall(defined(_)),assertz(defined(V)).
 @p_assign('$cdefined$',V):-retractall(cdefined(_)),assertz(cdefined(V)).
 @p_assign('$fdefined$',V):-retractall(fdefined(_)),assertz(fdefined(V)).
@@ -113,7 +117,7 @@ using namespace std;
 @make_std_body(Name):-
     make_params4(ParamTypes, ParamNames, Params, Names),
     !,
-    write('worker_'), write(ID),
+    write('*worker_'), write(ID),
     write(' = [&] (reentera_pf_'), write(ID), write(' reent_first, reentera_pf_'), write(ID),
     write(' reent_last, reentera_sa_'), write(ID),
     write(' _reent_group_soft_atomize, reentera_gf_'), write(ID),
@@ -140,7 +144,7 @@ using namespace std;
     write('};'), nl,
     write('auto '), write(FUN), write(' = [&] ('), write(Params), write(')'),
     write('{'), nl,
-    write('   '), write(Name), write('('), write(TParams), write(', ''chain_'), write(ID), write(''', ''(worker_'), write(ID), write(','), write(Names), write(')'');'), nl,
+    write('  '), write(CLUSTERED), write(' '), write(Name), write('('), write(TParams), write(', ''chain_'), write(ID), write(''', ''(worker_'), write(ID), write(','), write(Names), write(')'');'), nl,
     write('};'),
     nl.
 @write_defs('hypercube'):-

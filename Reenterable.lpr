@@ -14,6 +14,12 @@
 //       автоматический для простого конвейера или по plan_topology_quit() для топологии.
 //   p - параллельный ли режим.
 
+{ 18.01.2022 Release V0.94beta4 (Planning C)                                   }
+{ - Some bugs fixed.                                                           }
+{ + Добавлены кластерные анонимные топологии и цепи. Достаточно предварить     }
+{   обычную анонимную конструкцию префиксом clustered(массив_идентификаторов). }
+{ + Добавлено некоторое количество новых примеров.                             }
+
 { 06.12.2021 Release V0.94beta3 (Planning C)                                     }
 { + Разработана первая версия объектно-транзакционного параллельного расширения, }
 {   позволяющего динамически порождать параллельные soft-транзакционные страницы,}
@@ -1249,9 +1255,9 @@ Var Inp, Out: TextFile;
     Defines: TStringList;
     NoSourceLines: Boolean;
     S, S1, rS1, S2, oEvs, Evs, Proc, PrmStruct, ThrStruct, Params, gpuParams, ParamNames, _ParamNames,
-    ParamAsgns, ParamReasgns, STParamReasgns,
+    ParamAsgns, ParamReasgns, rParamReasgns, STParamReasgns,
     ParamDummy, ParamDummies, STParamDummies, SoftSTParamDummies,
-    rParamNames, _rParamNames, rParamDummies,
+    rParamNames, _rParamNames, rParamDummies, _rParamDummies,
     GetAsgns,
     gpuInit: String;
     NMParams: String;
@@ -1305,7 +1311,7 @@ Var Inp, Out: TextFile;
 begin
      If ParamCount=0 Then
         Begin
-          WriteLn('Planning C (R) Translator V0.94beta3');
+          WriteLn('Planning C (R) Translator V0.94beta4');
           WriteLn('free for any purposes. Original author: V.V.Pekunov, 2008-2017, 2019-2021');
           WriteLn('Usage: Reenterable.exe [-nosourcelines] [-extensionsonly] [-followdefines] [-Dmacro[=val]] <inputfile.cpp> [outputfile]');
           WriteLn('   -nosourcelines    Removes references to source line numbers, therefore');
@@ -1918,8 +1924,11 @@ begin
                             ParamAsgns:='';
                             GetAsgns:='';
                             ParamReasgns:='';
+                            rParamReasgns:='';
                             STParamReasgns:='';
                             rParamDummies:='';
+                            _rParamDummies:='';
+                            STParamDummies:='';
                             ParamDummies:='';
                             With _Names Do
                               For F:=0 To Count-1 Do
@@ -1944,14 +1953,25 @@ begin
                                      Begin
                                        S1:=IntToStr(1 Shl (Count-F));
                                        ParamReasgns:=ParamReasgns+' if (('+ParamDummy+'.Flags & '+S1+') || *__continue_plan__==2) '+rS1+Strings[F]+'='+ParamDummy+'.'+Strings[F]+'; \'+#$0D#$0A;
+                                       If rS1 = '' Then
+                                          rParamReasgns:=rParamReasgns+' if (('+ParamDummy+'.Flags & '+S1+') || *__continue_plan__==2) '+tran(_Names,Substs,Strings[F])+'='+ParamDummy+'.'+Strings[F]+'; \'+#$0D#$0A
+                                       Else
+                                          rParamReasgns:=rParamReasgns+' if (('+ParamDummy+'.Flags & '+S1+') || *__continue_plan__==2) '+rS1+Strings[F]+'='+ParamDummy+'.'+Strings[F]+'; \'+#$0D#$0A;
                                        STParamReasgns:=STParamReasgns+' if ((_dummy_.Flags & '+S1+') || *__continue_plan__==2) '+rS1+Strings[F]+'=_dummy_.'+Strings[F]+'; \'+#$0D#$0A;
                                        ParamDummies:=ParamDummies+','+Strings[F];
-                                       rParamDummies:=rParamDummies+','+rS1+Strings[F]
+                                       STParamDummies:=STParamDummies+','+rS1+Strings[F];
+                                       If rS1 = '' Then
+                                          rParamDummies:=rParamDummies+','+tran(_Names,Substs,Strings[F])
+                                       Else
+                                          rParamDummies:=rParamDummies+','+rS1+Strings[F];
+                                       _rParamDummies:=_rParamDummies+','+rS1+Strings[F]
                                      End
                                   Else
                                      Begin
                                        ParamDummies:=ParamDummies+',##.'+Strings[F];
-                                       rParamDummies:=rParamDummies+',##.'+rS1+Strings[F]
+                                       STParamDummies:=STParamDummies+',##.'+rS1+Strings[F];
+                                       rParamDummies:=rParamDummies+',##.'+rS1+Strings[F];
+                                       _rParamDummies:=_rParamDummies+',##.'+rS1+Strings[F]
                                      End;
                                   If F<Count-1 Then
                                      Begin
@@ -1962,10 +1982,13 @@ begin
                             FunctionParamNames := ParamNames;
                             ParamDummies:=',__nprocs__'+ParamDummies;
                             rParamDummies:=',__nprocs__'+rParamDummies;
-                            STParamDummies:=StringReplace(rParamDummies,'##','_dummy_',[rfReplaceAll]);
+                            _rParamDummies:=',__nprocs__'+_rParamDummies;
+                            STParamDummies:=',__nprocs__'+STParamDummies;
+                            STParamDummies:=StringReplace(STParamDummies,'##','_dummy_',[rfReplaceAll]);
                             SoftSTParamDummies:=StringReplace(ParamDummies,'##','_dummy_',[rfReplaceAll]);
                             ParamDummies:=StringReplace(ParamDummies,'##',ParamDummy,[rfReplaceAll]);
                             rParamDummies:=StringReplace(rParamDummies,'##',ParamDummy,[rfReplaceAll]);
+                            _rParamDummies:=StringReplace(_rParamDummies,'##',ParamDummy,[rfReplaceAll]);
 
                             Proc:='_call_'+ID;
 
@@ -2326,10 +2349,10 @@ begin
                                  Else
                                     Evs:='_events_'+ID+'__LOC__';
 
-                                 If ChainMode And Not IsDeclaration Then
+                                 If ChainMode Then
                                     begin
                                       WriteThrowMacroses(Out,ID,_ThrParamNames);
-                                      FunctionThrowParams := ThrParamNames
+                                      If Not IsDeclaration Then FunctionThrowParams := ThrParamNames
                                     end;
                                  If Not IsDeclaration Then
                                     WritePlanMacroses(Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
@@ -2757,7 +2780,7 @@ begin
                                         WriteLn(Out,'       __EVENTS__->pop_front(); \');
                                         WriteLn(Out,'    } \');
                                         WriteLn(Out,'    '+ResetDummies+' \');
-                                        WriteLn(Out,'    ',ParamReasgns,' \');
+                                        WriteLn(Out,'    ',rParamReasgns,' \');
                                         WriteLn(Out,'    __'+ID+'__(0'+
                                                                     StringReplace(rParamDummies,'__nprocs__','__nprocs__&(~__nprocs_mask__)',[])+
                                                                     ',__signaler__,__next_signaler__,__throw_stage__,__next_events__,__next_lock__,__plan_lock__,__EVENTS__); \');
@@ -2862,7 +2885,7 @@ begin
                                         WriteLn(Out,'       __EVENTS__->pop_front(); \');
                                         WriteLn(Out,'    } \');
                                         WriteLn(Out,'    '+ResetDummies+' \');
-                                        WriteLn(Out,'    ',ParamReasgns,' \');
+                                        WriteLn(Out,'    ',rParamReasgns,' \');
                                         WriteLn(Out,'    __'+ID+'__(0'+
                                                                     StringReplace(rParamDummies,'__nprocs__','__nprocs__&(~__nprocs_mask__)',[])+
                                                                     ',__signaler__,__next_signaler__,__throw_stage__,__next_events__,__next_lock__,__plan_lock__,__EVENTS__); \');
@@ -2907,7 +2930,7 @@ begin
                                    WriteLn(Out,'    '+ParamDummy+' = '+Evs+'.front();');
                                    WriteLn(Out,'    '+Evs+'.pop_front();');
                                    WriteLn(Out,'    ',ParamReasgns);
-                                   WriteLn(Out,'    ',RetAssgn,Proc+'(__num_stages__,__throw_stage__,p__chain_plan__,&__parallel_flag__,&val__continue_plan__,&'+Evs+rParamDummies+');');
+                                   WriteLn(Out,'    ',RetAssgn,Proc+'(__num_stages__,__throw_stage__,p__chain_plan__,&__parallel_flag__,&val__continue_plan__,&'+Evs+_rParamDummies+');');
                                    WriteLn(Out,'    '+RedModifs);
                                    WriteLn(Out,'    if (val__continue_plan__==2) val__continue_plan__ = 1;');
                                    WriteLn(Out,'   }');
@@ -2933,7 +2956,7 @@ begin
                                         WriteLn(Out,'   { \');
                                         WriteLn(Out,'    '+ParamDummy+' = __EVENTS__->front(); \');
                                         WriteLn(Out,'    __EVENTS__->pop_front(); \');
-                                        WriteLn(Out,'    ',ParamReasgns,' \');
+                                        WriteLn(Out,'    ',rParamReasgns,' \');
                                         WriteLn(Out,'    __'+ID+'__(0'+rParamDummies+',__num_stages__,__throw_stage__,__next_events__,__EVENTS__); \');
                                         WriteLn(Out,'    '+_eRedModifs+' \');
                                         WriteLn(Out,'   } \');
