@@ -337,6 +337,15 @@ Type StaticMode = (smDynamic,smStatic,smKept);
 Const dcCirc = 1;
       dcList = 2;
 
+Function Dereference(S: String): String;
+
+Var F: Integer;
+Begin
+  F:=Pos('*',S);
+  If F>0 Then Delete(S,F,1);
+  Result := S
+End;
+
 Function CollectParamsAfterBracket(L:TAnalyser; Names, Substs:TStringList;
                                    Var PrmDeclaration, RefsDeclaration:String;
                                    Reducts:TStringList;
@@ -345,7 +354,7 @@ Function CollectParamsAfterBracket(L:TAnalyser; Names, Substs:TStringList;
                                    Var _pRedDummies,pRedDummies,pRedModifs,pRedModifs_:String;
                                    Var TypeTaskID, NameTaskID, EmptyTaskID:String;
                                    Var InputProcName:String;
-                                   Var gpuParams, gpuInit: String;
+                                   Var gpuParams, gpuInit, gpuStart, gpuStop: String;
                                    TypeMaps:TStringList;
                                    LocGlob:TStringList):String;
 
@@ -357,7 +366,7 @@ Var S, S1, Store, Tp, _Tp, Nm, _Nm, Reduct:String;
 Begin
      Result:='';
      gpuParams := '';
-     gpuInit := 'int __idx = plan_vector_id();'+CRLF;
+     gpuInit := 'int __idx = plan_vector_id();'+CRLF+'int __counter__;'+CRLF;
      Names.Clear;
      Substs.Clear;
      If Assigned(LocGlob) Then LocGlob.Clear;
@@ -455,7 +464,9 @@ Begin
          _Nm := RandomName;
          If Assigned(LocGlob) Then
             If Length(LocGlob.Strings[LocGlob.Count-1]) = 0 Then
-               _Tp := _Tp + ' * '
+               Begin
+                 If Pos('*',Tp) = 0 Then _Tp := _Tp + ' * '
+               End
             Else If Pos('*',Tp) = 0 Then
                L.MakeError('_local/_global parameter is not a pointer');
          If NameTaskID=getTaskID Then
@@ -528,20 +539,33 @@ Begin
          If Assigned(LocGlob) Then
             If Length(LocGlob.Strings[LocGlob.Count-1]) > 0 Then
                Begin
-                 gpuInit := gpuInit + '__global ' + OCLMap(Tp) + ' ' + Nm + ' = ';
                  If Boolean(TObjectToInteger(LocGlob.Objects[LocGlob.Count-1])) Then // _global(N)
-                    gpuInit := gpuInit + _Nm + ';' + CRLF
-                 Else // local(N)
-                    gpuInit := gpuInit + '&' + _Nm + '[__offs[__idx*###+'+IntToStr(nLocs-1)+']];' + CRLF
+                    gpuInit := gpuInit + '__global ' + OCLMap(Tp) + ' ' + Nm + ' = ' + _Nm + ';' + CRLF
+                 Else If Pos('__planned__.', LocGlob.Strings[LocGlob.Count-1]) <> 0 Then
+                    gpuInit := gpuInit + '__global ' + OCLMap(Tp) + ' ' + Nm + ' = &' + _Nm + '[__offs[__idx*###+'+IntToStr(nLocs-1)+']];' + CRLF
+                 Else
+                   Begin  // local(N)
+                     gpuInit := gpuInit + '__local ' + Dereference(OCLMap(Tp)) + ' ' + _Nm + Nm + '[' + LocGlob.Strings[LocGlob.Count-1] + '];' + CRLF;
+                     gpuInit := gpuInit + '__local ' + OCLMap(Tp) + ' ' + Nm + ' = ' + _Nm + Nm + ';' + CRLF;
+                     gpuStart := gpuStart + 'for(__counter__=0;__counter__<' + LocGlob.Strings[LocGlob.Count-1] + ';__counter__++)' +
+                        Nm + '[__counter__] = ' + _Nm + '[__offs[__idx*###+'+IntToStr(nLocs-1)+']+__counter__];' + CRLF;
+                     gpuStop := gpuStop + 'for(__counter__=0;__counter__<' + LocGlob.Strings[LocGlob.Count-1] + ';__counter__++)' +
+                        _Nm + '[__offs[__idx*###+'+IntToStr(nLocs-1)+']+__counter__] = ' + Nm + '[__counter__];' + CRLF;
+                   End
                End
             Else
-               gpuInit := gpuInit + OCLMap(Tp) + ' ' + Nm + ' = ' + _Nm + '[__idx];'+CRLF
+               If Pos('*',Tp) = 0 Then
+                  gpuInit := gpuInit + OCLMap(Tp) + ' ' + Nm + ' = ' + _Nm + '[__idx];'+CRLF
+               Else
+                  gpuInit := gpuInit + '__global ' + OCLMap(Tp) + ' ' + Nm + ' = ' + _Nm + ';'+CRLF
        end;
      If Length(Result)<>0 Then
         Result:=','+Result;
      Result:=Result+RightBracket;
      gpuParams := Trim(gpuParams);
      gpuInit := StringReplace(gpuInit, '###', IntToStr(nLocs), [rfReplaceAll]);
+     gpuStart := StringReplace(gpuStart, '###', IntToStr(nLocs), [rfReplaceAll]);
+     gpuStop := StringReplace(gpuStop, '###', IntToStr(nLocs), [rfReplaceAll]);
      If (Length(gpuParams) > 0) And (gpuParams[Length(gpuParams)] <> LeftBracket) Then
         gpuParams := gpuParams + Comma;
      gpuParams := gpuParams + ' __global int * __offs';
@@ -1259,7 +1283,7 @@ Var Inp, Out: TextFile;
     ParamDummy, ParamDummies, STParamDummies, SoftSTParamDummies,
     rParamNames, _rParamNames, rParamDummies, _rParamDummies,
     GetAsgns,
-    gpuInit: String;
+    gpuInit, gpuStart, gpuStop: String;
     NMParams: String;
     ThrParamAsgns, ThrParamNames, _ThrParamNames,
     PrmDeclaration, RefsDeclaration, ThrDeclaration,
@@ -1524,6 +1548,8 @@ begin
           PureDummies := '';
           PlanAutos := '';
           gpuInit := '';
+          gpuStart := '';
+          gpuStop := '';
 
           ClusteredArrID := '';
 
@@ -1581,7 +1607,7 @@ begin
                       begin
                         FunctionText := FunctionText + CRLF + PureAutos + CRLF + S;
                         SoftFunctionText := SoftFunctionText + CRLF + PureAutos + CRLF + S;
-                        GPUFunctionText := GPUFunctionText + CRLF + PureDummies + CRLF + gpuInit + CRLF + S;
+                        GPUFunctionText := GPUFunctionText + CRLF + PureDummies + CRLF + gpuInit + CRLF + gpuStart + CRLF + S;
                         WriteLn(Out, PlanAutos);
                         WriteLn(Out);
                         AutosInserted := True
@@ -1861,7 +1887,7 @@ begin
                                                          _pRedDummies,pRedDummies,pRedModifs,pRedModifs_,
                                                          TypeTaskID, NameTaskID, TaskEmpty,
                                                          InputProcName,
-                                                         gpuParams, gpuInit,
+                                                         gpuParams, gpuInit, gpuStart, gpuStop,
                                                          TypeMaps,
                                                          LocGlobs);
                        S1 := L.AnlzLine;
@@ -2010,7 +2036,7 @@ begin
                                                                            S, S, S,
                                                                            S, S, S,
                                                                            InputProcName,
-                                                                           S, S,
+                                                                           S, S, S, S,
                                                                            Nil,
                                                                            Nil);
                                                  eRedDummies:=StringReplace(RedDummies,CRLF,' \'+CRLF,[rfReplaceAll]);
@@ -3146,6 +3172,7 @@ begin
                                            For K := 1 To Length('continue') Do
                                                S1[G+K-1] := ' ';
                                         If S = FunctionID Then S := 'gpu_' + FunctionID;
+                                        If S = 'return' Then S := '{ ' + gpuStop + S + '; }';
                                         G := Length(S1) + 1;
                                         S1 := S1 + S;
                                         S2 := S
@@ -3159,13 +3186,14 @@ begin
                                     For K := 1 To Length('continue') Do
                                         S1[G+K-1] := ' ';
                                  If S = FunctionID Then S := 'gpu_' + FunctionID;
+                                 If S = 'return' Then S := '{ ' + gpuStop + S + '; }';
                                  S1 := S1 + S
                                end;
                             F := Length(S1);
                             While S1[F] <> RightFBracket Do
                               Dec(F);
                             // Check plan_group_atomize and comment body if this directive is absent
-                            S2 := '/* return */'+CRLF;
+                            S2 := '/* return */'+CRLF+gpuStop+CRLF;
                             Insert(S2, S1, F);
                             If IsVectorized Then
                                Begin

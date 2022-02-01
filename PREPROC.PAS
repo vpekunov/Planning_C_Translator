@@ -261,6 +261,8 @@ procedure PreprocStage1(ApplyConds: Boolean;
 
 Var L: TAnalyser; Eval: TEvaluator;
     S, S1, S2: String;
+    LSaveCounter: Integer;
+    HasParams: Boolean;
     ID: String;
     DefStack: Array Of TDefItem;
     ModeGPU: Byte;
@@ -269,6 +271,7 @@ Var L: TAnalyser; Eval: TEvaluator;
     Rslt: Real;
     UseLine: Boolean;
     Original: String;
+    PolyLineDef: Boolean;
     Flag: Boolean;
     F, K: Integer;
 begin
@@ -291,12 +294,19 @@ begin
       S := Lines.Strings[LCounter-1];
       L.AnlzLine := S;
 
+      PolyLineDef := False;
+
       // Check gpu/common directives
       If L.IsNext(Pound) Then // #...
          Begin
            L.Check(Pound);
            S1 := L.GetIdent(True);
-           If S1 = idpragma Then
+           If S1 = iddefine Then
+              Begin
+                S1 := Trim(L.AnlzLine);
+                PolyLineDef := (Length(S1) > 0) And (S1[Length(S1)] = BackSlash)
+              End
+           Else If S1 = idpragma Then
               Begin
                 If L.FindIdent(True) = idplan Then
                    Begin
@@ -354,12 +364,13 @@ begin
       // Check is this line common or gpu line
       If ModeGPU <> gpuNone Then
          ProgGPU.Add(S);
-      If ModeGPU = gpuOnly Then
+      If (ModeGPU = gpuOnly) And Not PolyLineDef Then
          Begin
            TLine(Lines.Objects[LCounter-1]).Free;
            Lines.Delete(LCounter-1);
            Continue // return to big preprocessing loop header
          End;
+      LSaveCounter := LCounter;
 
       // Check if #defs allows compilation: -> Flag
       Flag := True;
@@ -430,6 +441,7 @@ begin
            If Flag And (S = idDefine) Then
               Begin
                 ID := L.GetIdent(False);
+                HasParams := (Length(L.AnlzLine) > 0) And (L.AnlzLine[1] = LeftBracket);
                 S1 := '';
                 S := Trim(L.AnlzLine);
                 Repeat
@@ -463,7 +475,27 @@ begin
                                S1 := Substitute(S1, '', '', Defines.Strings[F], PString(Defines.Objects[F])^);
                            If Length(S1) = 0 Then
                               S1 := '1';
-                           Defines.AddObject(ID, TObject(NewStr(S1)))
+
+                           If HasParams Then
+                              S2 := '#define ' + ID + S1
+                           Else
+                              S2 := '#define ' + ID + ' ' + S1;
+                           If ModeGPU <> gpuNone Then
+                              ProgGPU[ProgGPU.Count-1] := S2;
+
+                           If (ModeGPU <> gpuOnly) Then
+                              Defines.AddObject(ID, TObject(NewStr(S1)))
+                           Else
+                              Begin
+                                While LSaveCounter <= LCounter Do
+                                  Begin
+                                    TLine(Lines.Objects[LSaveCounter-1]).Free;
+                                    Lines.Delete(LSaveCounter-1);
+                                    Dec(LCounter)
+                                  End;
+                                Inc(LCounter);
+                                Continue
+                              End
                          End
                    End
               End

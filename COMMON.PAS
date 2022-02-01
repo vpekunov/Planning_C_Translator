@@ -453,7 +453,7 @@ Var F: Integer;
 begin
   WriteLn(Out, 'const char * ', V, '[] = {');
   For F := 0 To S.Count-1 Do
-      WriteLn(Out, '"' + StringReplace(S.Strings[F],'"','\"',[rfReplaceAll]) + '"', ',');
+      WriteLn(Out, '"' + StringReplace(StringReplace(S.Strings[F],'\','\\',[rfReplaceAll]),'"','\"',[rfReplaceAll]) + '"', ',');
   WriteLn(Out, 'NULL');
   WriteLn(Out, '};')
 end;
