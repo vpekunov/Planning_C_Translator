@@ -1278,7 +1278,7 @@ Var Inp, Out: TextFile;
     OldName, NewName: String;
     Defines: TStringList;
     NoSourceLines: Boolean;
-    S, S1, rS1, S2, oEvs, Evs, Proc, PrmStruct, ThrStruct, Params, gpuParams, ParamNames, _ParamNames,
+    S, S1, rS1, S2, S3, oEvs, Evs, Proc, PrmStruct, ThrStruct, Params, gpuParams, ParamNames, _ParamNames,
     ParamAsgns, ParamReasgns, rParamReasgns, STParamReasgns,
     ParamDummy, ParamDummies, STParamDummies, SoftSTParamDummies,
     rParamNames, _rParamNames, rParamDummies, _rParamDummies,
@@ -1328,6 +1328,7 @@ Var Inp, Out: TextFile;
     AtomizeFlag, SoftAtomizeFlag, VectorizeFlag: Boolean;
     StaticFlag: StaticMode;
     CastedFlag: TObject;
+    PolyDef: Boolean;
     FollowDefs: Boolean;
     ExtensionsOnly: Boolean;
     ParamNameNum: Integer;
@@ -1554,6 +1555,7 @@ begin
           ClusteredArrID := '';
 
           CommentFlag := False;
+          PolyDef := False;
           LCounter:=1;
           While Not ((LCounter > Lines.Count) Or L.Error) Do
             Begin
@@ -1565,16 +1567,23 @@ begin
                  End;
               Flag := True;
               S := Lines.Strings[LCounter-1];
-              If Not NoSourceLines Then
+              If Not (PolyDef Or NoSourceLines) Then
                  Write(Out, TLine(Lines.Objects[LCounter-1]).GetLineNumbers);
               StripComments(S, CommentFlag);
               L.AnlzLine := S;
+              If PolyDef And (Not L.Empty) And (L.AnlzLine[Length(L.AnlzLine)] <> '\') Then
+                 PolyDef := False;
               If L.IsNextSet([Pound]) Then // #...
                  begin
                    F:=Length(S)-Length(L.AnlzLine);
                    L.Check(Pound);
                    ID:=L.GetIdent(True);
-                   If ID=idPragma Then
+                   If ID=idDefine Then
+                      Begin
+                        S3 := Trim(L.AnlzLine);
+                        If (Length(S3) <> 0) And (S3[Length(S3)] = '\') Then PolyDef := True
+                      End
+                   Else If ID=idPragma Then
                       begin
                         ID:=L.GetIdent(True);
                         If ID=idOmp Then
