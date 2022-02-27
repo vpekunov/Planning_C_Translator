@@ -1457,6 +1457,7 @@ begin
             ProgGPU.Add('#define vector_max_size(S) get_global_size(0)');
             ProgGPU.Add('#define vector_max_units(S) (0)');
             ProgGPU.Add('#define get_device_id(n) ((char *)0)');
+            ProgGPU.Add('#define last_execution_time(A) (0.0)');
             ProgGPU.Add('');
 
             IsVectorized := False;
