@@ -234,7 +234,7 @@ Begin
   WriteLn(Out,'      cout<<"Create device program error = "<<ret<<endl; exit(-1);');
   WriteLn(Out,'   }');
   WriteLn(Out,'   double t = omp_get_wtime();');
-  WriteLn(Out,'   ret = clBuildProgram(prg->program, 1, &d.device_id, NULL, NULL, NULL);');
+  WriteLn(Out,'   ret = clBuildProgram(prg->program, 1, &d.device_id, "-cl-opt-disable", NULL, NULL);');
   WriteLn(Out,'   if (ret != CL_SUCCESS) {');
   WriteLn(Out,'      cout<<"Build device program error = "<<ret<<endl;');
   WriteLn(Out,'      clGetProgramBuildInfo(prg->program, d.device_id, CL_PROGRAM_BUILD_LOG, 65536*2, log, &sz);');
