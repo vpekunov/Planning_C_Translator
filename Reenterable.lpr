@@ -14,6 +14,12 @@
 //       автоматический для простого конвейера или по plan_topology_quit() для топологии.
 //   p - параллельный ли режим.
 
+{ 11.03.2022 Release V0.94beta5 (Planning C)                                   }
+{ + Добавлена функция [double last_execution_time(const char * Device)],       }
+{   возвращающая время последнего запуска плана на векторном расширителе (сек).}
+{ + Добавлена функция [unsigned long local_memory_size(const char * Device)],  }
+{   возвращающая размер локальной памяти на мультипроцессор устройства (байт). }
+
 { 18.01.2022 Release V0.94beta4 (Planning C)                                   }
 { - Some bugs fixed.                                                           }
 { + Добавлены кластерные анонимные топологии и цепи. Достаточно предварить     }
@@ -1336,8 +1342,8 @@ Var Inp, Out: TextFile;
 begin
      If ParamCount=0 Then
         Begin
-          WriteLn('Planning C (R) Translator V0.94beta4');
-          WriteLn('free for any purposes. Original author: V.V.Pekunov, 2008-2017, 2019-2021');
+          WriteLn('Planning C (R) Translator V0.94beta5');
+          WriteLn('free for any purposes. Original author: V.V.Pekunov, 2008-2017, 2019-2022');
           WriteLn('Usage: Reenterable.exe [-nosourcelines] [-extensionsonly] [-followdefines] [-Dmacro[=val]] <inputfile.cpp> [outputfile]');
           WriteLn('   -nosourcelines    Removes references to source line numbers, therefore');
           WriteLn('                     C++ compiler will use the line numbers from the generated file,');

@@ -49,6 +49,7 @@ int main() {
   _OUT = new float[NN];
 
   cout<<"MAX group size = "<<vector_max_size(NULL)<<endl;
+  cout<<"LOCAL MEMORY (per multiprocessor) size = "<<local_memory_size(NULL)<<endl;
 
   proc(true, 0, &MUL, sizes, 0, _OUT);
 

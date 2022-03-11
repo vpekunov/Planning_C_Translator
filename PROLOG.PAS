@@ -56,6 +56,7 @@ Begin
   WriteLn(Out,'   cl_platform_id   platform_id;');
   WriteLn(Out,'   cl_device_id     device_id;');
   WriteLn(Out,'   cl_uint          n_units;');
+  WriteLn(Out,'   cl_ulong         local_mem_size;');
   WriteLn(Out,'   size_t           max_work_size;');
   WriteLn(Out,'   cl_context       context;');
   WriteLn(Out,'   cl_command_queue command_queue;');
@@ -113,6 +114,7 @@ Begin
   WriteLn(Out,'          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(d.n_units), &d.n_units, &sz);');
   WriteLn(Out,'          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_NAME, 256, &device, &sz);');
   WriteLn(Out,'          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(d.max_work_size), &d.max_work_size, &sz);');
+  WriteLn(Out,'          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_LOCAL_MEM_SIZE, sizeof(d.local_mem_size), &d.local_mem_size, &sz);');
   WriteLn(Out,'          while (__devices.find(device) != __devices.end()) {');
   WriteLn(Out,'            int n = strlen(device);');
   WriteLn(Out,'            device[n++] = ''.''; device[n++] = ''X''; device[n] = 0x0;');
@@ -383,6 +385,16 @@ Begin
   WriteLn(Out,'  double result = it->second.execution_time;');
   WriteLn(Out,'  it->second.execution_time = 0.0;');
   WriteLn(Out,'  return result;');
+  WriteLn(Out,'}');
+  WriteLn(Out,'unsigned long local_memory_size(const char * Device) {');
+  WriteLn(Out,'  map<string, __device>::iterator it;');
+  WriteLn(Out,'  if (Device) {');
+  WriteLn(Out,'     for (it = __devices.begin(); it != __devices.end(); it++)');
+  WriteLn(Out,'         if (it->first.find(Device) != string::npos)');
+  WriteLn(Out,'            break;');
+  WriteLn(Out,'  } else');
+  WriteLn(Out,'     it = __devices.find(__powerfulest_device);');
+  WriteLn(Out,'  return it->second.local_mem_size;');
   WriteLn(Out,'}');
   WriteLn(Out,'');
   WriteLn(Out,'#define plan_vector_id() 0');
