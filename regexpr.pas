@@ -1503,10 +1503,11 @@ const
 
  PRUNE       = TREOp (39);  // (*PRUNE)
  FAIL        = TREOp (40);  // (*FAIL)
+ STOP        = TREOp (41);  // (*STOP)
 
  // !!! Change OPEN value if you add new opcodes !!!
 
- OPEN        = TREOp (41); // -    Mark this point in input as start of \n
+ OPEN        = TREOp (42); // -    Mark this point in input as start of \n
                            //      OPEN + 1 is \1, etc.
  CLOSE       = TREOp (ord (OPEN) + NSUBEXP);
                            // -    Analogous to OPEN.
@@ -5397,6 +5398,15 @@ function TRegExpr.ParseAtom (var flagp : integer) : PRegExprChar;
                   inc (regparse); // skip ')'
                   ret := EmitNode (FAIL); // fail
                 end
+           else if (regparse - directive = 4) and
+              (directive^ = 'S') and
+              ((directive+1)^ = 'T') and
+              ((directive+2)^ = 'O') and
+              ((directive+3)^ = 'P') then
+                begin
+                  inc (regparse); // skip ')'
+                  ret := EmitNode (STOP); // stop
+                end
            else
              begin
                 Error (reeBadDirective);
@@ -6063,6 +6073,10 @@ function TRegExpr.MatchPrim(context: TVarValue; contextNum: Integer;
             Pruning := True;
          FAIL:
             Exit(False);
+         STOP:
+            begin;
+              fInputEnd := reginput;
+            end;
          Succ (OPEN) .. TREOp (Ord (OPEN) + NSUBEXP - 1) : begin //###0.929
             no := ord (scan^) - ord (OPEN);
 //            save := reginput;
