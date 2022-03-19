@@ -405,7 +405,7 @@ Begin
   WriteLn(Out,'    char * cpu_data[n_args+1]; \');
   WriteLn(Out,'    cl_int ret; \');
   WriteLn(Out,'    int __n__ = 0; \');
-  WriteLn(Out,'    for (it = __event_list__->begin(); __n__ < d.max_work_size && it != __event_list__->end() && !((*it).Flags & 1); it++) \');
+  WriteLn(Out,'    for (it = __event_list__->begin(); __n__ < d.max_work_size && it != __event_list__->end() && !((*it).Flags & 1); ++it) \');
   WriteLn(Out,'        __n__++; \');
   WriteLn(Out,'    if (__n__ == 0) break; \');
   WriteLn(Out,'    if (__n__ == d.max_work_size && it != __event_list__->end() && !((*it).Flags & 1)) { \');
@@ -420,7 +420,7 @@ Begin
   WriteLn(Out,'          it = __event_list__->begin(); \');
   WriteLn(Out,'          n_items[i] = 0; \');
   WriteLn(Out,'          for (int j = 0; j < __n__; j++) { \');
-  WriteLn(Out,'              __planned__ = *it++; \');
+  WriteLn(Out,'              __planned__ = *it; ++it; \');
   WriteLn(Out,'              n_items[i] += (reinterpret_cast<int *>(n_pointer[i])[j] = loc_items(i)); \');
   WriteLn(Out,'          } \');
   WriteLn(Out,'        } \');
@@ -433,7 +433,7 @@ Begin
   WriteLn(Out,'    int * offs = reinterpret_cast<int *>(cpu_data[n_args]); \');
   WriteLn(Out,'    it = __event_list__->begin(); \');
   WriteLn(Out,'    for (int i = 0; i < __n__; i++) { \');
-  WriteLn(Out,'        __planned__ = *it++; \');
+  WriteLn(Out,'        __planned__ = *it; ++it; \');
   WriteLn(Out,'        memmove(&offs[i*__nl__], __offs, __nl__*sizeof(int)); \');
   WriteLn(Out,'        int k = 0; \');
   WriteLn(Out,'        for (int j = 0; j < n_args; j++) \');
