@@ -1446,7 +1446,7 @@ begin
               Begin
                 ReadLn(Inp,S);
                 StripComments(S, CommentFlag);
-                Lines.AddObject(S, TLine.Create(0, F));
+                Lines.AddObject(UTF8Decode(S), TLine.Create(0, F, gpuNone));
                 Inc(F)
               End;
             FL := TStringList.Create;
@@ -1474,7 +1474,7 @@ begin
             PatternsOrder.Clear;
             PatternsMode := pmNone;
 
-            PreprocStage1(FollowDefs, Defines, ProgGPU, IsClustered, IsVectorized, Restrictions);
+            PreprocStage1(FollowDefs, Defines, IsClustered, IsVectorized, Restrictions);
 
             PreprocStage1a(Restrictions);
 
@@ -1491,6 +1491,25 @@ begin
                  WriteLn('Parse error',TLine(Lines.Objects[LCounter-2]).GetDescription);
                  Halt(-1)
                End;
+
+            With Lines Do
+              Begin
+                F := 0;
+                While F < Count Do
+                  Case TLine(Objects[F])._ModeGPU Of
+                    gpuNone: Inc(F);
+                    gpuOnly: Begin
+                        ProgGPU.Add(RemoveCRLF(Strings[F]));
+                        TLine(Objects[F]).Free;
+                        Delete(F)
+                      End;
+                    gpuBoth: Begin
+                        ProgGPU.Add(RemoveCRLF(Strings[F]));
+                        Inc(F)
+                      End;
+                  End;
+              End;
+
             Inc(PassCount)
           Until PassCount >= PreprocPasses;
 

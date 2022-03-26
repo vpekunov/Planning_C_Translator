@@ -346,7 +346,7 @@ begin
          Begin
            ReadLn(Inp,S);
            StripComments(S, CommentFlag);
-           Lines.AddObject(S, TLine.Create(0, F));
+           Lines.AddObject(S, TLine.Create(0, F, gpuNone));
            Inc(F)
          End;
        FL := TStringList.Create;

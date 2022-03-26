@@ -300,7 +300,7 @@ type
      Function ExportDB(Const Name: String): String; virtual; abstract;
      Function ExportPascalDB(Const ID: String; Var out: TStringList; Const Offs, vDB: String): Boolean; virtual; abstract;
 
-     Function Unify(ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; virtual; abstract;
+     Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; virtual; abstract;
      Function Assert(Const Descriptor: TFastPositions): Boolean; virtual; abstract;
      Function Retract(Const Descriptor: TFastPositions): Boolean; virtual; abstract;
      Function Learn(Const Descriptor: TFastPositions): Boolean; virtual; abstract;
@@ -329,7 +329,7 @@ type
 
      Function Compare(Const S1, S2: String): Integer; virtual;
 
-     Function Unify(ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+     Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
      Function Assert(Const Descriptor: TFastPositions): Boolean; override;
      Function Retract(Const Descriptor: TFastPositions): Boolean; override;
      Function Learn(Const Descriptor: TFastPositions): Boolean; override;
@@ -368,7 +368,7 @@ type
   Function ExportDB(Const Name: String): String; override;
   function ExportPascalDB(Const ID: String; Var out: TStringList; Const Offs, vDB: String): Boolean; override;
 
-  Function Unify(ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
   Function Assert(Const Descriptor: TFastPositions): Boolean; override;
   Function Retract(Const Descriptor: TFastPositions): Boolean; override;
   Function Learn(Const Descriptor: TFastPositions): Boolean; override;
@@ -384,7 +384,7 @@ type
  public
   Constructor Create;
 
-  Function Unify(ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
  end;
 
  { TFastXPathF }
@@ -393,7 +393,16 @@ type
  public
   Constructor Create;
 
-  Function Unify(ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+ end;
+
+ { TFastStopFail }
+
+ TFastStopFail = class(TFastExternal)
+ public
+  Constructor Create;
+
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
  end;
 
  { TFastNet }
@@ -408,7 +417,7 @@ type
    Function ExportDB(Const Name: String): String; override;
    function ExportPascalDB(Const ID: String; Var out: TStringList; Const Offs, vDB: String): Boolean; override;
 
-   Function Unify(ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+   Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
    Function Assert(Const Descriptor: TFastPositions): Boolean; override;
    Function Retract(Const Descriptor: TFastPositions): Boolean; override;
    Function Learn(Const Descriptor: TFastPositions): Boolean; override;
@@ -437,7 +446,7 @@ type
 
       Function GetIndexOf(Const Predicate: String): Integer;
 
-      function Unify(ENV: TXPathEnvironment; Const Predicate: String; Var Descriptor: TFastPositions): Boolean;
+      function Unify(R: TRegExpr; ENV: TXPathEnvironment; Const Predicate: String; Var Descriptor: TFastPositions): Boolean;
       Function Assert(Const Predicate: String; Const Descriptor: TFastPositions): Boolean;
       Function Retract(Const Predicate: String; Const Descriptor: TFastPositions): Boolean;
       Function Learn(Const Predicate: String; Const Descriptor: TFastPositions): Boolean;
@@ -1777,12 +1786,29 @@ end;
 
 { TFastXPathF }
 
+constructor TFastStopFail.Create;
+begin
+  Inherited Create(Nil)
+end;
+
+function TFastStopFail.Unify(R: TRegExpr; ENV: TXPathEnvironment;
+  var Descriptor: TFastPositions): Boolean;
+
+begin
+   If Length(Descriptor) = 1 Then
+      If Descriptor[0].Kind = fpBound Then
+         R.fInputEnd := R.reginput + StrToInt(Descriptor[0].Value);
+   Exit(False)
+end;
+
+{ TFastXPathF }
+
 constructor TFastXPathF.Create;
 begin
   Inherited Create(Nil)
 end;
 
-function TFastXPathF.Unify(ENV: TXPathEnvironment;
+function TFastXPathF.Unify(R: TRegExpr; ENV: TXPathEnvironment;
   var Descriptor: TFastPositions): Boolean;
 
  function GetNodeValue(P: TDOMNode): String;
@@ -1881,7 +1907,7 @@ begin
   Inherited Create(Nil)
 end;
 
-function TFastXPath.Unify(ENV: TXPathEnvironment; var Descriptor: TFastPositions
+function TFastXPath.Unify(R: TRegExpr; ENV: TXPathEnvironment; var Descriptor: TFastPositions
   ): Boolean;
 
 Var parser: TDOMParser;
@@ -1967,7 +1993,7 @@ begin
   Result := True
 end;
 
-function TFastExternal.Unify(ENV: TXPathEnvironment; var Descriptor: TFastPositions): Boolean;
+function TFastExternal.Unify(R: TRegExpr; ENV: TXPathEnvironment; var Descriptor: TFastPositions): Boolean;
 
 Var Map, p: PWideChar;
     Vals: Array Of PWideChar;
@@ -1978,7 +2004,7 @@ begin
   p := Map;
   For F := Low(Descriptor) To High(Descriptor) Do
       begin
-        GetMem(Vals[F], 65536*SizeOf(WideChar));
+        GetMem(Vals[F], Max(Length(Descriptor[F].Value)+2,65536)*SizeOf(WideChar));
         System.Move(Descriptor[F].Value[1], Vals[F]^, Length(Descriptor[F].Value)*SizeOf(WideChar));
         (Vals[F]+Length(Descriptor[F].Value))^ := #0;
         If Descriptor[F].Kind = fpBound Then
@@ -2260,7 +2286,7 @@ begin
   out.Add(Offs + vDB + '.AddObject(''' + ID + ''', TFastNet.Create(''' + FName + ''', ' + vDB + '));')
 end;
 
-function TFastNet.Unify(ENV: TXPathEnvironment; var Descriptor: TFastPositions): Boolean;
+function TFastNet.Unify(R: TRegExpr; ENV: TXPathEnvironment; var Descriptor: TFastPositions): Boolean;
 
 Var L: TStringList;
     I: Integer;
@@ -2481,7 +2507,7 @@ begin
      Result := 1
 end;
 
-function TFastTable.Unify(ENV: TXPathEnvironment; var Descriptor: TFastPositions): Boolean;
+function TFastTable.Unify(R: TRegExpr; ENV: TXPathEnvironment; var Descriptor: TFastPositions): Boolean;
 
 Var L, SRC: TStringList;
     S: String;
@@ -2774,7 +2800,7 @@ Type PoolItem = Record
         Result: Boolean
      End;
 
-procedure Unificator(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+procedure Unificator(R: TRegExpr; Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
 
 Var Pool: Array Of PoolItem Absolute Data;
     pcall: TFastCall;
@@ -2785,7 +2811,7 @@ begin
         Item.WaitForIndex(K);
    pcall := Pool[Index].Call.Items[Pool[Index].Worker];
    Pool[Index].Call.FillIn(pcall, Pool[Index].R, Pool[Index].valext);
-   If Pool[Index].DB.Unify(Pool[Index].ENV, pcall.Predicate, pcall.Descriptor) = pcall.Negate Then
+   If Pool[Index].DB.Unify(R, Pool[Index].ENV, pcall.Predicate, pcall.Descriptor) = pcall.Negate Then
       begin
         Pool[Index].Result := False;
         Exit
@@ -2890,7 +2916,7 @@ function TFastCalls.Unify(ENV: TXPathEnvironment; const DB: TFastDB; const R: TR
               if pcall.Predicate <> dirSequential Then
                  begin
                    FillIn(pcall, R, valext);
-                   If DB.Unify(ENV, pcall.Predicate, pcall.Descriptor) = pcall.Negate Then
+                   If DB.Unify(R, ENV, pcall.Predicate, pcall.Descriptor) = pcall.Negate Then
                       Exit(False);
                    FillOut(pcall, R, valsp)
                  end;
@@ -3048,7 +3074,8 @@ begin
   libs := TStringList.Create;
 
   AddObject('xpath', TFastXPath.Create);
-  AddObject('xpathf', TFastXPathF.Create)
+  AddObject('xpathf', TFastXPathF.Create);
+  AddObject('stop_fail', TFastStopFail.Create)
 end;
 
 destructor TFastDB.Destroy;
@@ -3142,14 +3169,14 @@ begin
      end
 end;
 
-function TFastDB.Unify(ENV: TXPathEnvironment; const Predicate: String; var Descriptor: TFastPositions
+function TFastDB.Unify(R: TRegExpr; ENV: TXPathEnvironment; const Predicate: String; var Descriptor: TFastPositions
   ): Boolean;
 
 Var F: Integer;
 begin
    F := GetIndexOf(Predicate);
    If F < 0 Then Exit(False);
-   Result := TFastPredicate(Objects[F]).Unify(ENV, Descriptor)
+   Result := TFastPredicate(Objects[F]).Unify(R, ENV, Descriptor)
 end;
 
 function TFastDB.Assert(const Predicate: String;

@@ -9,6 +9,10 @@ Interface
 
 Uses Classes, Lexique;
 
+Const gpuNone = 0;
+      gpuOnly = 1;
+      gpuBoth = 2;
+
 Type
 
 { TLine }
@@ -16,8 +20,9 @@ Type
  TLine = Class
         FileIdx: Array Of Integer;
         LineNum: Array Of Integer;
+        _ModeGPU: Byte;
         Restricted: Boolean;
-        Constructor Create(_FileIdx, _LineNum: Integer);
+        Constructor Create(_FileIdx, _LineNum: Integer; __ModeGPU: Byte);
         constructor Derive(Parent: TLine; _FileIdx, _LineNum: Integer);
         Function    IsMacroResult: Boolean;
         Function    GetOriginalLine: String;
@@ -49,6 +54,8 @@ Function IntegerToTObject(S: Integer): TObject;
 Function BooleanToTObject(B: Boolean): TObject;
 Function RandomName: String;
 
+Function RemoveCRLF(Const S: String): String;
+
 Procedure StripComments(Var S: String; Var Flag: Boolean);
 Function GetLineFromLines(Var S:String):Boolean;
 Function _TrimRight(Const S: String): String;
@@ -77,13 +84,14 @@ Uses SysUtils, Consts;
 
 { TLine }
 
-constructor TLine.Create(_FileIdx, _LineNum: Integer);
+constructor TLine.Create(_FileIdx, _LineNum: Integer; __ModeGPU: Byte);
 begin
   Inherited Create;
   SetLength(FileIdx, 1);
   FileIdx[0] := _FileIdx;
   SetLength(LineNum, 1);
   LineNum[0] := _LineNum;
+  _ModeGPU := __ModeGPU;
   Restricted := False
 end;
 
@@ -95,6 +103,7 @@ begin
   LineNum := Copy(Parent.LineNum,0,Length(Parent.LineNum));
   SetLength(LineNum, Length(LineNum)+1);
   LineNum[High(LineNum)] := _LineNum;
+  _ModeGPU := Parent._ModeGPU;
   Restricted := False
 end;
 
@@ -219,6 +228,11 @@ Begin
     Result[F] := Chr(Ord('a')+Random(26))
 End;
 
+Function RemoveCRLF(Const S: String): String;
+Begin
+  Result := StringReplace(StringReplace(S, #$0D, '', [rfReplaceAll]), #$0A, '', [rfReplaceAll]);
+End;
+
 Function InQuotes(Const S: String; L:Integer; Quote:Char): Boolean;
 
 Var F: Integer;
@@ -233,8 +247,11 @@ End;
 Procedure StripComments(Var S: String; Var Flag: Boolean);
 
 Var S1:String;
+    ProbablyXPath: Boolean;
     F: Integer;
 begin
+     S1 := Trim(S);
+     ProbablyXPath := Pos('#def_pattern', S1) = 1;
      S1 := '';
      F := 1;
      While F <= Length(S) Do
@@ -251,7 +268,7 @@ begin
        Else
           begin
             If Not Flag Then
-               If (F+1 <= Length(S)) And (S[F] = '/') And (S[F+1] = '/') Then
+               If (F+1 <= Length(S)) And (S[F] = '/') And (S[F+1] = '/') And Not ProbablyXPath Then
                   Break
                Else
                   AppendStr(S1, S[F]);

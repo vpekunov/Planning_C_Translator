@@ -22,7 +22,6 @@ Const PreprocPasses: Integer = 1;
 
 procedure PreprocStage1(ApplyConds: Boolean;
                         Defines: TStringList;
-                        ProgGPU: TStringList;
                         Var IsClustered, IsVectorized: Boolean;
                         Var Restrictions: TRestrictions);
 procedure PreprocStage1a(Var Restrictions: TRestrictions);
@@ -46,10 +45,6 @@ Var Prologer: TLibHandle = 0;
     (* *)initer: switch_gprolog7; (* *)
 
 (* *)
-
-Const gpuNone = 0;
-      gpuOnly = 1;
-      gpuBoth = 2;
 
 Const BracketsOff = '$brackets_off$';
       PrefixOff   = '$prefix_off$';
@@ -177,14 +172,14 @@ Begin
               Begin
                 If res.AsNodeSet.Count > 1 Then Result := Result + '[';
                 For M := 0 To res.AsNodeSet.Count-1 Do
-                    Result := Result + '''' + TDOMNode(res.AsNodeSet[M]).TextContent + ''',';
+                    Result := Result + '''' + StringReplace(TDOMNode(res.AsNodeSet[M]).TextContent, '''', '''''', [rfReplaceAll]) + ''',';
                 If res.AsNodeSet.Count > 0 Then
                    System.Delete(Result, Length(Result), 1);
                 If res.AsNodeSet.Count > 1 Then Result := Result + ']';
                 Result := Result + ','
               End
          Else
-            Result := Result + '''' + res.AsText + ''',';
+            Result := Result + '''' + StringReplace(res.AsText, '''', '''''', [rfReplaceAll]) + ''',';
          res.Free
        End;
    If _Params.Count > 0 Then
@@ -255,7 +250,6 @@ End;
 
 procedure PreprocStage1(ApplyConds: Boolean;
                         Defines: TStringList;
-                        ProgGPU: TStringList;
                         Var IsClustered, IsVectorized: Boolean;
                         Var Restrictions: TRestrictions);
 
@@ -267,6 +261,9 @@ Var L: TAnalyser; Eval: TEvaluator;
     DefStack: Array Of TDefItem;
     ModeGPU: Byte;
     FL: TStringList;
+    FF: TextFile;
+    FS: String;
+    CommentFlag: Boolean;
     LN: TLine;
     Rslt: Real;
     UseLine: Boolean;
@@ -362,14 +359,7 @@ begin
       L.AnlzLine := S;
 
       // Check is this line common or gpu line
-      If ModeGPU <> gpuNone Then
-         ProgGPU.Add(S);
-      If (ModeGPU = gpuOnly) And Not PolyLineDef Then
-         Begin
-           TLine(Lines.Objects[LCounter-1]).Free;
-           Lines.Delete(LCounter-1);
-           Continue // return to big preprocessing loop header
-         End;
+      TLine(Lines.Objects[LCounter-1])._ModeGPU := ModeGPU;
       LSaveCounter := LCounter;
 
       // Check if #defs allows compilation: -> Flag
@@ -456,6 +446,7 @@ begin
                      Begin
                        Inc(LCounter);
                        S := Lines.Strings[LCounter-1];
+                       TLine(Lines.Objects[LCounter-1])._ModeGPU := ModeGPU;
                        S := ' '+Trim(S)
                      End
                 Until Not Flag;
@@ -480,22 +471,9 @@ begin
                               S2 := '#define ' + ID + S1
                            Else
                               S2 := '#define ' + ID + ' ' + S1;
-                           If ModeGPU <> gpuNone Then
-                              ProgGPU[ProgGPU.Count-1] := S2;
 
-                           If (ModeGPU <> gpuOnly) Then
+                           If (ModeGPU <> gpuOnly) And Not HasParams Then
                               Defines.AddObject(ID, TObject(NewStr(S1)))
-                           Else
-                              Begin
-                                While LSaveCounter <= LCounter Do
-                                  Begin
-                                    TLine(Lines.Objects[LSaveCounter-1]).Free;
-                                    Lines.Delete(LSaveCounter-1);
-                                    Dec(LCounter)
-                                  End;
-                                Inc(LCounter);
-                                Continue
-                              End
                          End
                    End
               End
@@ -525,9 +503,18 @@ begin
                         End
                      Else
                         Begin
+                          AssignFile(FF, S);
                           FL := TStringList.Create;
                           Try
-                             FL.LoadFromFile(S);
+                             Reset(FF);
+                             CommentFlag := False;
+                             While Not Eof(FF) Do
+                               Begin
+                                 ReadLn(FF, FS);
+                                 StripComments(FS, CommentFlag);
+                                 FL.Add(UTF8Decode(FS))
+                               End;
+                             CloseFile(FF)
                           Except
                              WriteLn('Error: can''t open file "'+S+'"',TLine(Lines.Objects[LCounter-1]).GetDescription);
                              Halt(-1);
@@ -842,7 +829,7 @@ Begin
       If Start > Length(HayStack) Then
          Begin
            K := Files.AddObject(Underscore+'END', Nil);
-           Lines.AddObject(Replacement, TLine.Create(K, 10000));
+           Lines.AddObject(Replacement, TLine.Create(K, 10000, gpuNone));
            Break
          End;
 
@@ -868,7 +855,7 @@ Begin
 
            If TObjectToInteger(TObject(Ends[K])) > Stop Then
               Begin
-                Lines.InsertObject(K+1, UnescapeString(Copy(HayStack, Stop+1, TObjectToInteger(TObject(Ends[K]))-Stop)), TLine.Create(G, 1));
+                Lines.InsertObject(K+1, UnescapeString(Copy(HayStack, Stop+1, TObjectToInteger(TObject(Ends[K]))-Stop)), TLine.Create(G, 1, TLine(Lines.Objects[K])._ModeGPU));
                 Begs.Insert(K+1, IntegerToTObject(Stop+1));
                 Ends.Insert(K+1, Ends[K])
               End;
@@ -915,7 +902,7 @@ Begin
               End;
            If Length(Replacement) > 0 Then
               Begin
-                Lines.InsertObject(K, Replacement, TLine.Create(G, 1));
+                Lines.InsertObject(K, Replacement, TLine.Create(G, 1, TLine(Lines.Objects[K])._ModeGPU));
                 Begs.Insert(K, IntegerToTObject(Start));
                 Ends.Insert(K, IntegerToTObject(Start + Length(Replacement) - 1))
               End;
@@ -1165,7 +1152,6 @@ begin
         While LCounter <= Lines.Count Do
           Begin
             S := Lines.Strings[LCounter-1];
-
             If TLine(Lines.Objects[LCounter-1]).Restricted Then
                Begin
                  Begs.Add(IntegerToTObject(G));
