@@ -1,9 +1,9 @@
-#ifndef __CILK_COMPILE_H__
-#define __CILK_COMPILE_H__
+#ifndef __GPU_LOOP_COMPILE_H__
+#define __GPU_LOOP_COMPILE_H__
 
-#parse(clsCilkProgram,clsCilkSpace,clsCilkInclude,clsCilkPreproc,clsCilkComments,clsCilkTypedef,clsCilkCVar,clsCilkFunction,clsCilkFor,clsCilkSwitch,clsCilkWhile,clsCilkIf,clsCilkElse,clsCilkDo,clsCilkAlternation,clsCilkReturn,clsCilkOper,clsCilkBegin,clsCilkEnd,clsCilkTerminator)
+#parse(clsGPUProgram,clsGPUSpace,clsGPUInclude,clsGPUPreproc,clsGPUComments,clsGPUTypedef,clsGPUCVar,clsGPUFunction,clsGPUFor,clsGPUSwitch,clsGPUWhile,clsGPUIf,clsGPUElse,clsGPUDo,clsGPUAlternation,clsGPUReturn,clsGPUOper,clsGPUBegin,clsGPUEnd,clsGPUTerminator)
 
-#def_pattern clsCilkAlternation => [prog] ('clsCilkAlternation', gid(), /root/TYPE/@Value, [['arg', /root/CASE/@Value]]) {
+#def_pattern clsGPUAlternation => [prog] ('clsGPUAlternation', gid(), /root/TYPE/@Value, [['arg', /root/CASE/@Value]]) {
   (((^)|(\;)+|\}|\{|\\n|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -17,7 +17,7 @@
   @end
 };
 
-#def_pattern clsCilkBegin => [prog] ('clsCilkBegin', gid(), '{', '') {
+#def_pattern clsGPUBegin => [prog] ('clsGPUBegin', gid(), '{', '') {
   (((^)|(\;)+|\}|\{|\\n|\)|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -26,13 +26,13 @@
   @end
 };
 
-#def_pattern clsCilkComments => [comment] ('clsCilkComments', gid(), /root/CONTENT/@Value) {
+#def_pattern clsGPUComments => [comment] ('clsGPUComments', gid(), /root/CONTENT/@Value) {
   @begin
     ((\/\/([^\\]*)->{CONTENT}(\\n))|(\/\*(.*?)->{CONTENT}\*\/))
   @end
 };
 
-#def_pattern clsCilkCVar => [prog] ('clsCilkCVar', gid(), /root/TYPE/@Value, [['def', /root/EXPR/@Value]]) {
+#def_pattern clsGPUCVar => [prog] ('clsGPUCVar', gid(), /root/TYPE/@Value, [['def', /root/EXPR/@Value]]) {
   (((^)|(\;)+|\}|\{|\)|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -42,7 +42,7 @@
   @end
 };
 
-#def_pattern clsCilkDo => [prog] ('clsCilkDo', gid(), 'do', '') {
+#def_pattern clsGPUDo => [prog] ('clsGPUDo', gid(), 'do', '') {
   (((^)|(\;)+|\}|\{|\)|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (do)
@@ -52,7 +52,7 @@
   (\s|\\t)*
 };
 
-#def_pattern clsCilkElse => [prog] ('clsCilkElse', gid(), 'else', '') {
+#def_pattern clsGPUElse => [prog] ('clsGPUElse', gid(), 'else', '') {
   (((\;)+|\}|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (else)
@@ -62,7 +62,7 @@
   (\s|\\t)*
 };
 
-#def_pattern clsCilkEnd => [prog] ('clsCilkEnd', gid(), '}', '') {
+#def_pattern clsGPUEnd => [prog] ('clsGPUEnd', gid(), '}', '') {
   (((\;)+|\}|\{|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     ()->{GID}
@@ -72,7 +72,7 @@
   @end
 };
 
-#def_pattern clsCilkFor => [prog] ('clsCilkFor', gid(), 'for', [['init', /root/INITF/@Value],['init', /root/INITN/@Value],['cond', /root/COND/@Value],['chng', /root/CHNGF/@Value],['chng', /root/CHNGN/@Value]]) {
+#def_pattern clsGPUFor => [prog] ('clsGPUFor', gid(), 'for', [['init', /root/INITF/@Value],['init', /root/INITN/@Value],['cond', /root/COND/@Value],['chng', /root/CHNGF/@Value],['chng', /root/CHNGN/@Value]]) {
   (((^)|(\;)+|\}|\)|\{|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -92,20 +92,20 @@
   @end
 };
 
-#def_pattern clsCilkFunction => [prog] ('clsCilkFunction', gid(), 'func', [['arg', //FIRST_REF/@Value], ['arg', //FIRST/@Value], ['idxs', //FIRST_IDXS/@Value], ['arg', //OTHER_REF/@Value], ['arg', //OTHER/@Value], ['idxs', //OTHER_IDXS/@Value], ['arg', //THREEP/@Value], ['args', /root/ARGS/@Value], ['ret', /root/RETTYPE/@Value], ['name', /root/ID/@Value]]) {
+#def_pattern clsGPUFunction => [prog] ('clsGPUFunction', gid(), 'func', [['arg', //FIRST_REF/@Value], ['type', //FIRST_TYPE/@Value], ['arg', //FIRST/@Value], ['idxs', //FIRST_IDXS/@Value], ['arg', //OTHER_REF/@Value], ['type', //OTHER_TYPE/@Value], ['arg', //OTHER/@Value], ['idxs', //OTHER_IDXS/@Value], ['arg', //THREEP/@Value], ['args', /root/ARGS/@Value], ['ret', /root/RETTYPE/@Value], ['name', /root/ID/@Value]]) {
   (((^)|(\;)+|\}|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
     ((([A-Za-z0-9_\[\]\*]+((\\n|\s|\\t)*\*(\\n|\s|\\t)*|(\\n|\s|\\t)+))+)->{RETTYPE}(\w+(\\n|\s|\\t)*)->{ID}\(
          (
-          (((\\n|\s|\\t)*[A-Za-z0-9_\[\]]+)+
+          ((((\\n|\s|\\t)*[A-Za-z0-9_\[\]]+)+)->{FIRST_TYPE}
             (
              ((\\n|\s|\\t)*(\&|(\*)+)->{FIRST_REF}
              )|
              (\\n|\s|\\t)+()->{FIRST_REF}
             )
             (\\n|\s|\\t)*(\w+)->{FIRST}(((\\n|\s|\\t)*\[(\\n|\s|\\t)*\w+(\\n|\s|\\t)*\])*)->{FIRST_IDXS}
-            ((\\n|\s|\\t)*\,((\\n|\s|\\t)*[A-Za-z0-9_\[\]]+)+
+            ((\\n|\s|\\t)*\,(((\\n|\s|\\t)*[A-Za-z0-9_\[\]]+)+)->{OTHER_TYPE}
              (
               ((\\n|\s|\\t)*(\&|(\*)+)->{OTHER_REF}
               )|
@@ -125,7 +125,7 @@
   (\{|\;)
 };
 
-#def_pattern clsCilkIf => [prog] ('clsCilkIf', gid(), 'if', [['cond', /root/COND/@Value]]) {
+#def_pattern clsGPUIf => [prog] ('clsGPUIf', gid(), 'if', [['cond', /root/COND/@Value]]) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -136,7 +136,7 @@
   @end
 };
 
-#def_pattern clsCilkInclude => [include] ('clsCilkInclude', gid(), /root/FILE/@Value) {
+#def_pattern clsGPUInclude => [include] ('clsGPUInclude', gid(), /root/FILE/@Value) {
   ((^)|\\n)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -146,7 +146,7 @@
   @end
 };
 
-#def_pattern clsCilkOper => [prog] ('clsCilkOper', gid(), 'op', [['op', /root/EXPR/@Value]]) {
+#def_pattern clsGPUOper => [prog] ('clsGPUOper', gid(), 'op', [['op', /root/EXPR/@Value]]) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -156,7 +156,7 @@
   @end
 };
 
-#def_pattern clsCilkPreproc => [prog] ('clsCilkPreproc', gid(), 'preproc', [['body', /root/BODY/@Value]]) {
+#def_pattern clsGPUPreproc => [prog] ('clsGPUPreproc', gid(), 'preproc', [['body', /root/BODY/@Value]]) {
   ((^)|\\n)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -166,7 +166,7 @@
   @end
 };
 
-#def_pattern clsCilkReturn => [prog] ('clsCilkReturn', gid(), 'return', [['arg', /root/EXPR/@Value]]) {
+#def_pattern clsGPUReturn => [prog] ('clsGPUReturn', gid(), 'return', [['arg', /root/EXPR/@Value]]) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -176,7 +176,7 @@
   @end
 };
 
-#def_pattern clsCilkSwitch => [prog] ('clsCilkSwitch', gid(), 'switch', [['arg', /root/EXPR/@Value]]) {
+#def_pattern clsGPUSwitch => [prog] ('clsGPUSwitch', gid(), 'switch', [['arg', /root/EXPR/@Value]]) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -187,7 +187,7 @@
   @end
 };
 
-#def_pattern clsCilkTypedef => [prog] ('clsCilkTypedef', gid(), 'type', [['def', /root/EXPR/@Value]]) {
+#def_pattern clsGPUTypedef => [prog] ('clsGPUTypedef', gid(), 'type', [['def', /root/EXPR/@Value]]) {
   (((^)|(\;)+|\}|\)|\{|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -198,7 +198,7 @@
   @end
 };
 
-#def_pattern clsCilkWhile => [prog] ('clsCilkWhile', gid(), 'while', [['cond', /root/COND/@Value]]) {
+#def_pattern clsGPUWhile => [prog] ('clsGPUWhile', gid(), 'while', [['cond', /root/COND/@Value]]) {
   (((^)|(\;)+|\}|\{|\)|\\n|(\\n|\\t|\b)else\b|(\\n|\\t|\b)do\b|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     (\s|\\t)*
@@ -209,7 +209,7 @@
   @end
 };
 
-#def_pattern clsCilkTerminator => parallelize (gid()) {
+#def_pattern clsGPUTerminator => parallelize (gid()) {
   @begin
     ($)->{END}
   @end
@@ -218,7 +218,6 @@
 #def_module() parallelize(AfterLastID) {
 @goal:-brackets_off.
 
-% #pragma auto for -- включает автораспараллеливание циклов
 % #pragma auto pure(fun1,fun2,...) -- обозначает функции без сторонних эффектов по отношению к текущей итерации цикла for
 
 @read_string(S,V):-
@@ -353,7 +352,7 @@
 
 @into_paired_list_f(TYPE, V, [[TYPE, V]]).
 
-@strip_list_f([[arg,''], [idxs,'']], []).
+@strip_list_f([[type,''], [arg,''], [idxs,'']], []).
 
 @strip_list_f(L, L).
 
@@ -371,13 +370,13 @@
   once(into_paired_list(TYPE, N, L2)),
   append(L1, L2, L).
 
-@make_fargs([], [], [], []).
+@make_fargs([], [], [], [], []).
 
-@make_fargs([['arg','']|REFT],[NM|NMT],[IDXS|IDXST], [NM,IDXS|T]):-
-  once(make_fargs(REFT, NMT, IDXST, T)).
+@make_fargs([['arg','']|REFT],[TP|TPT],[NM|NMT],[IDXS|IDXST], [TP,NM,IDXS|T]):-
+  once(make_fargs(REFT, TPT, NMT, IDXST, T)).
 
-@make_fargs([REF|REFT],[NM|NMT],[IDXS|IDXST], [REF,NM,IDXS|T]):-
-  once(make_fargs(REFT, NMT, IDXST, T)).
+@make_fargs([REF|REFT],[TP|TPT],[NM|NMT],[IDXS|IDXST], [REF,TP,NM,IDXS|T]):-
+  once(make_fargs(REFT, TPT, NMT, IDXST, T)).
 
 @analyze_args(_, _, '').
 
@@ -391,16 +390,18 @@
   append(L3, L2, L4),
   asserta(db_content('args', GID, L4)).
 
-@analyze_args(GID, 'func', [['arg',REF1], ['arg',NM1], ['idxs',IDXS1], ['arg',REFN], ['arg',NMN], ['idxs',IDXSN], ['arg',THREEP], ARGSV, RETV, NAMEV]):-
+@analyze_args(GID, 'func', [['arg',REF1], ['type',TYPE1], ['arg',NM1], ['idxs',IDXS1], ['arg',REFN], ['type',TYPEN], ['arg',NMN], ['idxs',IDXSN], ['arg',THREEP], ARGSV, RETV, NAMEV]):-
+  once(into_paired_list_f('type', TYPE1, TYPE1L)),
   once(into_paired_list_f('arg', REF1, REF1L)),
   once(into_paired_list_f('arg', NM1, NM1L)),
   once(into_paired_list_f('idxs', IDXS1, IDXS1L)),
-  once(make_fargs(REF1L, NM1L, IDXS1L, L1)),
+  once(make_fargs(REF1L, TYPE1L, NM1L, IDXS1L, L1)),
   once(strip_list_f(L1, L11)),
+  once(into_paired_list_f('type', TYPEN, TYPENL)),
   once(into_paired_list_f('arg', REFN, REFNL)),
   once(into_paired_list_f('arg', NMN, NMNL)),
   once(into_paired_list_f('idxs', IDXSN, IDXSNL)),
-  once(make_fargs(REFNL, NMNL, IDXSNL, L2)),
+  once(make_fargs(REFNL, TYPENL, NMNL, IDXSNL, L2)),
   once(strip_list_f(L2, L22)),
   append(L11, L22, LM),
   once((
@@ -802,22 +803,22 @@
 
 @glob_prefixate([],[]):-!.
 
-@glob_prefixate([H|T],[global(H)|T1]):-
+@glob_prefixate([var(H,TP)|T],[global(H,TP)|T1]):-
    glob_prefixate(T,T1).
 
 @get_glob_lazies(Fun,NPrms,GP,LP,ILP):-
-   cilk_function(Fun,GID,NPrms),
-   predicate_property(cilk_fanalyzed(_,_,_,_,_),'dynamic'),
-   cilk_fanalyzed(Fun,GID,Globs,LP,ILP),
+   gpu_function(Fun,GID,NPrms),
+   predicate_property(gpu_fanalyzed(_,_,_,_,_),'dynamic'),
+   gpu_fanalyzed(Fun,GID,Globs,LP,ILP),
    glob_prefixate(Globs, GP),
    !.
 
 @get_glob_lazies(_,_,[],0,[]):-!.
 
 @get_ftime(Fun,NPrms,T):-
-   cilk_function(Fun,GID,NPrms),
-   predicate_property(cilk_ftime(_,_,_),'dynamic'),
-   cilk_ftime(Fun,GID,T),
+   gpu_function(Fun,GID,NPrms),
+   predicate_property(gpu_ftime(_,_,_),'dynamic'),
+   gpu_ftime(Fun,GID,T),
    !.
 
 @get_ftime(_,_,T):-  % Содержит время исполнения функции по умолчанию
@@ -825,40 +826,40 @@
   !.
 
 @put_ftime(Fun,NPrms,T):-
-   cilk_function(Fun,GID,NPrms),
+   gpu_function(Fun,GID,NPrms),
    (
-    (predicate_property(cilk_ftime(_,_,_),'dynamic'), cilk_ftime(Fun,GID,T0))->(
+    (predicate_property(gpu_ftime(_,_,_),'dynamic'), gpu_ftime(Fun,GID,T0))->(
          D is T-T0,
          (
           ;(<(D,-1),>(D,1))->(
-             retractall(cilk_ftime(Fun,GID,_)),
-             asserta(cilk_ftime(Fun,GID,T)),
-             retractall(cilk_retime),
-             asserta(cilk_retime)
+             retractall(gpu_ftime(Fun,GID,_)),
+             asserta(gpu_ftime(Fun,GID,T)),
+             retractall(gpu_retime),
+             asserta(gpu_retime)
             );
             true
          )
        );(
-         retractall(cilk_retime),
-         asserta(cilk_retime),
-         asserta(cilk_ftime(Fun,GID,T))
+         retractall(gpu_retime),
+         asserta(gpu_retime),
+         asserta(gpu_ftime(Fun,GID,T))
        )
    ),
    !.
 
 @put_for_time(GID,T):-
    (
-    (predicate_property(cilk_for_time(_,_),'dynamic'), cilk_for_time(GID,T0))->(
+    (predicate_property(gpu_for_time(_,_),'dynamic'), gpu_for_time(GID,T0))->(
          D is T-T0,
          (
           ;(<(D,-1),>(D,1))->(
-             retractall(cilk_for_time(GID,_)),
-             asserta(cilk_for_time(GID,T))
+             retractall(gpu_for_time(GID,_)),
+             asserta(gpu_for_time(GID,T))
             );
             true
          )
        );(
-         asserta(cilk_for_time(GID,T))
+         asserta(gpu_for_time(GID,T))
        )
    ),
    !.
@@ -886,24 +887,24 @@
   !.
 
 % Анализ вызова функций на предмет наличия ленивых переменных (модифицируемых глобальных и модифицируемых &|*-параметров)
-% Если уже есть результаты предварительного анализа в фактах cilk_fanalyzed, то данные о "ленивости" берутся из них, если же их
+% Если уже есть результаты предварительного анализа в фактах gpu_fanalyzed, то данные о "ленивости" берутся из них, если же их
 % нет, то считается, что глобальных ленивых переменных для этой функции нет, а ленивыми являются все &|*-параметры
 % Во втором параметре принимает список разобранных параметров, каждый из которых = список токенов
-% В третьем параметре возвращает список ленивых переменных [global(имя),...,par(функция,имя_параметра,переданная переменная),...]
+% В третьем параметре возвращает список ленивых переменных [global(имя,тип),...,par(функция,имя_параметра,переданная переменная,тип,индексы),...]
 % В четвертом параметре возвращается список имен, переданных в неленивые &|* - параметры
 % В пятом параметре принимается список-карта переданных значений. Элемент = множество из одного элемента (имя переданной переменной)
 %  или пустое множество (если в параметре передано выражение).
 % В шестом параметре возвращается список имен переданных в качестве параметров переменных, значения которых используются на чтение в функции
 @get_lazies(Fun, Params, [], _, ParSingleMap, _):-
-   predicate_property(cilk_farg(_,_,_,_),'dynamic')->(
+   predicate_property(gpu_farg(_,_,_,_,_,_),'dynamic')->(
      length(Params,N),
-     once(cilk_farg(Fun,N,_,_)),
+     once(gpu_farg(Fun,N,_,_,_,_)),
      asserta(counter(0)),
      get_glob_lazies(Fun,N,GP,LP,ReadParams),
      asserta(params(GP)),
      asserta(isingles([])),
      asserta(refs([])),
-     cilk_farg(Fun,_,REF,V),
+     gpu_farg(Fun,_,REF,V,_,_),
      once(counter(I)),
      I1 is I+1,
      retract(counter(I)),
@@ -953,11 +954,11 @@
    !.
 
 @get_fparams(Mode, Fun, NPrms, []):-
-   predicate_property(cilk_farg(_,_,_,_),'dynamic')->(
-     once(cilk_farg(Fun,NPrms,_,_)),
+   predicate_property(gpu_farg(_,_,_,_,_,_),'dynamic')->(
+     once(gpu_farg(Fun,NPrms,_,_,Type,Idxs)),
      asserta(counter(0)),
      asserta(params([])),
-     cilk_farg(Fun,_,REF,V),
+     gpu_farg(Fun,_,REF,V,_,_),
      once(counter(I)),
      I1 is I+1,
      retract(counter(I)),
@@ -967,7 +968,9 @@
      ),
      once(params(LZ)),
      retract(params(_)),
-     once(append(LZ,[V],LZ1)),
+     ( =(Idxs,'[]')->once(=(ParsedIdxs,[]));once(parse_expr(Idxs,ParsedIdxs)) ),
+     once(parse_expr(Type,ParsedType)),
+     once(append(LZ,[var(V,type(ParsedType,ParsedIdxs))],LZ1)),
      asserta(params(LZ1)),
      fail
    );(
@@ -1007,7 +1010,7 @@
    extract_lzv(T,T1),
    !.
 
-@extract_lzv([global(V)|T],[V|T1]):-
+@extract_lzv([global(V,_)|T],[V|T1]):-
    extract_lzv(T,T1),
    !.
 
@@ -1063,15 +1066,15 @@
 @get_fun_params(Fun,L,R,[P|T],INS,[V|MAP],OUTS,FUNS,Lazies):-
    get_balanced(0,L,[',',')'],P,[','|Rest]),
    get_expr(P,INS1,OUTS1,FUNS1,LZ1),
-   ((cilk_function(Fun,_,_),=(OUTS3,[]));check_arg(P,OUTS3)),
+   ((gpu_function(Fun,_,_),=(OUTS3,[]));check_arg(P,OUTS3)),
    check_arg(P,V),
    !,
    get_fun_params(Fun,Rest,R,T,INS2,MAP,OUTS2,FUNS2,LZ2),
-   (
-    =(V,[Single])->
-      subtract(INS1,[Single],INSQ);
-      =(INSQ,INS1)
-   ),
+%   (
+%    =(V,[Single])->
+%      subtract(INS1,[Single],INSQ);
+      =(INSQ,INS1),
+%   ),
    union(INSQ,INS2,INS),
    union(OUTS1,OUTS2,OUTSK), union(OUTSK,OUTS3,OUTS), append(FUNS1,FUNS2,FUNS), union(LZ1,LZ2,Lazies),
    !.
@@ -1079,7 +1082,7 @@
 @get_fun_params(Fun,L,[')'|Rest],[Item],INS,[V],OUTS,FUNS,Lazies):-
    get_balanced(0,L,[',',')'],Item,[')'|Rest]),
    get_expr(Item,INS1,OUTS0,FUNS,Lazies),
-   ((cilk_function(Fun,_,_),=(OUTS3,[]));check_arg(Item,OUTS3)),
+   ((gpu_function(Fun,_,_),=(OUTS3,[]));check_arg(Item,OUTS3)),
    check_arg(Item,V),
    !,
    (
@@ -1090,8 +1093,9 @@
    union(OUTS0,OUTS3,OUTS),
    !.
 
-@analyze_item_expr(intros,[id(V)|T],INS,[V|OUTT],[V],FUNS,[],[],[]):-
+@analyze_item_expr(intros(TP),[id(V)|T],INS,[V|OUTT],[var(V,type(TP,IDXS))],FUNS,[],[],[]):-
    bypass_idxs(T,['='|Rest],INS0,OUTS0,FUNS0,_),
+   append(IDXS,['='|Rest],T),
    \+ =(Rest,['='|_]),
    get_expr(Rest,INS1,OUTS1,FUNS1,_),
    !,
@@ -1099,7 +1103,7 @@
    unique(INSA,INS), unique(OUTTA,OUTT),
    !.
 
-@analyze_item_expr(intros,[id(V)|T],INS,[V|OUTS],[V],FUNS,[],[],LAZIES):-
+@analyze_item_expr(intros(TP),[id(V)|T],INS,[V|OUTS],[var(V,type(TP,T))],FUNS,[],[],LAZIES):-
    bypass_idxs(T,[],INS,OUTS,FUNS,LAZIES),
    !.
 
@@ -1164,27 +1168,31 @@
    analyze_expr(Rest,Ins,Outs,News,Funs,Procs,Refs,Lazies),
    !.
 
-@analyze_expr(L,[],[],[V1],[],[],[],[]):-
+@analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
    append(D,['*',id(V1)],L),
    declaration(D),
+   append(D,['*'],DD),
    !.
 
-@analyze_expr(L,[],[],[V1],[],[],[],[]):-
+@analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
    append(D,['*','*',id(V1)],L),
    declaration(D),
+   append(D,['*','*'],DD),
    !.
 
-@analyze_expr(L,[],[],[V1],[],[],[],[]):-
+@analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
    append(D,['*','*','*',id(V1)],L),
    declaration(D),
+   append(D,['*','*','*'],DD),
    !.
 
-@analyze_expr(L,[],[],[V1],[],[],[],[]):-
+@analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
    append(D,['&',id(V1)],L),
    declaration(D),
+   append(D,['&'],DD),
    !.
 
-@analyze_expr(L,[],[],[V1],[],[],[],[]):-
+@analyze_expr(L,[],[V1],[var(V1,type(D,[]))],[],[],[],[]):-
    append(D,[id(V1)],L),
    declaration(D),
    !.
@@ -1197,8 +1205,10 @@
    declaration(D),
    member(A,['=',',','[']),
    !,
-   analyze_list_expr(intros,[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
-   subtract(OUTS0,NEWS,OUTS),
+   append(D,['*'],DD),
+   !,
+   analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   union(OUTS0,[V1],OUTS),
    !.
 
 @analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
@@ -1206,8 +1216,10 @@
    declaration(D),
    member(A,['=',',','[']),
    !,
-   analyze_list_expr(intros,[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
-   subtract(OUTS0,NEWS,OUTS),
+   append(D,['*','*'],DD),
+   !,
+   analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   union(OUTS0,[V1],OUTS),
    !.
 
 @analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
@@ -1215,8 +1227,10 @@
    declaration(D),
    member(A,['=',',','[']),
    !,
-   analyze_list_expr(intros,[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
-   subtract(OUTS0,NEWS,OUTS),
+   append(D,['*','*','*'],DD),
+   !,
+   analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   union(OUTS0,[V1],OUTS),
    !.
 
 @analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
@@ -1224,8 +1238,10 @@
    declaration(D),
    member(A,['=',',','[']),
    !,
-   analyze_list_expr(intros,[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
-   subtract(OUTS0,NEWS,OUTS),
+   append(D,['&'],DD),
+   !,
+   analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   union(OUTS0,[V1],OUTS),
    !.
 
 @analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
@@ -1233,8 +1249,8 @@
    declaration(D),
    member(A,['=',',','[']),
    !,
-   analyze_list_expr(intros,[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
-   subtract(OUTS0,NEWS,OUTS),
+   analyze_list_expr(intros(D),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   union(OUTS0,[V1],OUTS),
    !.
 
 @analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
@@ -1242,6 +1258,10 @@
    !.
 
 @get_params_length([], 0):-!.
+
+@get_params_length([[type,_]|T], N):-
+   get_params_length(T,N),
+   !.
 
 @get_params_length([[arg,'...']],infinity):-!.
 
@@ -1274,65 +1294,65 @@
    ),
    !.
 
-@prepare_cilk_function(_,_,[]):-!.
+@prepare_gpu_function(_,_,[]):-!.
 
-@prepare_cilk_function(Name,N,[[name,Name]|T]):-
+@prepare_gpu_function(Name,N,[[name,Name]|T]):-
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[ret,_]|T]):-
+@prepare_gpu_function(Name,N,[[args,_]|T]):-
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[args,_]|T]):-
+@prepare_gpu_function(Name,N,[[ret,_]|T]):-
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[arg,V],[idxs,Idxs]|T]):-
+@prepare_gpu_function(Name,N,[[type,TP],[arg,V],[idxs,Idxs]|T]):-
    \+ atom_length(Idxs,0),
-   assertz(cilk_farg(Name,N,'[]',V)),
+   assertz(gpu_farg(Name,N,'[]',V,TP,Idxs)),
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[arg,'&'],[arg,V],[idxs,_]|T]):-
-   assertz(cilk_farg(Name,N,'&',V)),
+@prepare_gpu_function(Name,N,[[arg,'&'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'&',V,TP,[])),
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[arg,'*'],[arg,V],[idxs,_]|T]):-
-   assertz(cilk_farg(Name,N,'*',V)),
+@prepare_gpu_function(Name,N,[[arg,'*'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'*',V,TP,[])),
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[arg,'**'],[arg,V],[idxs,_]|T]):-
-   assertz(cilk_farg(Name,N,'**',V)),
+@prepare_gpu_function(Name,N,[[arg,'**'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'**',V,TP,[])),
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[arg,'***'],[arg,V],[idxs,_]|T]):-
-   assertz(cilk_farg(Name,N,'***',V)),
+@prepare_gpu_function(Name,N,[[arg,'***'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'***',V,TP,[])),
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_function(Name,N,[[arg,V],[idxs,'']|T]):-
-   assertz(cilk_farg(Name,N,'',V)),
+@prepare_gpu_function(Name,N,[[type,TP],[arg,V],[idxs,'']|T]):-
+   assertz(gpu_farg(Name,N,'',V,TP,[])),
    !,
-   prepare_cilk_function(Name,N,T).
+   prepare_gpu_function(Name,N,T).
 
-@prepare_cilk_functions:-
+@prepare_gpu_functions:-
    global_trace(TR),
    db_content('prog',GID,[[func]]),
    db_content('args',GID,Params),
-   once(append(_,[gid('clsCilkFunction',GID),gid('clsCilkBegin',_)|_],TR)),
+   once(append(_,[gid('clsGPUFunction',GID),gid('clsGPUBegin',_)|_],TR)),
    member([name,Name],Params),
    get_params_length(Params,N),
    \+ =(N,infinity),
    N1 is N-3, % -args, -ret, -name
-   asserta(cilk_function(Name,GID,N1)),
-   call(prepare_cilk_function(Name,N1,Params)),
+   asserta(gpu_function(Name,GID,N1)),
+   call(prepare_gpu_function(Name,N1,Params)),
    fail.
 
-@prepare_cilk_functions:-!.
+@prepare_gpu_functions:-!.
 
 @prepare_ifor([],_,[]):-!.
 
@@ -1349,7 +1369,7 @@
    prepare_ifor(T,Type,TT).
 
 @prepare_ops(Type,GID,[arg(INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L])]):-
-   member(Type,['clsCilkWhile','clsCilkSwitch','clsCilkIf','clsCilkReturn','clsCilkOper']),
+   member(Type,['clsGPUWhile','clsGPUSwitch','clsGPUIf','clsGPUReturn','clsGPUOper']),
    !,
    db_content('args',GID,[[_,Opnd]]),
    !,
@@ -1358,7 +1378,7 @@
    analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES),
    !.
 
-@prepare_ops('clsCilkAlternation',GID,[arg(INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L])]):-
+@prepare_ops('clsGPUAlternation',GID,[arg(INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L])]):-
    db_content('args',GID,[[_,Opnd]]),
    !,
    parse_expr(Opnd,L),
@@ -1367,10 +1387,10 @@
    !.
 
 % (default:) in switch-case
-@prepare_ops('clsCilkAlternation',_,[arg([],[],[],[],[],[],[],[])]):-
+@prepare_ops('clsGPUAlternation',_,[arg([],[],[],[],[],[],[],[])]):-
    !.
 
-@prepare_ops('clsCilkFor',GID,OPL):-
+@prepare_ops('clsGPUFor',GID,OPL):-
    db_content('args',GID,L),
    prepare_ifor(L,'init',OPL1),
    prepare_ifor(L,'cond',OPL2),
@@ -1379,119 +1399,123 @@
    append(OPL1,OPL2,OPLP), append(OPLP,OPL3,OPL),
    !.
 
-% Помещает в базу факт cilk_op(Class,GID1,GID2,IDs,Ops) только втом случае, если его еще в базе не было,
-% или он был, но с другими ops. В последнем случае устанавливается флаг-факт cilk_recalculate. Это требуется
+% Помещает в базу факт gpu_op(Class,GID1,GID2,IDs,Ops) только в том случае, если его еще в базе не было,
+% или он был, но с другими ops. В последнем случае устанавливается флаг-факт gpu_recalculate. Это требуется
 % для нормальной работы итеративной процедуры уточнения состава ленивых переменных/параметров для каждой функции
-@put_cilk_op(Class,GID1,GID2,IDs,Ops):-
+@put_gpu_op(Class,GID1,GID2,IDs,Ops):-
    (
-      (predicate_property(cilk_op(_,_,_,_,_),'dynamic'), cilk_op(Class,GID1,GID2,IDs,Ops1))->(
+      (predicate_property(gpu_op(_,_,_,_,_),'dynamic'), gpu_op(Class,GID1,GID2,IDs,Ops1))->(
         =(Ops,Ops1)->(
           true, !
         );(
-          retractall(cilk_op(Class,GID1,GID2,_,_)),
+          retractall(gpu_op(Class,GID1,GID2,_,_)),
           (
-           (predicate_property(cilk_reanalyze,'dynamic'), cilk_reanalyze)->(
+           (predicate_property(gpu_reanalyze,'dynamic'), gpu_reanalyze)->(
              true, !
            );(
-             asserta(cilk_reanalyze)
+             asserta(gpu_reanalyze)
            )
           ),
-          asserta(cilk_op(Class,GID1,GID2,IDs,Ops))
+          asserta(gpu_op(Class,GID1,GID2,IDs,Ops))
         )
       );(
-        asserta(cilk_op(Class,GID1,GID2,IDs,Ops))
+        asserta(gpu_op(Class,GID1,GID2,IDs,Ops))
       )
    ),
    !.
 
-@get_cilk_fseq([gid('clsCilkEnd',GID)|Rest],[gid('clsCilkEnd',GID)|Rest],[]):-!.
+@get_gpu_fseq([gid('clsGPUEnd',GID)|Rest],[gid('clsGPUEnd',GID)|Rest],[]):-!.
 
-@get_cilk_fseq(L,Rest,[GID|IDT]):-
-   get_cilk_fop(L,Rest0,GID),
+@get_gpu_fseq(L,Rest,[GID|IDT]):-
+   get_gpu_fop(L,Rest0,GID),
    !,
-   get_cilk_fseq(Rest0,Rest,IDT),
+   get_gpu_fseq(Rest0,Rest,IDT),
    !.
 
-@get_cilk_fop([gid('clsCilkBegin',GID1)|T],Rest,GID1):-
-   get_cilk_fseq(T,[gid('clsCilkEnd',GID2)|Rest],IDs),
+@get_gpu_fop([gid('clsGPUBegin',GID1)|T],Rest,GID1):-
+   get_gpu_fseq(T,[gid('clsGPUEnd',GID2)|Rest],IDs),
    !,
-   put_cilk_op('clsCilkBegin',GID1,GID2,IDs,[]),
+   put_gpu_op('clsGPUBegin',GID1,GID2,IDs,[]),
    !.
 
-@get_cilk_fop([gid(Type,GID)|T],Rest,GID):-
-   member(Type,['clsCilkFor','clsCilkSwitch','clsCilkWhile']),
+@get_gpu_fop([gid(Type,GID)|T],Rest,GID):-
+   member(Type,['clsGPUFor','clsGPUSwitch','clsGPUWhile']),
    !,
-   get_cilk_fop(T,Rest,OPID),
+   get_gpu_fop(T,Rest,OPID),
    !,
    prepare_ops(Type,GID,OPL),
-   put_cilk_op(Type,GID,-1,[OPID],OPL),
+   put_gpu_op(Type,GID,-1,[OPID],OPL),
    !.
 
-@get_cilk_fop([gid('clsCilkDo',GID)|T],Rest,GID):-
-   get_cilk_fop(T,[gid('clsCilkWhile',GID1),gid('clsCilkOper',EmptyGID)|Rest],OPID),
+@get_gpu_fop([gid('clsGPUDo',GID)|T],Rest,GID):-
+   get_gpu_fop(T,[gid('clsGPUWhile',GID1),gid('clsGPUOper',EmptyGID)|Rest],OPID),
    db_content('args',EmptyGID,[[op,'']]),
    !,
-   prepare_ops('clsCilkWhile',GID1,OPL),
-   put_cilk_op('clsCilkDo',GID,GID1,[OPID],OPL),
+   prepare_ops('clsGPUWhile',GID1,OPL),
+   put_gpu_op('clsGPUDo',GID,GID1,[OPID],OPL),
    !.
 
-@get_cilk_fop([gid('clsCilkIf',GID)|T],Rest,GID):-
-   get_cilk_fop(T,Rest0,OPID0),
+@get_gpu_fop([gid('clsGPUIf',GID)|T],Rest,GID):-
+   get_gpu_fop(T,Rest0,OPID0),
    !,
-   prepare_ops('clsCilkIf',GID,OPL),
+   prepare_ops('clsGPUIf',GID,OPL),
    (
-    =(Rest0,[gid('clsCilkElse',GID1)|Rest1])->(
-       get_cilk_fop(Rest1,Rest,OPID1),
-       put_cilk_op('clsCilkIf',GID,GID1,[OPID0,OPID1],OPL)
+    =(Rest0,[gid('clsGPUElse',GID1)|Rest1])->(
+       get_gpu_fop(Rest1,Rest,OPID1),
+       put_gpu_op('clsGPUIf',GID,GID1,[OPID0,OPID1],OPL)
     );(
-       put_cilk_op('clsCilkIf',GID,-1,[OPID0],OPL),
+       put_gpu_op('clsGPUIf',GID,-1,[OPID0],OPL),
        =(Rest,Rest0)
     )
    ),
    !.
 
-@get_cilk_fop([gid(Type,GID)|T],T,GID):-
-   prepare_ops(Type,GID,OPL),
-   put_cilk_op(Type,GID,-1,[],OPL),
+@get_gpu_fop([gid('clsGPUPreproc',GID)|T],T,GID):-
+   put_gpu_op('clsGPUPreproc',GID,-1,[],[]),
    !.
 
-@get_cilk_fprocs([],[]):-!.
+@get_gpu_fop([gid(Type,GID)|T],T,GID):-
+   prepare_ops(Type,GID,OPL),
+   put_gpu_op(Type,GID,-1,[],OPL),
+   !.
 
-@get_cilk_fprocs([GID|T],[GID|TT]):-
-   cilk_op('clsCilkOper',GID,_,[],[arg(_,_,_,_,[proc(Name,_)],_,_,_)]),
-   cilk_function(Name,_,_),
+@get_gpu_fprocs([],[]):-!.
+
+@get_gpu_fprocs([GID|T],[GID|TT]):-
+   gpu_op('clsGPUOper',GID,_,[],[arg(_,_,_,_,[proc(Name,_)],_,_,_)]),
+   gpu_function(Name,_,_),
    !,
-   get_cilk_fprocs(T,TT),
+   get_gpu_fprocs(T,TT),
    !.
    
-@get_cilk_fprocs([GID|T],PGIDS):-
-   cilk_op(_,GID,_,LGIDs,_),
+@get_gpu_fprocs([GID|T],PGIDS):-
+   gpu_op(_,GID,_,LGIDs,_),
    !,
-   get_cilk_fprocs(LGIDs,PGIDS0),
-   get_cilk_fprocs(T,PGIDS1),
+   get_gpu_fprocs(LGIDs,PGIDS0),
+   get_gpu_fprocs(T,PGIDS1),
    !,
    append(PGIDS0,PGIDS1,PGIDS),
    !.
 
-@build_cilk_function(Fun,FGID,Body):-
-   get_cilk_fop(Body,[],OPID),
-   put_cilk_op('clsCilkFunction',FGID,-1,[OPID],[]),
-   get_cilk_fprocs([OPID],ProcsGIDs),
-   asserta(cilk_fprocs(Fun,FGID,ProcsGIDs)),
+@build_gpu_function(Fun,FGID,Body):-
+   get_gpu_fop(Body,[],OPID),
+   put_gpu_op('clsGPUFunction',FGID,-1,[OPID],[]),
+   get_gpu_fprocs([OPID],ProcsGIDs),
+   asserta(gpu_fprocs(Fun,FGID,ProcsGIDs)),
    !.
 
-% Анализ (структурный, в глубину) всех функций с разбором выражений, результаты которого попадают в cilk_op
-@build_cilk_functions:-
+% Анализ (структурный, в глубину) всех функций с разбором выражений, результаты которого попадают в gpu_op
+@build_gpu_functions:-
    global_trace(TR),
-   retractall(cilk_fprocs(_,_,_)),
+   retractall(gpu_fprocs(_,_,_)),
    !,
    (
-    predicate_property(cilk_function(_,_,_),'dynamic')->(
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
      (
-      cilk_function(Fun,GID,_),
-      once(append(_,[gid('clsCilkFunction',GID)|T],TR)),
+      gpu_function(Fun,GID,_),
+      once(append(_,[gid('clsGPUFunction',GID)|T],TR)),
       bypass_complex(T,Body,_),
-      call(build_cilk_function(Fun,GID,Body)),
+      call(build_gpu_function(Fun,GID,Body)),
       fail);
      true,!
     );(
@@ -1501,14 +1525,15 @@
 
 @get_globals([],[]):-!.
 
-@get_globals([gid('clsCilkCVar',GID)|T],[V|T1]):-
+@get_globals([gid('clsGPUCVar',GID)|T],[var(V,type(TP,IDXS))|T1]):-
    db_content('args',GID,[[_,Arg]]),
    !,
    parse_expr(Arg,L),
-   rbypass_var(L,V,_,_,_,_,_),
+   rbypass_var(L,V,TP,_,_,_,_,_),
+   append(TP,[id(V)|IDXS],L),
    get_globals(T,T1).
 
-@get_globals([gid('clsCilkOper',GID)|T],T1):-
+@get_globals([gid('clsGPUOper',GID)|T],T1):-
    db_content('args',GID,[[_,Arg]]),
    !,
    parse_expr(Arg,L),
@@ -1517,7 +1542,7 @@
    append(NEWS,T0,T1),
    !.
 
-@get_globals([gid('clsCilkFunction',_)|T],T1):-
+@get_globals([gid('clsGPUFunction',_)|T],T1):-
    bypass_complex(T,_,After),
    get_globals(After,T1),
    !.
@@ -1528,7 +1553,14 @@
 @find_globals:-
    global_trace(TR),
    get_globals(TR,GLOBS),
-   asserta(cilk_globals(GLOBS)),
+   asserta(gpu_globals(GLOBS)),
+   !.
+
+@extract_var_names([],[]):-
+   !.
+
+@extract_var_names([var(Name,_)|T],[Name|T1]):-
+   extract_var_names(T,T1),
    !.
 
 @addLocals([],News,[News]):-!.
@@ -1560,9 +1592,9 @@
 
 @analyze_one_flazies([],_,_,_,[],[],[]):-!.
 
-% ReadParams -- читаемые в самой функции ее ленивые параметры (не только выходные, но и входные).
+% ReadParams -- читаемые в самой функции ее ленивые параметры (не только выходные, но и входные)
 @analyze_one_flazies([GID|GIDS],Globs,Pars,Locals,GLazies,PLazies,ReadParams):-
-   cilk_op(_,GID,_,IGIDs,Ops),
+   gpu_op(_,GID,_,IGIDs,Ops),
    getNewInOutLazies(Ops,News,Ins,Outs,_,_),
    addLocals(Locals,News,Locals1),
    excludeLocals(Outs,Locals1,PreOuts),
@@ -1579,32 +1611,33 @@
    !.
 
 @analyze_flazies(Fun,NPrms,GLazies,PLazies,ReadParams):-
-   cilk_function(Fun,GID,NPrms),
+   gpu_function(Fun,GID,NPrms),
    !,
    (
-    (predicate_property(cilk_fanalyzed(_,_,_,_,_),'dynamic'), cilk_fanalyzed(Fun,GID,GLazies,PLazies,ReadParams))->(
+    (predicate_property(gpu_fanalyzed(_,_,_,_,_),'dynamic'), gpu_fanalyzed(Fun,GID,GLazies,PLazies,ReadParams))->(
      true,!
      );(
      get_fparams(lazy,Fun,NPrms,LPars0),
      !,
-     cilk_globals(Glob0),
+     gpu_globals(GlobVars),
+     extract_var_names(GlobVars,Glob0),
      !,
-     asserta(cilk_fanalyzed(Fun,GID,[],LPars0,LPars0)),
+     asserta(gpu_fanalyzed(Fun,GID,[],LPars0,LPars0)),
      analyze_one_flazies([GID],Glob0,LPars0,[],GLazies,PLazies,ReadParams),
-     retractall(cilk_fanalyzed(Fun,GID,[],_,_)),
-     asserta(cilk_fanalyzed(Fun,GID,GLazies,PLazies,ReadParams)),
+     retractall(gpu_fanalyzed(Fun,GID,[],_,_)),
+     asserta(gpu_fanalyzed(Fun,GID,GLazies,PLazies,ReadParams)),
      !
     )
    ).
 
 % Определение выходных переменных (глобальных и потенциально модифицируемых параметров) для каждой функции. Для этого проводится
 % структурный анализ функции в глубину (с отслеживанием локально декларированных переменных, изменение которых нас здесь не интересует),
-% выявляются модифицируемые переменные. Модифицируемые глобалы и параметры попадают в cilk_fanalyzed
-@analyze_cilk_functions:-
+% выявляются модифицируемые переменные. Модифицируемые глобалы и параметры попадают в gpu_fanalyzed
+@analyze_gpu_functions:-
    (
-    predicate_property(cilk_function(_,_,_),'dynamic')->(
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
      (
-      cilk_function(Fun,_,N),
+      gpu_function(Fun,_,N),
       call(analyze_flazies(Fun,N,_,_,_)),
       fail);
      true,!
@@ -1613,23 +1646,23 @@
     )
    ).
 
-% Итерационное сходящееся уточнение состава ленивых переменных/параметров функций (cilk_fanalyzed). На каждой итерации
-% для каждой функции уточняется список модифицируемых глобальных переменных и &|*-параметров. Это делается в analyze_cilk_functions.
+% Итерационное сходящееся уточнение состава ленивых переменных/параметров функций (gpu_fanalyzed). На каждой итерации
+% для каждой функции уточняется список модифицируемых глобальных переменных и &|*-параметров. Это делается в analyze_gpu_functions.
 % Это уточнение может влиять на другие функции, вызывающие уточненные. Сначала считается, что функция модифицирует все свои &|*-параметры,
-% они входят в соответствующие списки cilk_fanalyzed, потом эти списки урезаются, в то время как списки глобальных переменных расщиряются.
+% они входят в соответствующие списки gpu_fanalyzed, потом эти списки урезаются, в то время как списки глобальных переменных расщиряются.
 % Проходит "волна" уточнений, в результате которой, например, функции int p1(int &x) { p2(x); }, int p2(int & x) { cout << x; } в последнем
 % приближении уже не имеют выходных ленивых значений вообще, в то время как функции int p1() { p2(); }, int p2() { X = 11; } имеют один
 % ленивый результат -- глобальную переменную X.
-% После оередного уточнения, выполняется перестройка cilk_op-фактов, в которых выполняется новый разбор выражений с учетом новых данных
-% о ленивости. Если при этом изменится хоть один факт, то устанавливается cilk_reanalyze, что свидетельствует о необходимости как минимум
+% После очередного уточнения, выполняется перестройка gpu_op-фактов, в которых выполняется новый разбор выражений с учетом новых данных
+% о ленивости. Если при этом изменится хоть один факт, то устанавливается gpu_reanalyze, что свидетельствует о необходимости как минимум
 % еще одной итерации.
 @iterative_build_funs:-
-   retractall(cilk_reanalyze),
-   build_cilk_functions,
+   retractall(gpu_reanalyze),
+   build_gpu_functions,
    (
-    (predicate_property(cilk_reanalyze,'dynamic'), cilk_reanalyze)->(
-      retractall(cilk_fanalyzed(_,_,_,_,_)),
-      analyze_cilk_functions,
+    (predicate_property(gpu_reanalyze,'dynamic'), gpu_reanalyze)->(
+      retractall(gpu_fanalyzed(_,_,_,_,_)),
+      analyze_gpu_functions,
       iterative_build_funs,
       !
     );(
@@ -1646,12 +1679,12 @@
    length(Prms,NPrms),
    !,
    (
-    (predicate_property(cilk_fpure(_),'dynamic'), cilk_fpure(Name));
+    (predicate_property(gpu_fpure(_),'dynamic'), gpu_fpure(Name));
     (
-     predicate_property(cilk_function(_,_,_),'dynamic'),
-     cilk_function(Name,_,NPrms),
-     predicate_property(cilk_fdependent(_,_,_,_),'dynamic'),
-     cilk_fdependent(Name,NPrms,f,_)
+     predicate_property(gpu_function(_,_,_),'dynamic'),
+     gpu_function(Name,_,NPrms),
+     predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),
+     gpu_fdependent(Name,NPrms,f,_)
     )
    ),
    !,
@@ -1681,7 +1714,7 @@
    !.
 
 @get_fblock_deps([GID|T]):-
-   cilk_op(_,GID,_,LGIDs,Exprs),
+   gpu_op(_,GID,_,LGIDs,Exprs),
    !,
    get_fexpr_deps(Exprs),
    !,
@@ -1689,27 +1722,6 @@
    !,
    get_fblock_deps(T),
    !.
-
-% Имеет ли блок внутри cilk_sync?
-@block_has_sync([]):-
-   !,
-   fail.
-
-@block_has_sync([GID|T]):-
-   !,
-   (
-    (predicate_property(cilk_sync(_),'dynamic'),cilk_sync(GID))->
-       true;
-       (
-        cilk_op(_,GID,_,LGIDs,_),
-        !,
-        (
-         block_has_sync(LGIDs)->
-           true;
-           block_has_sync(T)
-        )
-       )
-   ).
 
 @exprs_has_no_derefs([]):-
    !.
@@ -1724,24 +1736,74 @@
    !,
    exprs_has_no_derefs(T).
 
+@mark_flist_deps([]):-
+   !.
+
+@mark_flist_deps([V|T]):-
+   =..(V,[_,Name,Prms]),
+   length(Prms,NPrms),
+   !,
+   (
+    (predicate_property(gpu_fpure(_),'dynamic'), gpu_fpure(Name));
+    (
+     predicate_property(gpu_function(_,_,_),'dynamic'),
+     gpu_function(Name,GID,NPrms),
+     predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),
+     gpu_fdependent(Name,NPrms,f,_),
+     (
+      (predicate_property(gpu_do_not_worry(_,_,_),'dynamic'), gpu_do_not_worry(Name,GID,NPrms))->
+        true;
+        ( asserta(gpu_do_not_worry(Name,GID,NPrms)), mark_fblock_deps([GID]) )
+     )
+    )
+   ),
+   !,
+   mark_flist_deps(T),
+   !.
+
+@mark_fexpr_deps([]):-
+   !.
+
+@mark_fexpr_deps([V|T]):-
+   =..(V,[_,_,_,_,FUNS,[expr],_,_,_]),
+   !,
+   mark_flist_deps(FUNS),
+   mark_fexpr_deps(T),
+   !.
+
+@mark_fexpr_deps([V|T]):-
+   =..(V,[_,_,_,_,FUNS,PROCS,_,_,_]),
+   !,
+   mark_flist_deps(FUNS),
+   !,
+   mark_flist_deps(PROCS),
+   mark_fexpr_deps(T),
+   !.
+
+@mark_fblock_deps([]):-
+   !.
+
+@mark_fblock_deps([GID|T]):-
+   gpu_op(_,GID,_,LGIDs,Exprs),
+   !,
+   mark_fexpr_deps(Exprs),
+   !,
+   mark_fblock_deps(LGIDs),
+   !,
+   mark_fblock_deps(T),
+   !.
+
 % Содержит ли блок разыменование указателей
 @block_has_no_derefs([]):-
    !.
 
 @block_has_no_derefs([GID|T]):-
-   cilk_op(_,GID,_,LGIDs,Exprs),
+   gpu_op(_,GID,_,LGIDs,Exprs),
    !,
    exprs_has_no_derefs(Exprs),
    !,
    block_has_no_derefs(LGIDs),
    block_has_no_derefs(T).
-
-@extract_var_names([],[]):-
-   !.
-
-@extract_var_names([var(Name,_)|T],[Name|T1]):-
-   extract_var_names(T,T1),
-   !.
 
 @exprs_in_outs([],[],[],[]):-
    !.
@@ -1761,10 +1823,10 @@
    !.
 
 @for_in_outs([GID|T],Ins,Outs,News):-
-   cilk_op(C,GID,_,LGIDs,Exprs),
+   gpu_op(C,GID,_,LGIDs,Exprs),
    !,
    (
-    =(C,'clsCilkFor')->
+    =(C,'clsGPUFor')->
       (exprs_in_outs(Exprs,Ins0,_,News0),=(Outs0,[]));
       exprs_in_outs(Exprs,Ins0,Outs0,News0)
    ),
@@ -1821,7 +1883,7 @@
    !.
 
 @get_var_idxs([GID|T],Idxs):-
-   cilk_op(_,GID,_,LGIDs,Exprs),
+   gpu_op(_,GID,_,LGIDs,Exprs),
    !,
    get_expr_idxs(Exprs,Idxs0),
    !,
@@ -1901,6 +1963,7 @@
    !.
 
 @check_outs_by_idxs([V|T],Ins,FIdxs):-
+write(V),write(FIdxs),
    !,
    \+ member(var(V,[]),FIdxs), % Выходная переменная должна зависеть от индекса
    !,
@@ -1924,13 +1987,12 @@
 
 % Анализ возможности распараллелить for
 @analyze_for(GID):-
-   cilk_op('clsCilkFor',GID,_,LGIDs,Exprs),
+   gpu_op('clsGPUFor',GID,_,LGIDs,Exprs),
    (
-    (predicate_property(cilk_for_time(_,_),'dynamic'),cilk_for_time(GID,T))->
-       (g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY), TPAR is T + 3*(TSP + TSY), TSEQ is 8*T, TPAR < TSEQ); % 2^3 = 8 (бинарное дерево ветвления)
+    (predicate_property(gpu_for_time(_,_),'dynamic'),gpu_for_time(GID,T))->
+       (g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY), TPAR is TSP + 2*T + TSY, TSEQ is 8*T, TPAR < TSEQ);
        true
    ),
-   \+ once(block_has_sync(LGIDs)),
    member(init(_,_,_,_,_,_,_,[[id(Counter),'='|_]]),Exprs),
    (
     member(cond(_,[],_,_,_,_,_,[[id(Counter),'<','='|_]]),Exprs);
@@ -1946,35 +2008,37 @@
     member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'+','+']]),Exprs);
     member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'-','-']]),Exprs)
    ),
+   ( predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_) ),
    once(block_has_no_derefs(LGIDs)),
    once(get_fblock_deps(LGIDs)),
    once(for_content(Counter,LGIDs)),
-   asserta(cilk_for(GID)),
+   once(mark_fblock_deps(LGIDs)),
+   asserta(gpu_for(GID)),
    !.
 
 % Нельзя распараллелить for
 @analyze_for(GID):-
-   cilk_op('clsCilkFor',GID,_,_,_),
+   gpu_op('clsGPUFor',GID,_,_,_),
    !.
 
 @get_fors([],_):-!.
 
 @get_fors([GID|T],_):-
-   cilk_op(_,GID,_,[],_),
+   gpu_op(_,GID,_,[],_),
    !,
    get_fors(T,t),
    !.
    
 % Пытаемся распараллелить самый внешний цикл
 @get_fors([GID|T],Flag):-
-   cilk_op('clsCilkFor',GID,_,[LGID],_),
-   cilk_op('clsCilkFor',LGID,_,_,_),
+   gpu_op('clsGPUFor',GID,_,[LGID],_),
+   gpu_op('clsGPUFor',LGID,_,_,_),
    !,
    (
     =(Flag,t)->(
       analyze_for(GID),
       (
-       (predicate_property(cilk_for(_),'dynamic'),cilk_for(GID))->
+       (predicate_property(gpu_for(_),'dynamic'),gpu_for(GID))->
          get_fors([LGID],f);
          get_fors([LGID],t)
       )
@@ -1988,7 +2052,7 @@
 
 % Пытаемся распараллелить цикл
 @get_fors([GID|T],Flag):-
-   cilk_op('clsCilkFor',GID,_,LGIDs,_),
+   gpu_op('clsGPUFor',GID,_,LGIDs,_),
    !,
    (
     =(Flag,t)->
@@ -2003,7 +2067,7 @@
 
 % Прочие составные операторы
 @get_fors([GID|T],_):-
-   cilk_op(_,GID,_,LGIDs,_),
+   gpu_op(_,GID,_,LGIDs,_),
    !,
    get_fors(LGIDs,t),
    !,
@@ -2012,16 +2076,18 @@
    
 % Обработка и распараллеливание циклов в функции Fun
 @handle_fors_in_function(FGID):-
-   cilk_op('clsCilkFunction',FGID,_,LGIDs,_),
+   gpu_op('clsGPUFunction',FGID,_,LGIDs,_),
    get_fors(LGIDs,t),
    !.
 
-% Обработка и распараллеливание подходящих циклов в каждой функции
-@handle_fors:-
+% Обработка и распараллеливание подходящих циклов в каждой функции на уровне Level
+@handle_fors_level(Level):-
    (
-    predicate_property(cilk_function(_,_,_),'dynamic')->(
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
      (
-      cilk_function(_,GID,_),
+      gpu_function(Name,GID,NPrms),
+      gpu_fdependent(Name,NPrms,_,Level),
+      \+ gpu_do_not_worry(Name,GID,NPrms),
       call(handle_fors_in_function(GID)),
       fail);
      true,!
@@ -2029,6 +2095,19 @@
      true,!
     )
    ).
+
+% Обработка и распараллеливание подходящих циклов
+@handle_fors(Level,Max):-
+   once(handle_fors_level(Level)),
+   !,
+   Level1 is Level + 1,
+   !,
+   (
+    ==(Level,Max)->
+      true;
+      ( handle_fors(Level1,Max), ! )
+   ),
+   !.
 
 @get_list_deps(_,[]):-
    !.
@@ -2060,7 +2139,7 @@
    !.
 
 @get_block_deps(NamePath,[GID|T]):-
-   cilk_op(_,GID,_,LGIDs,Exprs),
+   gpu_op(_,GID,_,LGIDs,Exprs),
    get_expr_deps(NamePath,Exprs),
    get_block_deps(NamePath,LGIDs),
    !,
@@ -2070,47 +2149,56 @@
 @mark_deps([]):-
    !.
 
-@mark_deps([path(Name,NPrms)|T]):-
+@mark_deps([path(Name,NPrms,Level)|T]):-
    (
-    (predicate_property(cilk_fdependent(_,_,_),'dynamic'),cilk_fdependent(Name,NPrms,t))->(
+    (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,t,_))->(
       true,!
     );(
-      retractall(cilk_fdependent(Name,NPrms,_)), asserta(cilk_fdependent(Name,NPrms,t))
+      retractall(gpu_fdependent(Name,NPrms,_,_)), asserta(gpu_fdependent(Name,NPrms,t,Level))
     )
    ),
    mark_deps(T).
 
 @get_fdeps(Name,NamePath,NPrms):-
-   member(path(Name,NPrms),NamePath),
+   member(path(Name,NPrms,Level),NamePath),
+   !,
+% Важно! Кольцо рекурсии даже для независимых функций считается ЗАВИСИМОСТЯМИ, поскольку векторные вычислители с таким кольцом могут не работать!
+   retractall(gpu_fdependent(Name,NPrms,_,_)), asserta(gpu_fdependent(Name,NPrms,t,Level)),
    !.
 
 @get_fdeps(Name,NamePath,NPrms):-
-   cilk_function(Name,GID,NPrms),
-   cilk_op('clsCilkFunction',GID,_,LGIDs,_),
+   gpu_function(Name,GID,NPrms),
+   gpu_op('clsGPUFunction',GID,_,LGIDs,_),
    (
-    (predicate_property(cilk_fdependent(_,_,_),'dynamic'),cilk_fdependent(Name,NPrms,_))->(
+    (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,_,_))->(
       true,!
     );(
-      get_block_deps([path(Name,NPrms)|NamePath],LGIDs),
       (
-       (predicate_property(cilk_fdependent(_,_,_),'dynamic'),cilk_fdependent(Name,NPrms,_))->(
+        =(NamePath,[])->
+         =(Level,0);
+         (=(NamePath,[path(_,_,Level0)|_]), Level is Level0 + 1)
+      ),
+      !,
+      get_block_deps([path(Name,NPrms,Level)|NamePath],LGIDs),
+      (
+       (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,_,_))->(
          true,!
        );(
-         asserta(cilk_fdependent(Name,NPrms,f))
+         asserta(gpu_fdependent(Name,NPrms,f,Level))
        )
       )
     )
    ),
    (
-     (predicate_property(cilk_fdependent(_,_,_),'dynamic'),cilk_fdependent(Name,NPrms,t))->
+     (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,t,_))->
         mark_deps(NamePath);
         true
    ).
 
 @get_fdeps(Name,NamePath,NPrms):-
-   \+ cilk_function(Name,_,NPrms),
+   \+ gpu_function(Name,_,NPrms),
    (
-    (predicate_property(cilk_fpure(_),'dynamic'),cilk_fpure(Name))->
+    (predicate_property(gpu_fpure(_),'dynamic'),gpu_fpure(Name))->
        true;
        mark_deps(NamePath)
    ),
@@ -2119,9 +2207,11 @@
 % Определение зависимостей функций от внешних функций
 @find_dependents:-
    (
-    predicate_property(cilk_function(_,_,_),'dynamic')->(
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
      (
-      cilk_function(Name,_,NPrms),
+      gpu_function('main',_,NPrms),
+      call(get_fdeps('main',[],NPrms)),
+      gpu_function(Name,_,NPrms),
       call(get_fdeps(Name,[],NPrms)),
       fail);
      true,!
@@ -2130,66 +2220,59 @@
     )
    ).
 
-@get_comma_list([id(F),')'],[F]):-
+@get_comma_list([V,')'],[F]):-
+   =..(V,[_,F]),
    !.
 
-@get_comma_list([id(F),','|R],[F|T]):-
+@get_comma_list([V,','|R],[F|T]):-
+   =..(V,[_,F]),
    get_comma_list(R,T).
+
+@get_next_op(GID,Next):-
+   gpu_op(_,_,_,GIDs,_),
+   append(_,[GID,Next|_],GIDs),
+   !.
+
+@get_next_op(GID,Next):-
+   global_trace(GIDs),
+   append(_,[gid(_,GID),gid(_,Next)|_],GIDs),
+   !.
 
 @analyze_pragma_pure([]):-
    !.
 
 @analyze_pragma_pure([F|T]):-
    (
-    (predicate_property(cilk_fpure(_),'dynamic'),cilk_fpure(F))->
+    (predicate_property(gpu_fpure(_),'dynamic'),gpu_fpure(F))->
        true;
-       asserta(cilk_fpure(F))
+       asserta(gpu_fpure(F))
    ),
    !,
    analyze_pragma_pure(T).
 
 % Очистка + Загрузка необходимых данных перед анализом
-@prepare_cilk:-
+@prepare_data:-
    retractall(db_content(_,_,_)),
-   retractall(cilk_function(_,_,_)),
-   retractall(cilk_fdependent(_,_,_)),
-   retractall(cilk_fpure(_)),
-   retractall(cilk_farg(_,_,_,_)),
-   retractall(cilk_fprocs(_,_,_)),
-   retractall(cilk_op(_,_,_,_,_)),
-   retractall(cilk_globals(_)),
-   retractall(cilk_fanalyzed(_,_,_,_,_)),
-   retractall(cilk_ftime(_,_,_)),
-   retractall(cilk_auto_for),
-   retractall(cilk_for_time(_,_)),
-   asserta(cilk_retime), retractall(cilk_retime),
-   asserta(cilk_reanalyze), retractall(cilk_reanalyze),
-   retractall(cilk_spawn(_)),
-   retractall(cilk_spawn_time(_,_)),
-   retractall(cilk_sync(_)),
-   retractall(cilk_for(_)),
-   retractall(cilk_break(_)),
-   retractall(cilk_continue(_)),
+   retractall(gpu_function(_,_,_)),
+   retractall(gpu_fdependent(_,_,_,_)),
+   retractall(gpu_fpure(_)),
+   retractall(gpu_farg(_,_,_,_,_,_)),
+   retractall(gpu_fprocs(_,_,_)),
+   retractall(gpu_op(_,_,_,_,_)),
+   retractall(gpu_globals(_)),
+   retractall(gpu_fanalyzed(_,_,_,_,_)),
+   retractall(gpu_ftime(_,_,_)),
+   retractall(gpu_for_time(_,_)),
+   asserta(gpu_do_not_worry('','','')), retractall(gpu_do_not_worry(_,_,_)),
+   asserta(gpu_for_interface('','')), retractall(gpu_for_interface(_,_)),
+   asserta(gpu_retime), retractall(gpu_retime),
+   asserta(gpu_reanalyze), retractall(gpu_reanalyze),
+   asserta(gpu_for('')), retractall(gpu_for(_)),
+   retractall(gpu_break(_)),
+   retractall(gpu_continue(_)),
    retractall(params(_)),
    retractall(counter(_)),
    read_db,
-   (
-    (db_content('prog',GID,[['preproc']]),db_content('args',GID,[[body,S]]),parse_expr(S,['#',id('pragma'),id('auto'),id('for')]))->
-     (
-      !,
-      (
-       (predicate_property(cilk_auto_for,'dynamic'), cilk_auto_for)->
-         true;
-         asserta(cilk_auto_for)
-      ),
-      once(global_trace(GTR)),
-      append(LEFTR,[gid(_,GID)|RIGHTR],GTR),
-      append(LEFTR,RIGHTR,GTR2),
-      once(retractall(global_trace(_))),
-      once(asserta(global_trace(GTR2)))
-     );
-     true
-   ),
    !,
    (
     (db_content('prog',GID1,[['preproc']]),
@@ -2197,34 +2280,34 @@
      once(parse_expr(S1,['#',id('pragma'),id('auto'),id('pure'),'('|R1])),
      once(get_comma_list(R1,L1)),
      once(analyze_pragma_pure(L1)),
-     once(global_trace(GTRX)),
-     append(LEFTRX,[gid(_,GID1)|RIGHTRX],GTRX),
-     append(LEFTRX,RIGHTRX,GTR2X),
+     once(global_trace(GTR)),
+     append(LEFTR,[gid(_,GID1)|RIGHTR],GTR),
+     append(LEFTR,RIGHTR,GTR2),
      once(retractall(global_trace(_))),
-     once(asserta(global_trace(GTR2X))),
+     once(asserta(global_trace(GTR2))),
      fail);
      true
    ),
    !,
-   prepare_cilk_functions,
+   prepare_gpu_functions,
    !,
    find_globals,
    !,
-   build_cilk_functions,
+   build_gpu_functions,
    !,
-   analyze_cilk_functions,
+   analyze_gpu_functions,
    !,
    iterative_build_funs,
    !,
    find_dependents,
    !.
 
-@find_lvar(V,[Globals],global(V)):-
-   member(global(V),Globals),
+@find_lvar(V,[Globals],global(V,TP)):-
+   member(global(V,TP),Globals),
    !.
 
-@find_lvar(V,[TopVars|_],loc(TopGID,V)):-
-   member(loc(TopGID,V),TopVars),
+@find_lvar(V,[TopVars|_],loc(TopGID,V,TP)):-
+   member(loc(TopGID,V,TP),TopVars),
    !.
 
 @find_lvar(V,[_|RestVars],V1):-
@@ -2233,7 +2316,7 @@
 
 @find_lvars([],_,[]):-!.
 
-@find_lvars([global(V)|T],Vars,[global(V)|T1]):-
+@find_lvars([global(V,TP)|T],Vars,[global(V,TP)|T1]):-
    find_lvars(T,Vars,T1),
    !.
 
@@ -2254,7 +2337,7 @@
 
 @loc_prefixate(_,[],[]):-!.
 
-@loc_prefixate(TopGID,[V|T],[loc(TopGID,V)|T1]):-
+@loc_prefixate(TopGID,[var(V,TP)|T],[loc(TopGID,V,TP)|T1]):-
    loc_prefixate(TopGID,T,T1),
    !.
 
@@ -2274,7 +2357,7 @@
    append(NewsP,News1,News2), append(InsP,Ins1,Ins2), append(LazP,Laz1,Laz2),
    append(OutsP,Outs1,Outs2), append(RefsP,Refs1,Ref2),
    unique(News2,News), unique(Ins2,Ins), unique(Laz2,Lazies),
-   unique(Outs2,Outs), unique(Ref2,Refs),
+   append(Outs2,News,Outs3), unique(Outs3,Outs), unique(Ref2,Refs),
    TM is T0+T1,
    !.
 
@@ -2305,649 +2388,428 @@
    ),
    !.
 
-@put_cilk_sync(GID):-
-   (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(GID))->
-      (true, !);
-      (asserta(cilk_sync(GID))).
+@check_no_multidim_or_glob([]):-!.
 
-@inc_spawns([],[],_):-!.
-
-@inc_spawns([trace(S,Fun,NPrms,T0)|T1],[trace(S,Fun,NPrms,TR)|T2],Delta):-
-   TR is T0+Delta,
-   inc_spawns(T1,T2,Delta).
-
-@start_spawn(GID,Fun,NPrms,L,[trace(GID,Fun,NPrms,0.0)|L],T1,T2):-
-   g_read('$SpawnTime', A),  % +Затраты на собственно spawn
-   T2 is T1+A.
-
-@stop_spawns([],[],T,T):-!.
-
-@stop_spawns([trace(GID,Fun,NPrm,T1)|T],[],T0,TMax):-
-   get_ftime(Fun,NPrm,TF),
-   g_read('$SyncTime', SyncTime),
-   (
-    <(T1,TF)->
-      TT is T0+TF-T1+SyncTime;
-      TT is T0+SyncTime % Затраты на собственно sync
-   ),
-   (
-    (predicate_property(cilk_spawn_time(_,_),'dynamic'), cilk_spawn_time(GID,Timings))->
-      (
-         retractall(cilk_spawn_time(GID,_)),
-         asserta(cilk_spawn_time(GID,[TT|Timings]))
-      );(
-         asserta(cilk_spawn_time(GID,[TT]))
-      )
-   ),
-   stop_spawns(T,[],T0,TC),
-   (
-    >(TT,TC)->
-      =(TMax,TT);
-      =(TMax,TC)
-   ),
+@check_no_multidim_or_glob([loc(_,_,type(_,[]))|T]):-
+   check_no_multidim_or_glob(T),
    !.
 
+@check_no_multidim_or_glob([global(_,_)|_]):-
+   !,
+   fail.
+
+@check_no_multidim_or_glob([loc(_,_,type(_,['['|IDXS]))|T]):-
+   append(_,[']'|Rest],IDXS),
+   !,
+   (=(Rest,[])->
+     (check_no_multidim_or_glob(T), !);
+     (!, fail)
+   ).
+
+@find_pivot([],_):-
+   !, fail.
+
+@find_pivot([loc(_,Pivot,type([id('__pivot')|_],['['|_]))|_],Pivot):-
+   !.
+
+@find_pivot([global(Pivot,type([id('__pivot')|_],['['|_]))|_],Pivot):-
+   !.
+
+@find_pivot([_|T],Pivot):-
+   find_pivot(T,Pivot).
+
+@add_modifiers([],[]):-!.
+
+@add_modifiers([loc(GID,Pivot,type([id('__pivot')|RestType],IDXS))|T],[loc(GID,Pivot,type([id('_pivot')|RestType],IDXS))|T1]):-
+   add_modifiers(T,T1),
+   !.
+
+@add_modifiers([loc(GID,Name,type(TYPE,[]))|T],[loc(GID,Name,type([id('_global')|TYPE],[]))|T1]):-
+   member('*',TYPE),
+   !,
+   add_modifiers(T,T1),
+   !.
+
+@add_modifiers([loc(GID,Name,type(TYPE,IDXS))|T],[loc(GID,Name,type([id('_global')|TYPE],IDXS))|T1]):-
+   \+ =(IDXS,[]),
+   \+ member('*',TYPE),
+   !,
+   add_modifiers(T,T1),
+   !.
+
+@add_modifiers([loc(GID,Name,type(TYPE,IDXS))|T],[loc(GID,Name,type(TYPE,IDXS))|T1]):-
+   add_modifiers(T,T1),
+   !.
+
+@add_modifiers([global(Pivot,type([id('__pivot')|RestType],IDXS))|T],[global(Pivot,type([id('_pivot')|RestType],IDXS))|T1]):-
+   add_modifiers(T,T1),
+   !.
+
+@add_modifiers([global(Name,type(TYPE,[]))|T],[global(Name,type([id('_global')|TYPE],[]))|T1]):-
+   member('*',TYPE),
+   !,
+   add_modifiers(T,T1),
+   !.
+
+@add_modifiers([global(Name,type(TYPE,IDXS))|T],[global(Name,type([id('_global')|TYPE],IDXS))|T1]):-
+   \+ =(IDXS,[]),
+   \+ member('*',TYPE),
+   !,
+   add_modifiers(T,T1),
+   !.
+
+@add_modifiers([global(Name,type(TYPE,IDXS))|T],[global(Name,type(TYPE,IDXS))|T1]):-
+   add_modifiers(T,T1),
+   !.
+
+@not_used(_).
+
 % Альтернативы из switch {}
-@traverse_alters([CurGID|GIDs], [TopGID|StackGIDs], [switch(TopGID,Pass)|StackConstrs], StackConstrs, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time, NAlt):-
-   cilk_op('clsCilkAlternation',CurGID,_,[],_),
+@traverse_alters([CurGID|GIDs], [TopGID|StackGIDs], [switch(TopGID,Pass)|StackConstrs], StackConstrs, Vars, Time, Used0, Used, NEWS0, NEWS, NAlt):-
+   gpu_op('clsGPUAlternation',CurGID,_,[],_),
    (
-    (append(ALT,[NextGID|_],GIDs),cilk_op('clsCilkOper',NextGID,_,[],_),db_content('args',NextGID,[['op','break']]),!)->
+    (append(ALT,[NextGID|_],GIDs),gpu_op('clsGPUOper',NextGID,_,[],_),db_content('args',NextGID,[['op','break']]),!)->
        (
         !,
-        traverse_fun(NextGID,ALT,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,InLazies,LazV,InRefs,RefV,ISpawns,OSP1,T1),
+        traverse_fun(ALT,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,Used0,Used1,NEWS0,NEWS1,T1),
         !
        );
        (
-        traverse_fun(NextGID,GIDs,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,InLazies,LazV,InRefs,RefV,ISpawns,OSP1,T1),
+        traverse_fun(GIDs,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,Used0,Used1,NEWS0,NEWS1,T1),
         !
        )
    ),
-   retractall(cilk_break(_)),
+   retractall(gpu_break(_)),
    (
-    (append(_,[NextGID1|Rest1],GIDs),cilk_op('clsCilkAlternation',NextGID1,_,[],_))->(
+    (append(_,[NextGID1|Rest1],GIDs),gpu_op('clsGPUAlternation',NextGID1,_,[],_))->(
        !,
-       traverse_alters([NextGID1|Rest1],[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,InLazies,LazVV,InRefs,RefVV,OSP1,OSpawns,T2,NAlt1),
-       append(LazV,LazVV,Laz1), append(RefV,RefVV,Ref1),
-       unique(Laz1,OutLazies), unique(Ref1,OutRefs),
+       traverse_alters([NextGID1|Rest1],[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,T2,Used1,Used,NEWS1,NEWS,NAlt1),
        Time is T1+T2,
        NAlt is NAlt1+1,
        !
     );(
-       =(OutLazies,LazV), =(OutRefs,RefV), =(OSpawns,OSP1), =(Time,T1), =(NAlt,1),
+       =(Time,T1), =(NAlt,1), =(Used,Used1), =(NEWS,NEWS1),
        !
     )
    ),
    !.
 
-@traverse_alters([], [TopGID|_], [switch(TopGID,_)|CRest], CRest, _, InLazies, InLazies, InRefs, InRefs, ISpawns, ISpawns, 0.0, 0):-!.
+@traverse_alters([], [TopGID|_], [switch(TopGID,_)|CRest], CRest, _, 0.0, Used, Used, NEWS, NEWS, 0):-!.
 
 % Окончание while
-@traverse_fun(SyncGID,[], [TopGID|StackGIDs], [while(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkWhile',TopGID,_,[IGID],Ops),
+@traverse_fun([], [TopGID|StackGIDs], [while(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUWhile',TopGID,_,[_],Ops),
    !,
-   (=(SyncGID,IGID);true), % Если SyncGID не связан, то получает значение IGID, иначе значение SyncGID сохраняется
+   getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,News,Ins,Outs,_,_,BaseTime),
    !,
-   getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,_,Ins,Outs,Refs,Lazs,BaseTime),
-   inc_spawns(ISpawns,ISP,BaseTime),
+   union(Used0, Ins, Used1), union(Used1, Outs, Used2), union(NEWS0, News, NEWSX), !,
    (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,TP)
-      );(
-       intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2), intersect(LVars,InRefs,Decision3),
-       (
-        (=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
-          =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(TP,0.0)
-        );(
-          (
-           cilk_op('clsCilkBegin',IGID,EGID,_,_)->
-            put_cilk_sync(EGID);
-            (
-             retractall(cilk_op('clsCilkWhile',TopGID,_,[IGID],Ops)),
-             NewIGID is IGID+10000,
-             NewEGID is NewIGID+1,
-             NewDGID is NewIGID+2,
-             asserta(cilk_op('clsCilkWhile',TopGID,-1,[NewIGID],Ops)),
-             asserta(cilk_op('clsCilkBegin',NewIGID,NewEGID,[IGID,NewDGID],[arg([],[],[],[],[],[],[],[])])),
-             asserta(cilk_op('clsCilkOper',NewDGID,-1,[],[arg([],[],[],[],[],[],[],[])])),
-             asserta(cilk_op('clsCilkEnd',NewEGID,-1,[],[arg([],[],[],[],[],[],[],[])])),
-             asserta(db_content('prog',NewIGID,[['{']])),
-             asserta(db_content('prog',NewEGID,[['}']])),
-             asserta(db_content('prog',NewDGID,[['op']])),
-             asserta(db_content('args',NewDGID,[['op','']])),
-             once(global_trace(TR)),
-             append(Left,[gid(C,IGID)|Right],TR),
-             bypass_op([gid(C,IGID)|Right],OPP,RIGHT),
-             append(Left,[gid('clsCilkBegin',NewIGID)|OPP],LL1),
-             append(LL1,[gid('clsCilkOper',NewDGID),gid('clsCilkEnd',NewEGID)|RIGHT],TR1),
-             retractall(global_trace(_)),
-             asserta(global_trace(TR1)),
-             !,
-             put_cilk_sync(NewDGID)
-            )
-          ),
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,TP)
-        )
-       )
-      )
-   ),
-   append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-   unique(Laz0,Laz1), unique(Ref0,Ref1),
-   !,
-   (
-    (predicate_property(cilk_continue(_),'dynamic'), cilk_continue(_))->(
+    (predicate_property(gpu_continue(_),'dynamic'), gpu_continue(_))->(
       =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
       =(CONT,0)
     )
    ),
-   retractall(cilk_continue(_)),
+   retractall(gpu_continue(_)),
    (
-    (predicate_property(cilk_break(_),'dynamic'), cilk_break(_))->(
-       retractall(cilk_break(_)),
-       =(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T1,0.0)
+    (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+       retractall(gpu_break(_)),
+       =(T1,0.0), =(Used, Used2), =(NEWS, NEWSX)
       );(
        =(Pass,1)->
-         ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
-          cilk_op('clsCilkWhile',TopGID,_,[IGID1],_),
-          traverse_fun(_,[IGID1],[TopGID|StackGIDs],[while(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLazies,Ref1,OutRefs,OSP1,OSpawns,T1)
+         ( % IGID внутреннего оператора мог измениться
+          gpu_op('clsGPUWhile',TopGID,_,[IGID1],_),
+          traverse_fun([IGID1],[TopGID|StackGIDs],[while(TopGID,2)|StackConstrs],_,[LVars|Vars],Used2,Used,NEWSX,NEWS,T1)
          );
-         (=(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns, OSP1), =(T1,0.0))
+         (=(T1,0.0), =(Used, Used2), =(NEWS, NEWSX))
       )
    ),
    (
     (=(CONT,1))->(
-      Time is TP+BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+      Time is BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
-      Time is TP+T1+BaseTime
+      Time is T1+BaseTime
     )
    ),
    !.
 
 % Прерывание break
-@traverse_fun(_,[CurGID|_], StackGIDs, [Top|StackConstrs], StackConstrs, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkOper',CurGID,_,[],_),
+@traverse_fun([CurGID|_], StackGIDs, [Top|StackConstrs], StackConstrs, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUOper',CurGID,_,[],_),
    db_content('args',CurGID,[['op','break']]),
    !,
-   asserta(cilk_break(CurGID)),
+   asserta(gpu_break(CurGID)),
    =..(Top,[_,TopGID,_]),
    !, % Цикл выхода из конструкций верхнего уровня
-     asserta(lz(InLazies)), asserta(rf(InRefs)), asserta(vr(Vars)), asserta(sp(ISpawns)), asserta(tm(0.0)),
+     asserta(vr(Vars)), asserta(tm(0.0)), asserta(us(Used0)), asserta(nw(NEWS0)),
      append(_,[CurTopGID|Rest],StackGIDs),
-     once(lz(LZ0)), once(rf(RF0)), once(vr(VAR0)), once(sp(SP0)), once(tm(T0)),
-     traverse_fun(CurGID,[],[CurTopGID|Rest],[Top|StackConstrs],_,VAR0,LZ0,LZ1,RF0,RF1,SP0,SP1,TT),
+     once(vr(VAR0)), once(tm(T0)), once(us(U0)), once(nw(N0)),
+     traverse_fun([],[CurTopGID|Rest],[Top|StackConstrs],_,VAR0,U0,U1,N0,N1,TT),
      T1 is T0+TT,
-     retractall(lz(_)), retractall(rf(_)), retractall(vr(_)), retractall(sp(_)), retractall(tm(_)),
+     retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
      =(VAR0,[_|VAR1]),
-     asserta(lz(LZ1)), asserta(rf(RF1)), asserta(vr(VAR1)), asserta(sp(SP1)), asserta(tm(T1)),
+     asserta(vr(VAR1)), asserta(tm(T1)), asserta(us(U1)), asserta(nw(N1)),
      =(TopGID,CurTopGID), % Проверка -- условие окончания цикла
    !,
-   =(OutLazies,LZ1), =(OutRefs,RF1), =(OSpawns,SP1), =(Time,T1),
-   retractall(lz(_)), retractall(rf(_)), retractall(vr(_)), retractall(sp(_)), retractall(tm(_)),
+   =(Time,T1), =(Used,U1), =(NEWS,N1),
+   retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
    !.
 
 % Возобновление continue
-@traverse_fun(_,[CurGID|_], StackGIDs, StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkOper',CurGID,_,[],_),
+@traverse_fun([CurGID|_], StackGIDs, StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUOper',CurGID,_,[],_),
    db_content('args',CurGID,[['op','continue']]),
    !,
-   asserta(cilk_continue(CurGID)),
+   asserta(gpu_continue(CurGID)),
    !, % Цикл выхода из конструкций верхнего уровня
-     asserta(lz(InLazies)), asserta(rf(InRefs)), asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(sp(ISpawns)), asserta(tm(0.0)),
+     asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(tm(0.0)), asserta(us(Used0)), asserta(nw(NEWS0)),
      append(_,[CurTopGID|Rest],StackGIDs),
-     once(lz(LZ0)), once(rf(RF0)), once(st(ST0)), once(vr(VAR0)), once(sp(SP0)), once(tm(T0)),
-     traverse_fun(CurGID,[],[CurTopGID|Rest],ST0,ST1,VAR0,LZ0,LZ1,RF0,RF1,SP0,SP1,TT),
+     once(st(ST0)), once(vr(VAR0)), once(tm(T0)), once(us(U0)), once(nw(N0)),
+     traverse_fun([],[CurTopGID|Rest],ST0,ST1,VAR0,U0,U1,N0,N1,TT),
      T1 is T0+TT,
-     retractall(lz(_)), retractall(rf(_)), retractall(st(_)), retractall(vr(_)), retractall(sp(_)), retractall(tm(_)),
+     retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
      =(VAR0,[_|VAR1]),
-     asserta(lz(LZ1)), asserta(rf(RF1)), asserta(st(ST1)), asserta(vr(VAR1)), asserta(sp(SP1)), asserta(tm(T1)),
-     \+ cilk_continue(CurGID), % Проверка -- условие окончания цикла
+     asserta(st(ST1)), asserta(vr(VAR1)), asserta(tm(T1)), asserta(us(U1)), asserta(nw(N1)),
+     \+ gpu_continue(CurGID), % Проверка -- условие окончания цикла
    !,
-   =(OutLazies,LZ1), =(OutRefs,RF1), =(OutCStack,ST1), =(OSpawns,SP1), =(Time,T1),
-   retractall(lz(_)), retractall(rf(_)), retractall(st(_)), retractall(vr(_)), retractall(sp(_)), retractall(tm(_)),
+   =(OutCStack,ST1), =(Time,T1), =(Used,U1), =(NEWS,N1),
+   retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
    !.
 
 % Возврат return
-@traverse_fun(_,[CurGID|_], StackGIDs, StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkReturn',CurGID,_,[],_),
+@traverse_fun([CurGID|_], StackGIDs, StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUReturn',CurGID,_,[],_),
    !, % Цикл выхода из конструкций верхнего уровня
-     asserta(lz(InLazies)), asserta(rf(InRefs)), asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(sp(ISpawns)), asserta(tm(0.0)),
+     asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(tm(0.0)), asserta(us(Used0)), asserta(nw(NEWS0)),
      append(_,[CurTopGID|Rest],StackGIDs),
-     once(lz(LZ0)), once(rf(RF0)), once(st(ST0)), once(vr(VAR0)), once(sp(SP0)), once(tm(T0)),
-     traverse_fun(CurGID,[],[CurTopGID|Rest],ST0,ST1,VAR0,LZ0,LZ1,RF0,RF1,SP0,SP1,TT),
+     once(st(ST0)), once(vr(VAR0)), once(tm(T0)), once(us(U0)), once(nw(N0)),
+     traverse_fun([],[CurTopGID|Rest],ST0,ST1,VAR0,U0,U1,N0,N1,TT),
      T1 is T0+TT,
-     retractall(lz(_)), retractall(rf(_)), retractall(st(_)), retractall(vr(_)), retractall(sp(_)), retractall(tm(_)),
+     retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
      =(VAR0,[_|VAR1]),
-     asserta(lz(LZ1)), asserta(rf(RF1)), asserta(st(ST1)), asserta(vr(VAR1)), asserta(sp(SP1)), asserta(tm(T1)),
+     asserta(st(ST1)), asserta(vr(VAR1)), asserta(tm(T1)), asserta(us(U1)), asserta(nw(N1)),
      =(Rest,[-1]), % Проверка -- условие окончания цикла
    !,
-   =(OutLazies,LZ1), =(OutRefs,RF1), =(OutCStack,ST1), =(OSpawns,SP1), =(Time,T1),
-   retractall(lz(_)), retractall(rf(_)), retractall(st(_)), retractall(vr(_)), retractall(sp(_)), retractall(tm(_)),
+   =(OutCStack,ST1), =(Time,T1), =(Used,U1), =(NEWS,N1),
+   retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
    !.
 
 % Окончание do-while
-@traverse_fun(SyncGID,[], [TopGID|StackGIDs], [do(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkDo',TopGID,LastGID,[IGID],Ops),
+@traverse_fun([], [TopGID|StackGIDs], [do(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUDo',TopGID,LastGID,[_],Ops),
    !,
-   (=(SyncGID,IGID);true), % Если SyncGID не связан, то получает значение IGID, иначе значение SyncGID сохраняется
+   getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,News,Ins,Outs,_,_,BaseTime),
    !,
-   getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,_,Ins,Outs,Refs,Lazs,BaseTime),
-   inc_spawns(ISpawns,ISP,BaseTime),
+   union(Used0, Ins, Used1), union(Used1, Outs, Used2), union(NEWS0, News, NEWSX), !,
    (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-      );(
-       intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2), intersect(LVars,InRefs,Decision3),
-       (
-        (=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
-          =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
-        );(
-          (
-           cilk_op('clsCilkBegin',IGID,EGID,_,_)->
-            put_cilk_sync(EGID);
-            (
-             retractall(cilk_op('clsCilkDo',TopGID,_,[IGID],Ops)),
-             NewIGID is IGID+10000,
-             NewEGID is NewIGID+1,
-             NewDGID is NewIGID+2,
-             asserta(cilk_op('clsCilkDo',TopGID,LastGID,[NewIGID],Ops)),
-             asserta(cilk_op('clsCilkBegin',NewIGID,NewEGID,[IGID,NewDGID],[arg([],[],[],[],[],[],[],[])])),
-             asserta(cilk_op('clsCilkOper',NewDGID,-1,[],[arg([],[],[],[],[],[],[],[])])),
-             asserta(cilk_op('clsCilkEnd',NewEGID,-1,[],[arg([],[],[],[],[],[],[],[])])),
-             asserta(db_content('prog',NewIGID,[['{']])),
-             asserta(db_content('prog',NewEGID,[['}']])),
-             asserta(db_content('prog',NewDGID,[['op']])),
-             asserta(db_content('args',NewDGID,[['op','']])),
-             once(global_trace(TR)),
-             append(Left,[gid(C,IGID)|Right],TR),
-             bypass_op([gid(C,IGID)|Right],OPP,RIGHT),
-             append(Left,[gid('clsCilkBegin',NewIGID)|OPP],LL1),
-             append(LL1,[gid('clsCilkOper',NewDGID),gid('clsCilkEnd',NewEGID)|RIGHT],TR1),
-             retractall(global_trace(_)),
-             asserta(global_trace(TR1)),
-             !,
-             put_cilk_sync(NewDGID)
-            )
-          ),
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-        )
-       )
-      )
-   ),
-   append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-   unique(Laz0,Laz1), unique(Ref0,Ref1),
-   !,
-   (
-    (predicate_property(cilk_continue(_),'dynamic'), cilk_continue(_))->(
+    (predicate_property(gpu_continue(_),'dynamic'), gpu_continue(_))->(
       =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
       =(CONT,0)
     )
    ),
-   retractall(cilk_continue(_)),
+   retractall(gpu_continue(_)),
    (
-    (predicate_property(cilk_break(_),'dynamic'), cilk_break(_))->(
-       retractall(cilk_break(_)),
-       =(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0)
+    (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+       retractall(gpu_break(_)),
+       =(T2,0.0), =(Used,Used2), =(NEWS,NEWSX)
       );(
        =(Pass,1)->
-         ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
-          cilk_op('clsCilkDo',TopGID,LastGID,[IGID1],_),
-          traverse_fun(_,[IGID1],[TopGID|StackGIDs],[do(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLazies,Ref1,OutRefs,OSP1,OSpawns,T2)
+         ( % IGID внутреннего оператора мог измениться
+          gpu_op('clsGPUDo',TopGID,LastGID,[IGID1],_),
+          traverse_fun([IGID1],[TopGID|StackGIDs],[do(TopGID,2)|StackConstrs],_,[LVars|Vars],Used2,Used,NEWSX,NEWS,T2)
          );
-         (=(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0))
+         (=(T2,0.0), =(Used,Used2), =(NEWS,NEWSX))
       )
    ),
    (
     (=(CONT,1))->(
-      Time is T1+BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+      Time is BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
-      Time is T1+T2+BaseTime
+      Time is T2+BaseTime
     )
    ),
    !.
 
 % Окончание for
-@traverse_fun(SyncGID,[], [TopGID|StackGIDs], [for(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkFor',TopGID,_,[IGID],Ops),
+@traverse_fun([], [TopGID|StackGIDs], [for(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUFor',TopGID,_,[_],Ops),
    !,
-   (=(SyncGID,IGID);true), % Если SyncGID не связан, то получает значение IGID, иначе значение SyncGID сохраняется
+   getForNewInOutRefLazies(['cond','chng'],TopGID,[LVars|Vars],Ops,News,Ins,Outs,_,_,BaseTime),
    !,
-   getForNewInOutRefLazies(['cond','chng'],TopGID,[LVars|Vars],Ops,_,Ins,Outs,Refs,Lazs,BaseTime),
-   inc_spawns(ISpawns,ISP,BaseTime),
+   union(Used0, Ins, Used1), union(Used1, Outs, Used2), union(NEWS0, News, NEWSX), !,
    (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-      );(
-       intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2), intersect(LVars,InRefs,Decision3),
-       (
-        (=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
-          =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
-        );(
-          (
-           cilk_op('clsCilkBegin',IGID,EGID,_,_)->
-            put_cilk_sync(EGID);
-            (
-             retractall(cilk_op('clsCilkFor',TopGID,_,[IGID],Ops)),
-             NewIGID is IGID+10000,
-             NewEGID is NewIGID+1,
-             NewDGID is NewIGID+2,
-             asserta(cilk_op('clsCilkFor',TopGID,-1,[NewIGID],Ops)),
-             asserta(cilk_op('clsCilkBegin',NewIGID,NewEGID,[IGID,NewDGID],[arg([],[],[],[],[],[],[],[])])),
-             asserta(cilk_op('clsCilkOper',NewDGID,-1,[],[arg([],[],[],[],[],[],[],[])])),
-             asserta(cilk_op('clsCilkEnd',NewEGID,-1,[],[arg([],[],[],[],[],[],[],[])])),
-             asserta(db_content('prog',NewIGID,[['{']])),
-             asserta(db_content('prog',NewEGID,[['}']])),
-             asserta(db_content('prog',NewDGID,[['op']])),
-             asserta(db_content('args',NewDGID,[['op','']])),
-             once(global_trace(TR)),
-             append(Left,[gid(C,IGID)|Right],TR),
-             bypass_op([gid(C,IGID)|Right],OPP,RIGHT),
-             append(Left,[gid('clsCilkBegin',NewIGID)|OPP],LL1),
-             append(LL1,[gid('clsCilkOper',NewDGID),gid('clsCilkEnd',NewEGID)|RIGHT],TR1),
-             retractall(global_trace(_)),
-             asserta(global_trace(TR1)),
-             !,
-             put_cilk_sync(NewDGID)
-            )
-          ),
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-        )
-       )
-      )
-   ),
-   append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-   unique(Laz0,Laz1), unique(Ref0,Ref1),
-   !,
-   (
-    (predicate_property(cilk_continue(_),'dynamic'), cilk_continue(_))->(
+    (predicate_property(gpu_continue(_),'dynamic'), gpu_continue(_))->(
       =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
       =(CONT,0)
     )
    ),
-   retractall(cilk_continue(_)),
+   retractall(gpu_continue(_)),
    (
-    (predicate_property(cilk_break(_),'dynamic'), cilk_break(_))->(
-       retractall(cilk_break(_)),
-       =(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0)
+    (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+       retractall(gpu_break(_)),
+       =(T2,0.0), =(Used,Used2), =(NEWS,NEWSX)
       );(
        =(Pass,1)->
-         ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
-          cilk_op('clsCilkFor',TopGID,_,[IGID1],_),
-          traverse_fun(_,[IGID1],[TopGID|StackGIDs],[for(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLazies,Ref1,OutRefs,OSP1,OSpawns,T2),
+         ( % IGID внутреннего оператора мог измениться
+          gpu_op('clsGPUFor',TopGID,_,[IGID1],_),
+          traverse_fun([IGID1],[TopGID|StackGIDs],[for(TopGID,2)|StackConstrs],_,[LVars|Vars],Used2,Used,NEWSX,NEWS,T2),
           put_for_time(TopGID,T2)
          );
-         (=(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0))
+         (=(T2,0.0), =(Used,Used2), =(NEWS, NEWSX))
       )
    ),
    (
     (=(CONT,1))->(
-      Time is T1+BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+      Time is BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
-      Time is T1+T2+BaseTime
+      Time is T2+BaseTime
     )
    ),
    !.
 
 % Окончание произвольного {}
-@traverse_fun(SyncGID,[], [TopGID|_], StackConstrs, StackConstrs, [LVars|_], InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkBegin',TopGID,EndGID,_,_),
-   !,
-   (=(SyncGID,EndGID);true), % Если SyncGID не связан, то получает значение EndGID, иначе значение SyncGID сохраняется
-   !,
-   (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(OutLazies,[]), =(OutRefs,[]), stop_spawns(ISpawns,OSpawns,0.0,Time)
-      );(
-       intersect(InLazies,LVars,Decision2), intersect(InRefs,LVars,Decision3),
-       (
-        (=(Decision2,[]),=(Decision3,[]))->(
-          =(OutLazies,InLazies), =(OutRefs,InRefs), =(OSpawns,ISpawns), =(Time,0.0)
-        );(
-          put_cilk_sync(SyncGID),
-          =(OutLazies,[]), =(OutRefs,[]), stop_spawns(ISpawns,OSpawns,0.0,Time)
-        )
-       )
-      )
-   ),
+@traverse_fun([], [TopGID|_], StackConstrs, StackConstrs, _, Used, Used, NEWS, NEWS, 0.0):-
+   gpu_op('clsGPUBegin',TopGID,_,_,_),
    !.
 
 % Окончание функции
-@traverse_fun(_,[], [-1], StackConstrs, StackConstrs, _, _, [], _, [], ISpawns, ISpawns, 0.0):-
+@traverse_fun([], [-1], StackConstrs, StackConstrs, _, Used, Used, NEWS, NEWS, 0.0):-
    !.
 
 % Окончание произвольного (не{}) оператора. Может вызываться в операторе окончания различных конструктов
-@traverse_fun(_,[], [TopGID|_], StackConstrs, StackConstrs, [LVars|_], InLazies, OutLazies, InRefs, OutRefs, ISpawns, ISpawns, 0.0):-
-   \+ cilk_op('clsCilkBegin',TopGID,_,_,_),
-   !,
-   intersect(InLazies,LVars,Decision2), intersect(InRefs,LVars,Decision3),
-   (
-    (=(Decision2,[]),=(Decision3,[]))->(
-      =(OutLazies,InLazies), =(OutRefs,InRefs)
-    );(
-      fail % Непонятно: текущий оператор имеет локальную ленивую переменную, причем не в {}. Как это возможно?
-    )
-   ),
+@traverse_fun([], [TopGID|_], StackConstrs, StackConstrs, _, Used, Used, NEWS, NEWS, 0.0):-
+   \+ gpu_op('clsGPUBegin',TopGID,_,_,_),
    !.
 
 % Полный if-else, IGIDs = [IfGID,EGID]. Краткий if -- обрабатывается обычным образом, IGIDs = [IfGID]
-@traverse_fun(SyncGID,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkIf',CurGID,_,[IfGID,EGID],Ops),
+@traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUIf',CurGID,_,[IfGID,EGID],Ops),
    !,
-   (=(SyncGID,CurGID);true), % Если SyncGID не связан, то получает значение CurGID, иначе значение SyncGID сохраняется
+   getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
    !,
-   getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,Refs,Lazs,BaseTime),
-   inc_spawns(ISpawns,ISP,BaseTime),
-   (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-      );(
-       intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
-       (
-        (=(Decision1,[]),=(Decision2,[]))->(
-          =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
-        );(
-          put_cilk_sync(SyncGID),
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-        )
-       )
-      )
-   ),
-   append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-   unique(Laz0,Laz1), unique(Ref0,Ref1),
-   !,
-   traverse_fun(_,[IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz20,Ref1,Ref20,OSP1,OSP20,T20),
-   traverse_fun(_,[EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz21,Ref1,Ref21,OSP1,OSP21,T21),
-   append(Laz20,Laz21,Laz22), unique(Laz22,Laz2), !,
-   append(Ref20,Ref21,Ref22), unique(Ref22,Ref2), !,
-   append(OSP20,OSP21,OSP22),
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP22,OSpawns,T3),
-   Time is T1+BaseTime+0.5*(T20+T21)+T3,
+   union(Ins, Outs, Used2), !,
+   traverse_fun([IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used30,News,NEWS30,T20),
+   traverse_fun([EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used31,News,NEWS31,T21),
+   union(Used30,Used31,Used3X), union(Used0, Used3X, Used3XX),
+   union(NEWS30, NEWS31, NEWS3X), subtract(Used3X, NEWS3X, Used3E), !,
+   not_used(Used3E),
+   traverse_fun(GIDs,[TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3XX,Used,NEWS0,NEWS,T3),
+   Time is BaseTime+0.5*(T20+T21)+T3,
    !.
 
 % Полный while
-@traverse_fun(SyncGID,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkWhile',CurGID,_,[IGID],Ops),
+@traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUWhile',CurGID,_,[IGID],Ops),
    !,
-   (=(SyncGID,CurGID);true), % Если SyncGID не связан, то получает значение CurGID, иначе значение SyncGID сохраняется
+   getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
    !,
-   getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,Refs,Lazs,BaseTime),
-   inc_spawns(ISpawns,ISP,BaseTime),
-   (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-      );(
-       intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
-       (
-        (=(Decision1,[]),=(Decision2,[]))->(
-          =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
-        );(
-          put_cilk_sync(SyncGID),
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-        )
-       )
-      )
-   ),
-   append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-   unique(Laz0,Laz1), unique(Ref0,Ref1),
+   union(Ins, Outs, Used2), !,
+   traverse_fun([IGID],[CurGID,TopGID|StackGIDs],[while(CurGID,1)|StackConstrs],_,[News|Vars],Used2,Used3,News,NEWSX,T2),
    !,
-   traverse_fun(_,[IGID],[CurGID,TopGID|StackGIDs],[while(CurGID,1)|StackConstrs],_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,T2),
-   !,
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T3),
-   Time is T1+BaseTime+T2+T3,
+   union(Used0, Used3, Used3X), subtract(Used3, NEWSX, Used3E), !,
+   not_used(Used3E),
+   traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3X,Used,NEWS0,NEWS,T3),
+   Time is BaseTime+T2+T3,
    !.
 
 % Полный for
-@traverse_fun(SyncGID,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkFor',CurGID,_,[IGID],Ops),
+@traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUFor',CurGID,_,[IGID],Ops),
    !,
-   (=(SyncGID,CurGID);true), % Если SyncGID не связан, то получает значение CurGID, иначе значение SyncGID сохраняется
+   getForNewInOutRefLazies(['init','cond'],CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
    !,
-   getForNewInOutRefLazies(['init','cond'],CurGID,Vars,Ops,News,Ins,Outs,Refs,Lazs,BaseTime),
-   inc_spawns(ISpawns,ISP,BaseTime),
+   union(Ins, Outs, Used2), !,
+   traverse_fun([IGID],[CurGID,TopGID|StackGIDs],[for(CurGID,1)|StackConstrs],_,[News|Vars],Used2,Used3,News,NEWS1,T2),
+   !,
+   union(Used3, Used0, Used3X), subtract(Used3, NEWS1, Used3E), !,
+   retractall(gpu_for_interface(CurGID,_)),
    (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-      );(
-       intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
-       (
-        (=(Decision1,[]),=(Decision2,[]))->(
-          =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
-        );(
-          put_cilk_sync(SyncGID),
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-        )
-       )
-      )
+    once(find_pivot(Used3E,_)),
+    once(check_no_multidim_or_glob(Used3E)),
+    once(add_modifiers(Used3E,Used3F)),
+    asserta(gpu_for_interface(CurGID,Used3F));
+    true
    ),
-   append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-   unique(Laz0,Laz1), unique(Ref0,Ref1),
    !,
-   traverse_fun(_,[IGID],[CurGID,TopGID|StackGIDs],[for(CurGID,1)|StackConstrs],_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,T2),
-   !,
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T3),
-   Time is T1+BaseTime+T2+T3,
+   traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3X,Used,NEWS0,NEWS,T3),
+   Time is BaseTime+T2+T3,
    !.
 
 % Полный do-while
-@traverse_fun(_,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkDo',CurGID,_,[IGID],_),
+@traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUDo',CurGID,_,[IGID],_),
    !,
-   traverse_fun(_,[IGID],[CurGID,TopGID|StackGIDs],[do(CurGID,1)|StackConstrs],_,[[]|Vars],InLazies,Laz2,InRefs,Ref2,ISpawns,OSP1,T1),
+   traverse_fun([IGID],[CurGID,TopGID|StackGIDs],[do(CurGID,1)|StackConstrs],_,[[]|Vars],[],Used1,[],NEWS1,T1),
    !,
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP1,OSpawns,T2),
+   union(Used0, Used1, Used1X), subtract(Used1, NEWS1, Used1E), !,
+   not_used(Used1E),
+   traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used1X,Used,NEWS0,NEWS,T2),
    Time is T1+T2,
    !.
 
 % switch
-@traverse_fun(SyncGID,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkSwitch',CurGID,_,[IGID],Ops),
-   cilk_op('clsCilkBegin',IGID,_,IGIDs,_),
+@traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsGPUSwitch',CurGID,_,[IGID],Ops),
+   gpu_op('clsGPUBegin',IGID,_,IGIDs,_),
    !,
-   (=(SyncGID,CurGID);true), % Если SyncGID не связан, то получает значение CurGID, иначе значение SyncGID сохраняется
+   getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
    !,
-   getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,Refs,Lazs,BaseTime),
-   inc_spawns(ISpawns,ISP,BaseTime),
-   (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
-       =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-      );(
-       intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
-       (
-        (=(Decision1,[]),=(Decision2,[]))->(
-          =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
-        );(
-          put_cilk_sync(SyncGID),
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP,OSP1,0.0,T1)
-        )
-       )
-      )
-   ),
-   append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-   unique(Laz0,Laz1), unique(Ref0,Ref1),
+   union(Ins, Outs, Used2), !,
+   traverse_alters(IGIDs,[CurGID,TopGID|StackGIDs],[switch(CurGID,1)|StackConstrs],_,[News|Vars],TNN,Used2,Used3,News,NEWS1,NAlt),
    !,
-   traverse_alters(IGIDs,[CurGID,TopGID|StackGIDs],[switch(CurGID,1)|StackConstrs],_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,TNN,NAlt),
-   !,
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T2),
+   union(Used0, Used3, Used3X), subtract(Used3, NEWS1, Used3E), !,
+   not_used(Used3E),
+   traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3X,Used,NEWS0,NEWS,T2),
    (
     =(NAlt,0)->
-      Time is T1+BaseTime+T2;
-      Time is T1+BaseTime+TNN/NAlt+T2
+      Time is BaseTime+T2;
+      Time is BaseTime+TNN/NAlt+T2
    ),
    !.
 
-@traverse_fun(SyncGID,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   (predicate_property(cilk_break(_),'dynamic'), cilk_break(BreakGID))->(
-      traverse_fun(BreakGID,[], [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,InLazies,OutLazies,InRefs,OutRefs,ISpawns,OSpawns,Time),
+@traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+      traverse_fun([], [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used0,Used,NEWS0,NEWS,Time),
       !
    );(
-      cilk_op(_,CurGID,_,IGIDs,Ops),
+      gpu_op(_,CurGID,_,IGIDs,Ops),
       !,
-      (=(SyncGID,CurGID);true), % Если SyncGID не связан, то получает значение CurGID, иначе значение SyncGID сохраняется
-      !,
-      getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,Refs,Lazs,BaseTime),
-      inc_spawns(ISpawns,ISP,BaseTime),
-      (
-       (predicate_property(cilk_spawn(_),'dynamic'), cilk_spawn(CurGID))->
-          (
-           cilk_op(_,CurGID,_,[],[arg(_,_,_,_,[proc(Fun,Prms)],_,_,_)]),
-           length(Prms,NPrms),
-           start_spawn(CurGID,Fun,NPrms,ISP,ISP1,0.0,TSP));
-          (
-           ( % Если это не spawn, но запуск процедуры, то прибавляем время ее исполнения
-            cilk_op(_,CurGID,_,[],[arg(_,_,_,_,[proc(Fun,Prms)],_,_,_)])->
-              (getTime([proc(Fun,Prms)],TSP1), g_read('$DefOperTime',TOp0), TSP is TSP1-TOp0);
-              =(TSP,0.0)
-           ),
-           =(ISP1,ISP)
-          )
-      ),
-      (
-       (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID),
-        ((predicate_property(cilk_spawn(_),'dynamic'),=(SyncGID,CurGID))->(\+ cilk_spawn(SyncGID));true)
-       )->(
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP1,OSP1,0.0,T1)
-         );(
-          intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
-          (
-           (=(Decision1,[]),=(Decision2,[]))->(
-             =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP1), =(T1,0.0)
-           );(
-             put_cilk_sync(SyncGID),
-             =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP1,OSP1,0.0,T1)
-           )
-          )
-         )
+      getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
+      union(Ins, Outs, Used2), !,
+      ( % Если это запуск процедуры, то прибавляем время ее исполнения
+       gpu_op(_,CurGID,_,[],[arg(_,_,_,_,[proc(Fun,Prms)],_,_,_)])->
+         (getTime([proc(Fun,Prms)],TSP1), g_read('$DefOperTime',TOp0), TSP is TSP1-TOp0);
+         =(TSP,0.0)
       ),
       addLocals(Vars,News,Vars1),
-      append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
-      unique(Laz0,Laz1), unique(Ref0,Ref1),
       !,
-      traverse_fun(_,IGIDs,[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,T2),
-      traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars1,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T3),
-      Time is TSP+T1+BaseTime+T2+T3,
+      traverse_fun(IGIDs,[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used3,News,NEWS1,T2),
+      union(Used0, Used3, Used3X), union(NEWS0, NEWS1, NEWSX), !,
+      traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars1,Used3X,Used,NEWSX,NEWS,T3),
+      Time is TSP+BaseTime+T2+T3,
       !
    ).
 
-@create_syncs(Fun,GID,NPrms):-
-   retractall(cilk_break(_)),
-   retractall(cilk_continue(_)),
-   cilk_globals(GLOB),
+@process_fun(Fun,GID,NPrms):-
+   retractall(gpu_break(_)),
+   retractall(gpu_continue(_)),
+   gpu_globals(GLOB),
    glob_prefixate(GLOB,G1),
    get_fparams(all,Fun,NPrms,PARMS),
    loc_prefixate(GID,PARMS,P1),
-   traverse_fun(_,[GID],[-1],[],_,[P1,G1],[],_,[],_,[],OSP,Time0),
-   stop_spawns(OSP,[],Time0,Time),
+   traverse_fun([GID],[-1],[],_,[P1,G1],[],_,[],_,Time),
    put_ftime(Fun,NPrms,Time),
    !.
 
 @bypass_sequence([],[],[]):-!.
 
-@bypass_sequence([gid('clsCilkEnd',GID)|T],[],[gid('clsCilkEnd',GID)|T]):-
+@bypass_sequence([gid('clsGPUEnd',GID)|T],[],[gid('clsGPUEnd',GID)|T]):-
    !.
 
-@bypass_sequence([gid('clsCilkBegin',GID)|T],TT,T3):-
-   bypass_complex([gid('clsCilkBegin',GID)|T],T0,T1),
+@bypass_sequence([gid('clsGPUBegin',GID)|T],TT,T3):-
+   bypass_complex([gid('clsGPUBegin',GID)|T],T0,T1),
    bypass_sequence(T1,T2,T3),
    append(T0,T2,TT),
    !.
@@ -2956,25 +2818,25 @@
    bypass_sequence(T,T1,T2),
    !.
 
-@bypass_complex([gid('clsCilkBegin',GID)|T],[gid('clsCilkBegin',GID)|T1],T2):-
-   bypass_sequence(T,T0,[gid('clsCilkEnd',GID2)|T2]),
-   append(T0,[gid('clsCilkEnd',GID2)],T1).
+@bypass_complex([gid('clsGPUBegin',GID)|T],[gid('clsGPUBegin',GID)|T1],T2):-
+   bypass_sequence(T,T0,[gid('clsGPUEnd',GID2)|T2]),
+   append(T0,[gid('clsGPUEnd',GID2)],T1).
 
 @bypass_op([A|T],[A|BeforeWith],After):-
-   member(A,[gid('clsCilkFor',_),gid('clsCilkSwitch',_),gid('clsCilkWhile',_)]),
+   member(A,[gid('clsGPUFor',_),gid('clsGPUSwitch',_),gid('clsGPUWhile',_)]),
    !,
    bypass_op(T,BeforeWith,After),
    !.
 
-@bypass_op([gid('clsCilkDo',GID)|T],[gid('clsCilkDo',GID)|T1],T2):-
-   bypass_op(T,BeforeWhile,[gid('clsCilkWhile',GIDW),gid('clsCilkOper',EMPTY)|T2]),
-   append(BeforeWhile,[gid('clsCilkWhile',GIDW),gid('clsCilkOper',EMPTY)],T1),
+@bypass_op([gid('clsGPUDo',GID)|T],[gid('clsGPUDo',GID)|T1],T2):-
+   bypass_op(T,BeforeWhile,[gid('clsGPUWhile',GIDW),gid('clsGPUOper',EMPTY)|T2]),
+   append(BeforeWhile,[gid('clsGPUWhile',GIDW),gid('clsGPUOper',EMPTY)],T1),
    !.
 
-@bypass_op([gid('clsCilkIf',GID)|T],[gid('clsCilkIf',GID)|T1],T2):-
+@bypass_op([gid('clsGPUIf',GID)|T],[gid('clsGPUIf',GID)|T1],T2):-
    bypass_op(T,BeforeWith,[A|AfterT]),
    (
-    =(gid('clsCilkElse',_),A)->(
+    =(gid('clsGPUElse',_),A)->(
       bypass_op(AfterT,BeforeWith2,T2),
       append(BeforeWith,[A|BeforeWith2],T1),
       !
@@ -2984,8 +2846,8 @@
    ),
    !.
 
-@bypass_op([gid('clsCilkBegin',GID)|T],T1,T2):-
-   bypass_complex([gid('clsCilkBegin',GID)|T],T1,T2),
+@bypass_op([gid('clsGPUBegin',GID)|T],T1,T2):-
+   bypass_complex([gid('clsGPUBegin',GID)|T],T1,T2),
    !.
 
 @bypass_op([A|T],[A],T):-!.
@@ -2993,115 +2855,126 @@
 @insert_ending_bracket(L1,L2):-
    bypass_op(L1,BeforeWith,After),
    !,
-   append(BeforeWith,[gid('clsCilkEnd',-1)|After],L2),
+   append(BeforeWith,[gid('clsGPUEnd',-1)|After],L2),
    !.
 
-@write_sync(S,Shift,OShift,[SPC|ST],OSPC,T,OT,GID):-
-   (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(GID))->(
-      =(Shift,'')->(
-         write(S,SPC),write(S,'cilk_sync;'), nl(S),!,
-         =(OShift,Shift),=(OSPC,[SPC|ST]),=(OT,T),!
-      );(
-         write(S,SPC),write(S,Shift),write(S,'{'),nl(S),
-         write(S,SPC),write(S,Shift),write(S,'  cilk_sync;'), nl(S),!,
-         atom_concat(SPC,Shift,SPC1),
-         atom_concat(SPC1,'  ',SPC2),
-         =(OShift,''),
-         =(OSPC,[SPC2,SPC1,SPC|ST]),
-         insert_ending_bracket(T,OT),
-         !
-      )
-    );(
-      =(OShift,Shift),=(OSPC,[SPC|ST]),=(OT,T),!
-    )
-   ).
+@into_atom([],_,''):-
+   !.
+
+@into_atom([id(V)|T],Gap,A):-
+   into_atom(T,Gap,A1),
+   atom_concat(V,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@into_atom([real(V)|T],Gap,A):-
+   into_atom(T,Gap,A1),
+   atom_concat(V,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@into_atom([integ(V)|T],Gap,A):-
+   into_atom(T,Gap,A1),
+   atom_concat(V,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@into_atom([Z|T],Gap,A):-
+   into_atom(T,Gap,A1),
+   atom_concat(Z,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@write_interface(S, []):-
+   write(S, '_'),
+   !.
+
+@write_interface(S, [loc(_,Name,type(TYPE,[]))]):-
+   into_atom(TYPE,' ', ATYPE),
+   !,
+   write(S, ATYPE), write(S, ' '), write(S, Name),
+   !.
+
+@write_interface(S, [loc(_,Name,type(TYPE,IDX))]):-
+   into_atom(TYPE,' ', ATYPE),
+   !,
+   into_atom(IDX,'', AIDX),
+   !,
+   write(S, ATYPE), write(S, ' '), write(S, Name), write(S, AIDX),
+   !.
+
+@write_interface(S, [ITEM]):- write(S, ITEM), !.
+
+@write_interface(S, [A,B|T]):-
+   write_interface(S, [A]),
+   !,
+   write(S, ','),
+   write_interface(S, [B|T]),
+   !.
 
 @write_program(_,_,_,[]):-!.
 
-@write_program(IShift,SPCS,S,[gid('clsCilkOper',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUOper',GID)|T]):-
    db_content('prog',GID,[['op']]),
    db_content('args',GID,[['op',Op]]),
-   write_sync(S,IShift,Shift,SPCS,[SPC|ST],[gid('clsCilkOper',GID)|T],[_|T1],GID),
    atom_concat(SPC,Shift,SPC1),
    write(S,SPC1),
-   (
-    predicate_property(cilk_spawn(_),'dynamic'), cilk_spawn(GID)->(
-      write(S,'cilk_spawn '),!
-    );(
-      true,!
-    )
-   ),
    write(S,Op), write(S,';'), nl(S),
-   write_program('',[SPC|ST],S,T1),
-   !.
-
-@write_program(Shift,SP,S,[gid('clsCilkComments',_)|T]):-
-   write_program(Shift,SP,S,T),
-   !.
-
-@write_program(Shift,SP,S,[gid('clsCilkInclude',_)|T]):-
-   write_program(Shift,SP,S,T),
-   !.
-
-@write_program(IShift,[SPC0|ST0],S,[gid('clsCilkBegin',GID)|T]):-
-   db_content('prog',GID,[['{']]),
-   (
-    (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(GID))->(
-      write(S,SPC0),write(S,IShift),write(S,'{'),nl(S),
-      write(S,SPC0),write(S,IShift),write(S,'  cilk_sync;'), nl(S),!,
-      atom_concat(SPC0,IShift,SPC10),
-      atom_concat(SPC10,'  ',SPC20),
-      =(Shift,''),
-      =([SPC|ST],[SPC20,SPC10,SPC0|ST0]),
-      insert_ending_bracket([gid('clsCilkBegin',GID)|T],[_|T1]),
-      !
-    );(
-      =(Shift,IShift),=([SPC|ST],[SPC0|ST0]),=(T1,T),!
-    )
-   ),
-   write(S,SPC), write(S,Shift), write(S,'{'), nl(S),
-   atom_concat(SPC,Shift,SPC1),
-   atom_concat(SPC1,'  ',SPC2),
-   write_program('',[SPC2,SPC1,SPC|ST],S,T1),
-   !.
-
-@write_program(_,[SPC2,SPC1,SPC|ST],S,[gid('clsCilkEnd',GID)|T]):-
-   (
-     (db_content('prog',GID,[['}']]), predicate_property(cilk_sync(_),'dynamic'), cilk_sync(GID))->(
-       write(S,SPC2), write(S,'cilk_sync;'), nl(S), !
-     );(
-       true, !
-     )
-   ),
-   write(S,SPC1), write(S,'}'), nl(S),
    write_program('',[SPC|ST],S,T),
    !.
 
-@write_program(Shift,[SPC|ST],S,[gid('clsCilkDo',GID)|T]):-
+@write_program(Shift,SP,S,[gid('clsGPUComments',_)|T]):-
+   write_program(Shift,SP,S,T),
+   !.
+
+@write_program(Shift,SP,S,[gid('clsGPUInclude',_)|T]):-
+   write_program(Shift,SP,S,T),
+   !.
+
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUBegin',GID)|T]):-
+   db_content('prog',GID,[['{']]),
+   !,
+   write(S,SPC), write(S,Shift), write(S,'{'), nl(S),
+   atom_concat(SPC,Shift,SPC1),
+   atom_concat(SPC1,'  ',SPC2),
+   write_program('',[SPC2,SPC1,SPC|ST],S,T),
+   !.
+
+@write_program(_,[_,SPC1,SPC|ST],S,[gid('clsGPUEnd',GIDE)|T]):-
+   write(S,SPC1), write(S,'}'), nl(S),
+   (
+    ( predicate_property(gpu_end_function(_),'dynamic'), gpu_end_function(GIDE) )->
+       ( write(S, '#pragma plan common end'), nl(S), nl(S), retractall(gpu_end_function(_)) );
+       true
+   ),
+   !,
+   write_program('',[SPC|ST],S,T),
+   !.
+
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUDo',GID)|T]):-
    db_content('prog',GID,[['do']]),
    atom_concat(Shift,'  ',Shift1),
    write(S,SPC), write(S,Shift), write(S,'do'), nl(S),
    write_program(Shift1,[SPC|ST],S,T),
    !.
 
-@write_program(IShift,SPCS,S,[gid('clsCilkWhile',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUWhile',GID)|T]):-
    db_content('prog',GID,[['while']]),
    db_content('args',GID,[['cond',Cond]]),
-   write_sync(S,IShift,Shift,SPCS,[SPC|ST],[gid('clsCilkWhile',GID)|T],[_|T1],GID),
    atom_concat(Shift,'  ',Shift1),
    write(S,SPC), write(S,Shift), write(S,'while ( '), write(S,Cond), write(S,' )'), nl(S),
-   write_program(Shift1,[SPC|ST],S,T1),
+   write_program(Shift1,[SPC|ST],S,T),
    !.
 
-@write_program(IShift,SPCS,S,[gid('clsCilkFor',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUFor',GID)|T]):-
    db_content('prog',GID,[['for']]),
-   write_sync(S,IShift,Shift,SPCS,[SPC|ST],[gid('clsCilkFor',GID)|T],[_|T1],GID),
    atom_concat(Shift,'  ',Shift1),
    write(S,SPC), write(S,Shift),
    (
-    (predicate_property(cilk_for(_),'dynamic'), cilk_for(GID))->
-      write(S,'cilk_for ( ');
+    (predicate_property(gpu_for(_),'dynamic'), gpu_for(GID), gpu_for_interface(GID,INTRF))->
+      (
+       write(S,'vectorized(NULL,50) gpu<'), write_interface(S, INTRF), write(S,'> for ( ')
+      );
       write(S,'for ( ')
    ),
    !,
@@ -3127,35 +3000,33 @@
    ),
    !,
    write(S,' )'), nl(S),
-   write_program(Shift1,[SPC|ST],S,T1),
+   write_program(Shift1,[SPC|ST],S,T),
    !.
 
-@write_program(IShift,SPCS,S,[gid('clsCilkIf',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUIf',GID)|T]):-
    db_content('prog',GID,[['if']]),
    db_content('args',GID,[['cond',Cond]]),
-   write_sync(S,IShift,Shift,SPCS,[SPC|ST],[gid('clsCilkIf',GID)|T],[_|T1],GID),
    atom_concat(Shift,'  ',Shift1),
    write(S,SPC), write(S,Shift), write(S,'if ( '), write(S,Cond), write(S,' )'), nl(S),
-   write_program(Shift1,[SPC|ST],S,T1),
+   write_program(Shift1,[SPC|ST],S,T),
    !.
 
-@write_program(Shift,[SPC|ST],S,[gid('clsCilkElse',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUElse',GID)|T]):-
    db_content('prog',GID,[['else']]),
    atom_concat(Shift,'  ',Shift1),
    write(S,SPC), write(S,Shift), write(S,'else'), nl(S),
    write_program(Shift1,[SPC|ST],S,T),
    !.
 
-@write_program(IShift,SPCS,S,[gid('clsCilkSwitch',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUSwitch',GID)|T]):-
    db_content('prog',GID,[['switch']]),
    db_content('args',GID,[['arg',Arg]]),
-   write_sync(S,IShift,Shift,SPCS,[SPC|ST],[gid('clsCilkSwitch',GID)|T],[_|T1],GID),
    atom_concat(Shift,'  ',Shift1),
    write(S,SPC), write(Shift), write(S,'switch ( '), write(S,Arg), write(S,' )'), nl(S),
-   write_program(Shift1,[SPC|ST],S,T1),
+   write_program(Shift1,[SPC|ST],S,T),
    !.
 
-@write_program(Shift,[SPC|ST],S,[gid('clsCilkAlternation',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUAlternation',GID)|T]):-
    (
     (
      db_content('prog',GID,[['case']]),
@@ -3171,92 +3042,115 @@
    write_program(Shift,[SPC|ST],S,T),
    !.
 
-@write_program(Shift,[SPC|ST],S,[gid('clsCilkTypedef',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUTypedef',GID)|T]):-
    db_content('prog',GID,[['type']]),
    db_content('args',GID,[['def',Def]]),
    write(S,SPC), write(S,Shift), write(S,'typedef '), write(S,Def), write(S,';'), nl(S),
    write_program('',[SPC|ST],S,T),
    !.
 
-@write_program(IShift,SPCS,S,[gid('clsCilkCVar',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUCVar',GID)|T]):-
    db_content('prog',GID,[[TYPE]]),
    member(TYPE,['struct','union']),
    !,
    db_content('args',GID,[['def',Def]]),
-   write_sync(S,IShift,Shift,SPCS,[SPC|ST],[gid('clsCilkCVar',GID)|T],[_|T1],GID),
    write(S,SPC), write(S,Shift), write(S,TYPE), write(S,' '), write(S,Def), write(S,';'), nl(S),
-   write_program('',[SPC|ST],S,T1),
+   write_program('',[SPC|ST],S,T),
    !.
 
-@write_program(IShift,SPCS,S,[gid('clsCilkReturn',GID)|T]):-
+@write_program(Shift,[SPC|ST],S,[gid('clsGPUReturn',GID)|T]):-
    db_content('prog',GID,[['return']]),
    db_content('args',GID,[['arg',Arg]]),
-   write_sync(S,IShift,Shift,SPCS,[SPC|ST],[gid('clsCilkReturn',GID)|T],[_|T1],GID),
    write(S,SPC), write(S,Shift), write(S,'return '), write(S,Arg), write(S,';'), nl(S),
-   write_program('',[SPC|ST],S,T1),
+   write_program('',[SPC|ST],S,T),
    !.
 
-@write_program(Shift,SP,S,[gid('clsCilkPreproc',GID)|T]):-
+@write_program(Shift,SP,S,[gid('clsGPUPreproc',GID)|T]):-
    db_content('prog',GID,[['preproc']]),
    db_content('args',GID,[['body',Body]]),
    write(S,Body), nl(S),
    write_program(Shift,SP,S,T),
    !.
 
-@write_program(_,[SPC|ST],S,[gid('clsCilkFunction',GID)|T]):-
+@write_program(_,[SPC|ST],S,[gid('clsGPUFunction',GID)|T]):-
    db_content('prog',GID,[['func']]),
    db_content('args',GID,L),
    member(['name',ID],L),
    member(['args',Args],L),
    member(['ret',Ret],L),
    !,
+   (
+    (=(T,[gid('clsGPUBegin',_)|_]), predicate_property(gpu_do_not_worry(_,_,_),'dynamic'), gpu_do_not_worry(_,GID,_))->
+      (
+       write(S, '#pragma plan common begin'), nl(S), write(S,'$ '),
+       bypass_complex(T,BODY,_),
+       last(BODY,gid('clsGPUEnd',GIDE)),
+       asserta(gpu_end_function(GIDE))
+      );
+      true
+   ),
+   !,
    write(S,SPC), write(S, Ret), write(S, ' '), write(S, ID), write(S,'( '), write(S,Args), write(S,' )'),
    write_program('',[SPC|ST],S,T),
    !.
+
+@restructure_program:-
+   asserta(gpu_new_id(10000)),
+   (predicate_property(gpu_for(_),'dynamic'), gpu_for(GID), gpu_for_interface(GID,_)),
+   gpu_new_id(NewBegGID),
+   global_trace(TR),
+   once(\+(append(_,[gid('clsGPUFor',GID),gid('clsGPUBegin',_)|_],TR))),
+   retractall(gpu_new_id(_)),
+   NewestGID is NewBegGID + 2,
+   NewEndGID is NewBegGID + 1,
+   asserta(gpu_new_id(NewestGID)),
+   asserta(db_content('prog',NewBegGID,[['{']])),
+   asserta(db_content('prog',NewEndGID,[['}']])),
+   once(append(Left,[gid(C,GID)|Right],TR)),
+   once(bypass_op([gid(C,GID)|Right],_,[NEXT|RIGHT])),
+   once(append(BODY,[NEXT|RIGHT],Right)),
+   once(append(Left,[gid(C,GID),gid('clsGPUBegin',NewBegGID)|BODY],L1)),
+   once(append(L1,[gid('clsGPUEnd',NewEndGID)|[NEXT|RIGHT]],TR1)),
+   retractall(global_trace(_)),
+   asserta(global_trace(TR1)),
+   fail.
+
+@restructure_program.  
 
 % Формирование текста программы FName по загруженным данным + spawn/sync
 @recreate_program(FName):-
   open(FName,write,S),
   global_trace(TR),
+  write(S, '#include "gpu_parallelize.h"'), nl(S), nl(S),
+  write(S, '#define __pivot /* Pivot of optimized loops */'), nl(S), nl(S),
   write_program('',[''],S,TR),
   close(S).
 
-@put_all_spawns:-
-  retractall(cilk_spawn(_)),
-  predicate_property(cilk_fprocs(_,_,_),'dynamic'),
-  cilk_fprocs(_,_,GIDs),
-  member(GID,GIDs),
-  asserta(cilk_spawn(GID)),
-  fail.
-
-@put_all_spawns:-!.
-
-@create_all_syncs:-
-  predicate_property(cilk_function(_,_,_),'dynamic'),
-  cilk_function(Fun,GID,NPrms),
-  once(create_syncs(Fun,GID,NPrms)),
+@process_all_funs:-
+  predicate_property(gpu_function(_,_,_),'dynamic'),
+  gpu_function(Fun,GID,NPrms),
+  once(process_fun(Fun,GID,NPrms)),
   get_ftime(Fun,NPrms,_), % Time
 %  write(Fun),write(':'),write(Time),nl,
   fail.
 
-@create_all_syncs:-
+@process_all_funs:-
 %  write('--------------'), nl,
   !.
 
-@iterative_syncs_times(0):-!.
+@iterative_times(0):-!.
 
-% Итерационный алгоритм последовательного добавления syncs и пересчета времен исполнения функций. Алгоритм заканчивается, когда
+% Итерационный алгоритм пересчета времен исполнения функций. Алгоритм заканчивается, когда
 % времена исполнения практически перестают меняться (+/-1) или превышено число итераций N
-@iterative_syncs_times(N):-
-  retractall(cilk_retime),
-  retractall(cilk_spawn_time(_,_)),
-  create_all_syncs,
-  cilk_retime,
+@iterative_times(N):-
+  retractall(gpu_retime),
+  process_all_funs,
+  gpu_retime,
   !,
   N1 is N-1,
-  iterative_syncs_times(N1).
+  iterative_times(N1).
 
-@iterative_syncs_times(_):-!.
+@iterative_times(_):-!.
 
 @sum([],0.0):-!.
 
@@ -3272,105 +3166,16 @@
   length(L,N),
   Avr is S/N.
 
-% Определяем неэффективные spawn-запуски
-@remove_spawns:-
-  predicate_property(cilk_spawn(_),'dynamic'),
-  cilk_spawn(GID),
-  cilk_op(_,GID,_,[],[arg(_,_,_,_,[proc(Fun,Prms)],_,_,_)]),
-  length(Prms,NPrms),
-  cilk_function(Fun,FunGID,NPrms),
-  cilk_ftime(Fun,FunGID,BaseTime),
-  cilk_spawn_time(GID,Timings),
-  call(avr(Timings,AvrTime)),
-  g_read('$SpawnTime', SpawnTime),
-  ParExecTime is AvrTime+SpawnTime, % С учетом расходов на собственно spawn
-  ( % Принятие решения об исключении spawn
-    >(ParExecTime,BaseTime)->(
-      once(cilk_respawn(List)),
-      retractall(cilk_respawn(_)),
-      asserta(cilk_respawn([GID|List]))
-    );
-    true
-  ),
-  fail.
-
-@remove_spawns:-!.
-
-% Удаляем пометки spawn с операторов, GIDы которых прописаны в параметре-списке
-@delete_spawns([]):-!.
-
-@delete_spawns([H|T]):-
-  retractall(cilk_spawn(H)),
-  delete_spawns(T).
-
-@process_syncs_and_spawns(0):-!.
-
-% Главный цикл распараллеливания. Предварительно расставлены все возможные spawns. Итеративный циклический алгоритм. Завершается,
-% когда заканчиваются подлежащие удалению spawns или превышено число итераций N
-@process_syncs_and_spawns(N):-
-  iterative_syncs_times(15), % Расставляем syncs (там, где еще не расставлены) и предсказываем время исполнения функций
-  retractall(cilk_respawn(_)),
-  asserta(cilk_respawn([])),
-  remove_spawns, % Определяем список spawns (в списке-параметре факта cilk_respawn([...])), которые дают отрицательный эффект
-  % для общего времени работы. Они подлежат удалению
-  cilk_respawn([First|Rest]), % Если список удаляемых spawns не пуст
-  delete_spawns([First|Rest]), % Удаляем пометки spawn для неэффективных случаев
-  !,
-  N1 is N-1,
-  process_syncs_and_spawns(N1).
-
-@process_syncs_and_spawns(_):-!.
-
-@has_spawns(GID):-
-   predicate_property(cilk_spawn(_),'dynamic'),
-   cilk_spawn(GID),
-   !.
-
-@has_spawns(GID):-
-   cilk_op(_,GID,_,IGIDs,_),
-   !,
-   member(IGID,IGIDs),
-   has_spawns(IGID)->
-    (true,!);
-    fail.
-
-@remove_syncs(GID):-
-   predicate_property(cilk_sync(_),'dynamic'),
-   once(cilk_sync(GID)),
-   retractall(cilk_sync(GID)).
-
-@remove_syncs(GID):-
-   cilk_op(_,GID,_,IGIDs,_),
-   !,
-   member(IGID,IGIDs),
-   remove_syncs(IGID),
-   fail.
-
-@remove_syncs(_):-!.
-
-% Удаление syncs из функций, в которых уже нет spawns
-@remove_unnecessary_syncs:-
-  cilk_function(_,FunGID,_),
-  \+ call(has_spawns(FunGID)),
-  call(remove_syncs(FunGID)),
-  fail.
-
-@remove_unnecessary_syncs:-!.
-
 @processing:-
   g_assign('$DefFTime', 15.0), % Время исполнения функции/процедуры по умолчанию (внешней или внутренней до расчета)
   g_assign('$SpawnTime', 5.0), % Время, затрачиваемое мастер-процессом на ответвление spawn-процесса
   g_assign('$DefOperTime', 1.0), % Время исполнения элементарного математического выражения без функций по умолчанию
-  g_assign('$SyncTime', 5.0), % Время, затрачиваемое собственно вызовом sync (без ожидания)
-  prepare_cilk,
-  put_all_spawns,
-  retractall(cilk_sync(_)),
-  process_syncs_and_spawns(5),
-  remove_unnecessary_syncs,
-  (
-   (predicate_property(cilk_auto_for,'dynamic'), cilk_auto_for)->handle_fors;true
-  ),
-  recreate_program('_cilk.cpp').
+  g_assign('$SyncTime', 5.0), % Время, затрачиваемое слиянием ответвленных процессов (без ожидания)
+  prepare_data,
+  iterative_times(15), % Предсказываем время исполнения функций
+  handle_fors(0,15),
+  restructure_program,
+  recreate_program('_gpu.cpp').
 
 @collect_global_trace:-
   prog(Cls, GID, _, _),
@@ -3384,13 +3189,13 @@
 @collect_global_trace:-
   !.
 
-@cilk_debug:-
+@gpu_debug:-
   asserta(global_trace([])),
   collect_global_trace,
   processing.
 
 @goal:-
-  cilk_debug.
+  gpu_debug.
 };
 
 #endif

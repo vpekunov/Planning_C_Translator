@@ -44,7 +44,7 @@ using namespace std;
   member(C,Visited),
   !.
 @get_marks(Visited,Visited1,C,LMARKS):-
-  ( (predicate_property(lmarks(_,_),'dynamic'), lmarks(C,LM1))->true;=(LM1,[]) ),
+  ( (predicate_property(lmarks(_,_,_),'dynamic'), lmarks(C,LM1,_))->true;=(LM1,[]) ),
   !,
   (
     ( predicate_property(calls(_,_),'dynamic'), calls(C, CALLS) )->
@@ -86,7 +86,7 @@ using namespace std;
           predicate_property(marks(_,_,_),'dynamic'),
           marks(GID,ID,N),
           once(explode(GID,N,LMARKS)),
-          assertz(lmarks(ID,LMARKS)),
+          assertz(lmarks(ID,LMARKS,GID)),
           fail
         );
         true
@@ -96,8 +96,10 @@ using namespace std;
       (
         (
           predicate_property(gpu_loop(_,_),'dynamic'),
-          gpu_loop(_,LOOPCALLS),
-          once(make_trace([],_,LOOPCALLS,LMARKS)),
+          gpu_loop(GIDL,LOOPCALLS),
+          once(;(->(lmarks(_,LLMARKS,GIDL),true),=(LLMARKS,[]))),
+          once(make_trace([],_,LOOPCALLS,TLMARKS)),
+          once(union(LLMARKS,TLMARKS,LMARKS)),
           once(common(GENMARKS)),
           once(retractall(common(_))),
           once(;( ->(=(GENMARKS,[[]]),=(NEWMARKS,LMARKS)) , once(union(GENMARKS,LMARKS,NEWMARKS)) )),
@@ -121,7 +123,7 @@ using namespace std;
 enumerations_point();
 #pragma plan common end
 
-#def_pattern optFun => insert_marks(gid(), '', '', '', //RETTYPE/@Value, //ID/@Value, //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, //OP/@Value, //TYPE/@Value) {
+#def_pattern optFun => insert_marks(gid(), '', '', '', //RETTYPE/@Value, //ID/@Value, //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, '', //OP/@Value, //TYPE/@Value) {
   (((^)|(\;)+|\}|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     \$(\s|\\t|\\n)+
@@ -215,7 +217,7 @@ enumerations_point();
   (\s|\\t|\\n)*
 };
 
-#def_pattern gpuFor => insert_marks(gid(), //DEVICE/@Value, //CHUNK/@Value, //LOOP/@Value, '', randomid(), //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, //OP/@Value, //TYPE/@Value) {
+#def_pattern gpuFor => insert_marks(gid(), //DEVICE/@Value, //CHUNK/@Value, //LOOP/@Value, '', randomid(), //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, //SIZES/@Value, //OP/@Value, //TYPE/@Value) {
   (((^)|(\;)+|\}|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     vectorized(\s|\\t|\\n)*\(
@@ -233,7 +235,9 @@ enumerations_point();
              (
               (.{1,128})->{TYPES}
               (\s|\\t|\\n)(\w+)->{NAMES}
-              (\s|\\t|\\n)*\,
+              (\s|\\t|\\n)*
+              ((\[(.{1,64}\])?=>{Predicates.BAL($,']')}(\s|\\t|\\n)*)*)->{SIZES}
+              \,
              )?=>{Predicates.TBAL($,',')}
             )*
             (
@@ -242,7 +246,9 @@ enumerations_point();
              (
               (.{1,128})->{TYPES}
               (\s|\\t|\\n)(\w+)->{NAMES}
-              (\s|\\t|\\n)*\>
+              (\s|\\t|\\n)*
+              ((\[(.{1,64}\])?=>{Predicates.BAL($,']')}(\s|\\t|\\n)*)*)->{SIZES}
+              \>
              )?=>{Predicates.TBAL($,'>')}
             )
            )->{PARAMS}
@@ -278,7 +284,7 @@ enumerations_point();
   (\s|\\t|\\n)*
 };
 
-#def_module() insert_marks(GID, DEVICE, CHUNK, LOOP, RETTYPE, ID, PARAMS, KINDS, TYPES, NAMES, OP, TYPE) {
+#def_module() insert_marks(GID, DEVICE, CHUNK, LOOP, RETTYPE, ID, PARAMS, KINDS, TYPES, NAMES, SIZES, OP, TYPE) {
 @goal:-brackets_off.
 @put_register(N,N1):-
   N1 is N+1,
@@ -374,40 +380,72 @@ enumerations_point();
 @make_set([H|T],[H|T1]):-
   make_set(T, T1),
   !.
-@gen_reent_each_param('','',''):-!.
-@gen_reent_each_param([],[],[]):-!.
-@gen_reent_each_param([K|TK],[T|TT],[N|NN]):-
+@determ_size(L,R,S):-
+  append(Part,[']'|R],L),
+  !,
+  atom_chars(PP,['('|Part]),
+  atom_concat(PP,')',S),
+  !.
+@determ_sizes([],''):-!.
+@determ_sizes([' '|T],A):-
+  determ_sizes(T,A),
+  !.
+@determ_sizes(['['|Rest],B):-
+  determ_size(Rest, Rest1, B),
+  determ_sizes(Rest1, '').
+@determ_sizes(['['|Rest],A):-
+  determ_size(Rest, Rest1, B),
+  determ_sizes(Rest1, C),
+  !,
+  atom_concat(B,'*',BB),
+  atom_concat(BB,C,A),
+  !.
+@get_size(SZ,ASZ):-
+  atom_chars(SZ, LSZ),
+  determ_sizes(LSZ, ASZ),
+  !.
+@gen_reent_each_param('','','',''):-!.
+@gen_reent_each_param([],[],[],[]):-!.
+@gen_reent_each_param([K|TK],[T|TT],[N|NN],[_|SZZ]):-
   atom_concat('_local',_,K),
   !,
   write(', _local(1) '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param([K|TK],[T|TT],[N|NN]):-
+@gen_reent_each_param([K|TK],[T|TT],[N|NN],[SZ|SZZ]):-
   atom_concat('_pivot',_,K),
   !,
-  write(', _local(1) '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  (=(SZ,'')->
+    (write(', _global(1) '), write(T));
+    (write(', _global('),get_size(SZ,ASZ),write(ASZ),write(') '), write(T), write(' *'))
+  ), !,
+  write(' '), write(N),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param([K|TK],[T|TT],[N|NN]):-
+@gen_reent_each_param([K|TK],[T|TT],[N|NN],[SZ|SZZ]):-
   atom_concat('_global',_,K),
   !,
-  write(', _global(1) '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  (=(SZ,'')->
+    (write(', _global(1) '), write(T));
+    (write(', _global('),get_size(SZ,ASZ),write(ASZ),write(') '), write(T), write(' *'))
+  ), !,
+  write(' '), write(N),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param([''|TK],[T|TT],[N|NN]):-
+@gen_reent_each_param([''|TK],[T|TT],[N|NN],[_|SZZ]):-
   !,
   write(', '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param(K,T,N):-
-  gen_reent_each_param([K],[T],[N]).
-@gen_reent_params(Kinds,Types,Names):-
+@gen_reent_each_param(K,T,N,S):-
+  gen_reent_each_param([K],[T],[N],[S]).
+@gen_reent_params(Kinds,Types,Names,Sizes):-
   write('bool init, int __markCommons, _local(__planned__.__markCommons) unsigned short * TR'),
-  gen_reent_each_param(Kinds,Types,Names),
+  gen_reent_each_param(Kinds,Types,Names,Sizes),
   !.
 @insert_prototype([]):-!.
-@insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names))|T]):-
-  write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names),write(') {'), nl,
+@insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names,Sizes))|T]):-
+  write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names,Sizes),write(') {'), nl,
   write('  if (init) {'), nl,
   write('     plan_group_vectorize('), write(Device), write(');'), nl,
   write('  } else {'), nl,
@@ -517,7 +555,7 @@ enumerations_point();
 @write_fillers(Offs, PI, [K|TK], [N|TN], [V|TV]):-
   atom_concat('_pivot', _, K),
   !,
-  write(Offs), write(PI), write('.'), write(N), write(' = '), write(V), write(' + __n;'), nl,
+  write(Offs), write(PI), write('.'), write(N), write(' = '), write(V), write(';'), nl,
   write_fillers(Offs, PI, TK, TN, TV),
   !.
 @write_fillers(Offs, PI, [''|TK], [N|TN], [V|TV]):-
@@ -607,7 +645,7 @@ enumerations_point();
     write('if (!initialized) {'), nl,
     write('   sort(__plan_indexes.begin(),__plan_indexes.end(),'), nl,
     write('     [&](const int & A, const int & B)->bool {'), nl,
-    write('        int d = __plan_sorted[B].'), write(Pivot), write(' - __plan_sorted[A].'), write(Pivot), write(';'), nl,
+    write('        int d = __plan_sorted[B].'), write(Pivot), write('[B] - __plan_sorted[A].'), write(Pivot), write('[A];'), nl,
     write('        int i;'), nl,
     write('        if (abs(d) > 0) return d < 0;'), nl,
     write('        for (i = 0; i < __markCommons; i++) {'), nl,
@@ -640,7 +678,7 @@ enumerations_point();
     write_starter('    '),
 % Handling
     write('std::function<'), write(PivotType), write('(int)> getPivot = [&](int raw_index)->'), write(PivotType), write('{'), nl,
-    write('   return __plan_sorted[raw_index].'), write(Pivot), write(';'), nl,
+    write('   return __plan_sorted[raw_index].'), write(Pivot), write('[raw_index];'), nl,
     write('};'), nl,
     write('trace_balancing(np, TraceWNotFound, TraceW, Timings, __total, Winners, TR, TR1, TR2, TR3, Prognosed0, Prognosed1, Prognosed2, getPivot);'), nl,
   write('}'), nl,
@@ -670,7 +708,7 @@ enumerations_point();
   (
    (predicate_property(blocks(_,_),'dynamic'), blocks(GID,_))->
      true;
-     assertz(blocks(GID,loop(Loop,DEVICE,CHUNK,KINDS,TYPES,NAMES)))
+     assertz(blocks(GID,loop(Loop,DEVICE,CHUNK,KINDS,TYPES,NAMES,SIZES)))
   ),
   !.
 @goal:-
@@ -679,40 +717,72 @@ enumerations_point();
 
 #def_module() register_fun(GID, RETTYPE, ID, PARAMS) {
 @goal:-brackets_off.
-@gen_reent_each_param('','',''):-!.
-@gen_reent_each_param([],[],[]):-!.
-@gen_reent_each_param([K|TK],[T|TT],[N|NN]):-
+@determ_size(L,R,S):-
+  append(Part,[']'|R],L),
+  !,
+  atom_chars(PP,['('|Part]),
+  atom_concat(PP,')',S),
+  !.
+@determ_sizes([],''):-!.
+@determ_sizes([' '|T],A):-
+  determ_sizes(T,A),
+  !.
+@determ_sizes(['['|Rest],B):-
+  determ_size(Rest, Rest1, B),
+  determ_sizes(Rest1, '').
+@determ_sizes(['['|Rest],A):-
+  determ_size(Rest, Rest1, B),
+  determ_sizes(Rest1, C),
+  !,
+  atom_concat(B,'*',BB),
+  atom_concat(BB,C,A),
+  !.
+@get_size(SZ,ASZ):-
+  atom_chars(SZ, LSZ),
+  determ_sizes(LSZ, ASZ),
+  !.
+@gen_reent_each_param('','','',''):-!.
+@gen_reent_each_param([],[],[],[]):-!.
+@gen_reent_each_param([K|TK],[T|TT],[N|NN],[_|SZZ]):-
   atom_concat('_local',_,K),
   !,
   write(', _local(1) '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param([K|TK],[T|TT],[N|NN]):-
+@gen_reent_each_param([K|TK],[T|TT],[N|NN],[SZ|SZZ]):-
   atom_concat('_pivot',_,K),
   !,
-  write(', _local(1) '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  (=(SZ,'')->
+    (write(', _global(1) '), write(T));
+    (write(', _global('),get_size(SZ,ASZ),write(ASZ),write(') '), write(T), write(' *'))
+  ), !,
+  write(' '), write(N),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param([K|TK],[T|TT],[N|NN]):-
+@gen_reent_each_param([K|TK],[T|TT],[N|NN],[SZ|SZZ]):-
   atom_concat('_global',_,K),
   !,
-  write(', _global(1) '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  (=(SZ,'')->
+    (write(', _global(1) '), write(T));
+    (write(', _global('),get_size(SZ,ASZ),write(ASZ),write(') '), write(T), write(' *'))
+  ), !,
+  write(' '), write(N),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param([''|TK],[T|TT],[N|NN]):-
+@gen_reent_each_param([''|TK],[T|TT],[N|NN],[_|SZZ]):-
   !,
   write(', '), write(T), write(' '), write(N),
-  gen_reent_each_param(TK,TT,NN),
+  gen_reent_each_param(TK,TT,NN,SZZ),
   !.
-@gen_reent_each_param(K,T,N):-
-  gen_reent_each_param([K],[T],[N]).
-@gen_reent_params(Kinds,Types,Names):-
+@gen_reent_each_param(K,T,N,S):-
+  gen_reent_each_param([K],[T],[N],[S]).
+@gen_reent_params(Kinds,Types,Names,Sizes):-
   write('bool init, int __markCommons, _local(__planned__.__markCommons) unsigned short * TR'),
-  gen_reent_each_param(Kinds,Types,Names),
+  gen_reent_each_param(Kinds,Types,Names,Sizes),
   !.
 @insert_prototype([]):-!.
-@insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names))|T]):-
-  write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names),write(') {'), nl,
+@insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names,Sizes))|T]):-
+  write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names,Sizes),write(') {'), nl,
   write('  if (init) {'), nl,
   write('     plan_group_vectorize('), write(Device), write(');'), nl,
   write('  } else {'), nl,
@@ -832,7 +902,7 @@ void trace_balancing(
 		#pragma omp parallel for schedule(guided) num_threads(np)
 		for (int s = 0; s < __markCommons; s++) {
 			for (int j = 0; j < NN; j++) {
-				bMNK[s] += *getPivot(j)*TR[j*__markCommons + s];
+				bMNK[s] += getPivot(j)*TR[j*__markCommons + s];
 				for (int p = s; p < __markCommons; p++)
 					aMNK[s][p] += TR[j*__markCommons + p]*TR[j*__markCommons + s];
 			}

@@ -980,7 +980,7 @@
      ),
      once(params(LZ)),
      retract(params(_)),
-     once(parse_expr(Idxs,ParsedIdxs)),
+     ( =(Idxs,'[]')->once(=(ParsedIdxs,[]));once(parse_expr(Idxs,ParsedIdxs)) ),
      once(parse_expr(Type,ParsedType)),
      once(append(LZ,[var(V,type(ParsedType,ParsedIdxs))],LZ1)),
      asserta(params(LZ1)),
@@ -1318,22 +1318,22 @@
    !,
    prepare_atomic_function(Name,N,T).
 
-@prepare_atomic_function(Name,N,[[type,TP],[arg,'&'],[arg,V],[idxs,_]|T]):-
+@prepare_atomic_function(Name,N,[[arg,'&'],[type,TP],[arg,V],[idxs,_]|T]):-
    assertz(atomic_farg(Name,N,'&',V,TP,[])),
    !,
    prepare_atomic_function(Name,N,T).
 
-@prepare_atomic_function(Name,N,[[type,TP],[arg,'*'],[arg,V],[idxs,_]|T]):-
+@prepare_atomic_function(Name,N,[[arg,'*'],[type,TP],[arg,V],[idxs,_]|T]):-
    assertz(atomic_farg(Name,N,'*',V,TP,[])),
    !,
    prepare_atomic_function(Name,N,T).
 
-@prepare_atomic_function(Name,N,[[type,TP],[arg,'**'],[arg,V],[idxs,_]|T]):-
+@prepare_atomic_function(Name,N,[[arg,'**'],[type,TP],[arg,V],[idxs,_]|T]):-
    assertz(atomic_farg(Name,N,'**',V,TP,[])),
    !,
    prepare_atomic_function(Name,N,T).
 
-@prepare_atomic_function(Name,N,[[type,TP],[arg,'***'],[arg,V],[idxs,_]|T]):-
+@prepare_atomic_function(Name,N,[[arg,'***'],[type,TP],[arg,V],[idxs,_]|T]):-
    assertz(atomic_farg(Name,N,'***',V,TP,[])),
    !,
    prepare_atomic_function(Name,N,T).
@@ -1353,7 +1353,7 @@
    \+ =(N,infinity),
    N1 is N-3, % -args, -ret, -name
    asserta(atomic_function(Name,GID,N1)),
-   call(prepare_atomic_function(Name,N1,Params)),
+   call(prepare_atomic_function(Name,N1,Params)),write(Params),
    fail.
 
 @prepare_atomic_functions:-!.

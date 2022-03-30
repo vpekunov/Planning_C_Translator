@@ -113,11 +113,14 @@ Begin
       Else
          SI := SI + 'sizeof(__planned__.' + Names.Strings[F] +')';
       OI := OI + '(char *)&__planned__.' + Names.Strings[F] + '-(char *)&__planned__';
-      If (Length(LocGlob.Strings[F]) > 0) And Not Boolean(TObjectToInteger(LocGlob.Objects[F])) Then
+      If (Length(LocGlob.Strings[F]) > 0) Then
          Begin
            MI := MI + 'CL_MEM_READ_WRITE';
            Fun := Fun + '  case ' + IntToStr(F) + ': return ' + LocGlob.Strings[F] + '; \' + CRLF;
-           Inc(nLocs)
+           If Not Boolean(TObjectToInteger(LocGlob.Objects[F])) Then
+              Begin
+                Inc(nLocs)
+              End
          End
       Else
          MI := MI + 'CL_MEM_READ_ONLY';
@@ -127,7 +130,7 @@ Begin
          IG := IG + 'false';
       If Length(LocGlob.Strings[F]) > 0 Then
          If Boolean(TObjectToInteger(LocGlob.Objects[F])) Then
-            NP := NP + LocGlob.Strings[F]
+            NP := NP + '0' // LocGlob.Strings[F]
          Else
             NP := NP + '1'
       Else

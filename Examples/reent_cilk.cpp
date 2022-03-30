@@ -1,5 +1,7 @@
 #include "cilk_compile.h"
 
+// #pragma auto for
+
 #include <stdio.h>
 #include <math.h>
 #include <omp.h>

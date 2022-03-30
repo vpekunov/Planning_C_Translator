@@ -88,7 +88,7 @@
         <EditorIndex Value="10"/>
         <WindowIndex Value="1"/>
         <CursorPos X="15"/>
-        <UsageCount Value="183"/>
+        <UsageCount Value="184"/>
         <Loaded Value="True"/>
       </Unit5>
       <Unit6>
@@ -99,7 +99,7 @@
         <WindowIndex Value="1"/>
         <TopLine Value="256"/>
         <CursorPos X="26" Y="261"/>
-        <UsageCount Value="183"/>
+        <UsageCount Value="184"/>
         <Loaded Value="True"/>
       </Unit6>
       <Unit7>
@@ -112,23 +112,23 @@
         <Filename Value="PROLOG.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Prolog"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="9"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="216"/>
-        <CursorPos X="49" Y="216"/>
-        <UsageCount Value="183"/>
+        <TopLine Value="461"/>
+        <CursorPos X="54" Y="477"/>
+        <UsageCount Value="184"/>
         <Loaded Value="True"/>
       </Unit8>
       <Unit9>
         <Filename Value="PREPROC.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Preproc"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="5"/>
         <WindowIndex Value="1"/>
         <TopLine Value="463"/>
         <CursorPos X="38" Y="471"/>
-        <UsageCount Value="198"/>
+        <UsageCount Value="199"/>
         <Bookmarks Count="1">
           <Item0 X="37" Y="1178"/>
         </Bookmarks>
@@ -157,9 +157,9 @@
         <UnitName Value="Macroses"/>
         <EditorIndex Value="2"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="223"/>
-        <CursorPos X="27" Y="241"/>
-        <UsageCount Value="183"/>
+        <TopLine Value="125"/>
+        <CursorPos X="31" Y="133"/>
+        <UsageCount Value="184"/>
         <Loaded Value="True"/>
       </Unit12>
       <Unit13>
@@ -169,7 +169,7 @@
         <EditorIndex Value="1"/>
         <WindowIndex Value="1"/>
         <CursorPos X="29" Y="17"/>
-        <UsageCount Value="183"/>
+        <UsageCount Value="184"/>
         <Loaded Value="True"/>
       </Unit13>
       <Unit14>
@@ -233,127 +233,123 @@
         <UsageCount Value="5"/>
       </Unit20>
     </Units>
-    <JumpHistory Count="30" HistoryIndex="29">
+    <JumpHistory Count="29" HistoryIndex="28">
       <Position1>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="436" TopLine="429"/>
+        <Caret Line="444" TopLine="430"/>
       </Position1>
       <Position2>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="438" TopLine="429"/>
+        <Caret Line="445" TopLine="431"/>
       </Position2>
       <Position3>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="439" TopLine="429"/>
+        <Caret Line="447" TopLine="433"/>
       </Position3>
       <Position4>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="441" TopLine="429"/>
+        <Caret Line="448" TopLine="434"/>
       </Position4>
       <Position5>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="442" TopLine="429"/>
+        <Caret Line="449" TopLine="435"/>
       </Position5>
       <Position6>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="444" TopLine="430"/>
+        <Caret Line="450" TopLine="436"/>
       </Position6>
       <Position7>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="445" TopLine="431"/>
+        <Caret Line="452" TopLine="438"/>
       </Position7>
       <Position8>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="447" TopLine="433"/>
+        <Caret Line="438" TopLine="430"/>
       </Position8>
       <Position9>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="448" TopLine="434"/>
+        <Caret Line="439" TopLine="430"/>
       </Position9>
       <Position10>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="449" TopLine="435"/>
+        <Caret Line="444" TopLine="430"/>
       </Position10>
       <Position11>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="450" TopLine="436"/>
+        <Caret Line="445" TopLine="431"/>
       </Position11>
       <Position12>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="452" TopLine="438"/>
+        <Caret Line="452" TopLine="444"/>
       </Position12>
       <Position13>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="438" TopLine="430"/>
+        <Caret Line="453" TopLine="444"/>
       </Position13>
       <Position14>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="439" TopLine="430"/>
+        <Caret Line="454" TopLine="444"/>
       </Position14>
       <Position15>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="441" TopLine="430"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="3" Column="38"/>
       </Position15>
       <Position16>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="442" TopLine="430"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="271" Column="55" TopLine="257"/>
       </Position16>
       <Position17>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="444" TopLine="430"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="314" Column="33" TopLine="300"/>
       </Position17>
       <Position18>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="445" TopLine="431"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="323" Column="50" TopLine="309"/>
       </Position18>
       <Position19>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="447" TopLine="433"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="416" Column="64" TopLine="402"/>
       </Position19>
       <Position20>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="448" TopLine="434"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="417" Column="42" TopLine="403"/>
       </Position20>
       <Position21>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="449" TopLine="435"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="419" Column="35" TopLine="405"/>
       </Position21>
       <Position22>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="450" TopLine="436"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="424" Column="78" TopLine="410"/>
       </Position22>
       <Position23>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="452" TopLine="438"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="441" Column="130" TopLine="427"/>
       </Position23>
       <Position24>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="438" TopLine="430"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="442" Column="42" TopLine="428"/>
       </Position24>
       <Position25>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="439" TopLine="430"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="454" Column="108" TopLine="440"/>
       </Position25>
       <Position26>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="444" TopLine="430"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="462" Column="56" TopLine="448"/>
       </Position26>
       <Position27>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="445" TopLine="431"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="463" Column="75" TopLine="449"/>
       </Position27>
       <Position28>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="452" TopLine="444"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="468" Column="170" TopLine="454"/>
       </Position28>
       <Position29>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="453" TopLine="444"/>
+        <Filename Value="PROLOG.PAS"/>
+        <Caret Line="476" Column="34" TopLine="462"/>
       </Position29>
-      <Position30>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="454" TopLine="444"/>
-      </Position30>
     </JumpHistory>
   </ProjectOptions>
   <CompilerOptions>
