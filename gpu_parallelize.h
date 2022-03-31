@@ -563,9 +563,7 @@ enumerations_point();
   write(Offs), write(PI), write('.'), write(N), write(' = '), write(V), write(';'), nl,
   write_fillers(Offs, PI, TK, TN, TV),
   !.
-@get_pivot([], [], [], _, _):-
-  !,
-  fail.
+@get_pivot([], [], [], '', ''):-!.
 @get_pivot([K|_], [N|_], [T|_], N, T):-
   atom_concat('_pivot', _, K),
   !.
@@ -643,19 +641,26 @@ enumerations_point();
 % Sort indexes of plan
     get_pivot(KINDS, NAMES, TYPES, Pivot, PivotType),
     write('if (!initialized) {'), nl,
-    write('   sort(__plan_indexes.begin(),__plan_indexes.end(),'), nl,
-    write('     [&](const int & A, const int & B)->bool {'), nl,
-    write('        int d = __plan_sorted[B].'), write(Pivot), write('[B] - __plan_sorted[A].'), write(Pivot), write('[A];'), nl,
-    write('        int i;'), nl,
-    write('        if (abs(d) > 0) return d < 0;'), nl,
-    write('        for (i = 0; i < __markCommons; i++) {'), nl,
-    write('            int p = WOrder[i];'), nl,
-    write('            int q = (TR[B*__markCommons + p] - TR[A*__markCommons + p]);'), nl,
-    write('            if (q != 0) return q < 0;'), nl,
-    write('        }'), nl,
-    write('        return false;'), nl,
-    write('     }'), nl,
-    write('   );'), nl,
+    (
+     =(Pivot, '')->
+      true;
+      (
+       write('   sort(__plan_indexes.begin(),__plan_indexes.end(),'), nl,
+       write('     [&](const int & A, const int & B)->bool {'), nl,
+       write('        int d = __plan_sorted[B].'), write(Pivot), write('[B] - __plan_sorted[A].'), write(Pivot), write('[A];'), nl,
+       write('        int i;'), nl,
+       write('        if (abs(d) > 0) return d < 0;'), nl,
+       write('        for (i = 0; i < __markCommons; i++) {'), nl,
+       write('            int p = WOrder[i];'), nl,
+       write('            int q = (TR[B*__markCommons + p] - TR[A*__markCommons + p]);'), nl,
+       write('            if (q != 0) return q < 0;'), nl,
+       write('        }'), nl,
+       write('        return false;'), nl,
+       write('     }'), nl,
+       write('   );'), nl
+      )
+    ),
+    !,
     write('   initialized = true;'), nl,
     write('}'), nl,
 % Empty traces
@@ -677,10 +682,17 @@ enumerations_point();
     write('  }'), nl,
     write_starter('    '),
 % Handling
-    write('std::function<'), write(PivotType), write('(int)> getPivot = [&](int raw_index)->'), write(PivotType), write('{'), nl,
-    write('   return __plan_sorted[raw_index].'), write(Pivot), write('[raw_index];'), nl,
-    write('};'), nl,
-    write('trace_balancing(np, TraceWNotFound, TraceW, Timings, __total, Winners, TR, TR1, TR2, TR3, Prognosed0, Prognosed1, Prognosed2, getPivot);'), nl,
+    (
+     =(Pivot, '')->
+       true;
+       (
+        write('std::function<'), write(PivotType), write('(int)> getPivot = [&](int raw_index)->'), write(PivotType), write('{'), nl,
+        write('   return __plan_sorted[raw_index].'), write(Pivot), write('[raw_index];'), nl,
+        write('};'), nl,
+        write('trace_balancing(np, TraceWNotFound, TraceW, Timings, __total, Winners, TR, TR1, TR2, TR3, Prognosed0, Prognosed1, Prognosed2, getPivot);'), nl
+       )
+    ),
+    !,
   write('}'), nl,
   telling(CurOut),
   tell('_loop.txt'),
