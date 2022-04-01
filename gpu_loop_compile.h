@@ -1,6 +1,8 @@
 #ifndef __GPU_LOOP_COMPILE_H__
 #define __GPU_LOOP_COMPILE_H__
 
+#preproc_passes(1,"_gpu.cpp")
+
 #parse(clsGPUProgram,clsGPUSpace,clsGPUInclude,clsGPUPreproc,clsGPUComments,clsGPUTypedef,clsGPUCVar,clsGPUFunction,clsGPUFor,clsGPUSwitch,clsGPUWhile,clsGPUIf,clsGPUElse,clsGPUDo,clsGPUAlternation,clsGPUReturn,clsGPUOper,clsGPUBegin,clsGPUEnd,clsGPUTerminator)
 
 #def_pattern clsGPUAlternation => [prog] ('clsGPUAlternation', gid(), /root/TYPE/@Value, [['arg', /root/CASE/@Value]]) {

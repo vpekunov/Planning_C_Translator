@@ -3,6 +3,8 @@
 
 #parse(clsAtomicProgram,clsAtomicSpace,clsAtomicInclude,clsAtomicPreproc,clsAtomicComments,clsAtomicTypedef,clsAtomicCVar,clsAtomicFunction,clsAtomicFor,clsAtomicSwitch,clsAtomicWhile,clsAtomicIf,clsAtomicElse,clsAtomicDo,clsAtomicAlternation,clsAtomicReturn,clsAtomicOper,clsAtomicBegin,clsAtomicEnd,clsAtomicTerminator)
 
+#preproc_passes(1,"_atomic.cpp")
+
 #def_pattern clsAtomicAlternation => [prog] ('clsAtomicAlternation', gid(), /root/TYPE/@Value, [['arg', /root/CASE/@Value]]) {
   (((^)|(\;)+|\}|\{|\\n|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin

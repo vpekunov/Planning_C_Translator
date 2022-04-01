@@ -354,6 +354,7 @@ Function Substitute(S: String; Const Prefix, Postfix: String; Const ID, Subst: S
 Const qtNone   = 0;
       qtSingle = 1;
       qtDouble = 2;
+      qtTriag = 3;
 
 Var Word: String;
     _Quote:Byte;
@@ -392,6 +393,16 @@ Begin
                    _Quote:=qtNone
                 Else If _Quote = qtNone Then
                    _Quote:=qtDouble
+              End
+           Else If S[F] = Less Then
+              Begin
+                If _Quote = qtNone Then
+                   _Quote:=qtTriag
+              End
+           Else If S[F] = Greater Then
+              Begin
+                If _Quote = qtTriag Then
+                   _Quote:=qtNone
               End;
            Result := Result + S[F]
          End;

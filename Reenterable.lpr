@@ -1364,6 +1364,10 @@ begin
 
           Defines := TStringList.Create;
 
+          Lines := Nil;
+          Files := Nil;
+          ProgGPU := Nil;
+
           ParamNameNum := CheckCommandLine(Defines, FollowDefs, NoSourceLines, ExtensionsOnly);
 
           If ParamCount = ParamNameNum Then
@@ -1379,139 +1383,152 @@ begin
                NewName:=ParamStr(ParamNameNum+1)
              End;
 
-          Assign(Inp,OldName);
-          Try
-             Reset(Inp);
-          Except
-             WriteLn('Can''t open input file ', OldName, ' for reading');
-             Halt(-1)
-          End;
-          If FileExists(NewName) Then
-             Begin
-               S := ChangeFileExt(NewName, '.bak');
-               SysUtils.DeleteFile(S);
-               RenameFile(NewName, S)
-             End;
-          Assign(Out,NewName);
-          Try
-             Rewrite(Out);
-          Except
-             WriteLn('Can''t open output file ', NewName, ' for writing');
-             Halt(-1)
-          End;
-
           LineDelimiter := '';
 
           L:=TAnalyser.Create(IdentSet,[Space,Tabulation]);
           L1:=TAnalyser.Create(IdentSet,[Space,Tabulation]);
 
-          PassCount := 0;
-          PreprocPasses := 1;
           Repeat
-            WriteLn('Preprocessing: Pass [', PassCount+1, ']');
-            If PassCount > 0 Then
-               begin
-                 With Defines Do
-                   Begin
-                     For F := 0 To Count - 1 Do
-                         DisposeStr(PString(Objects[F]));
-                     Clear;
+              NewFileName := '';
 
-                     CheckCommandLine(Defines, FollowDefs, NoSourceLines, ExtensionsOnly)
-                   End;
-                 With Lines Do
-                   Begin
-                     For F := 0 To Count - 1 Do
-                         If Assigned(Objects[F]) Then
-                            Objects[F].Free;
-                     Free
-                   End;
-                 With Files Do
-                   Begin
-                     For F := 0 To Count - 1 Do
-                         If Assigned(Objects[F]) Then
-                            Objects[F].Free;
-                     Free
-                   End;
-                 ProgGPU.Free;
-                 Reset(Inp)
-               end;
-            Lines := TStringList.Create;
-            // Preprocessing
-            CommentFlag := False;
-            // Read file into Lines
-            Files := TStringList.Create;
-            F := 1;
-            While Not Eof(Inp) Do
-              Begin
-                ReadLn(Inp,S);
-                StripComments(S, CommentFlag);
-                Lines.AddObject(UTF8Decode(S), TLine.Create(0, F, gpuNone));
-                Inc(F)
+              Assign(Inp,OldName);
+              Try
+                 Reset(Inp);
+              Except
+                 WriteLn('Can''t open input file ', OldName, ' for reading');
+                 Halt(-1)
               End;
-            FL := TStringList.Create;
-            FL.Assign(Lines);
-            Files.AddObject(Asterisk+ParamStr(ParamNameNum), FL);
-
-            CloseFile(Inp);
-
-            ProgGPU := TStringList.Create;
-            ProgGPU.Add('#define __GPU__');
-            ProgGPU.Add('');
-            ProgGPU.Add('#define plan_vector_size() get_global_size(0)');
-  	    ProgGPU.Add('#define plan_vector_id() get_global_id(0)');
-            ProgGPU.Add('#define vector_max_size(S) get_global_size(0)');
-            ProgGPU.Add('#define vector_max_units(S) (0)');
-            ProgGPU.Add('#define get_device_id(n) ((char *)0)');
-            ProgGPU.Add('#define last_execution_time(A) (0.0)');
-            ProgGPU.Add('');
-
-            IsVectorized := False;
-            IsClustered := False;
-            SetLength(Restrictions, 0);
-            Defines.AddObject('__REENT__', TObject(NewStr('1')));
-
-            PatternsOrder.Clear;
-            PatternsMode := pmNone;
-
-            PreprocStage1(FollowDefs, Defines, IsClustered, IsVectorized, Restrictions);
-
-            PreprocStage1a(Restrictions);
-
-            If L.Error Then
-               Begin
-                 WriteLn('Parse error',TLine(Lines.Objects[LCounter-2]).GetDescription);
+              If FileExists(NewName) Then
+                 Begin
+                   S := ChangeFileExt(NewName, '.bak');
+                   SysUtils.DeleteFile(S);
+                   RenameFile(NewName, S)
+                 End;
+              Assign(Out,NewName);
+              Try
+                 Rewrite(Out);
+              Except
+                 WriteLn('Can''t open output file ', NewName, ' for writing');
                  Halt(-1)
-               End;
+              End;
 
-            PreprocStage2(Restrictions);
+              PassCount := 0;
+              PreprocPasses := 1;
+              Repeat
+                With Defines Do
+                  Begin
+                    For F := 0 To Count - 1 Do
+                        DisposeStr(PString(Objects[F]));
+                    Clear;
 
-            If L.Error Then
-               Begin
-                 WriteLn('Parse error',TLine(Lines.Objects[LCounter-2]).GetDescription);
-                 Halt(-1)
-               End;
+                    CheckCommandLine(Defines, FollowDefs, NoSourceLines, ExtensionsOnly)
+                  End;
+                If Assigned(Lines) Then
+                   With Lines Do
+                     Begin
+                       For F := 0 To Count - 1 Do
+                           If Assigned(Objects[F]) Then
+                              Objects[F].Free;
+                       Free
+                     End;
+                If Assigned(Files) Then
+                   With Files Do
+                     Begin
+                       For F := 0 To Count - 1 Do
+                           If Assigned(Objects[F]) Then
+                              Objects[F].Free;
+                       Free
+                     End;
+                ProgGPU.Free;
 
-            With Lines Do
-              Begin
-                F := 0;
-                While F < Count Do
-                  Case TLine(Objects[F])._ModeGPU Of
-                    gpuNone: Inc(F);
-                    gpuOnly: Begin
-                        ProgGPU.Add(RemoveCRLF(Strings[F]));
-                        TLine(Objects[F]).Free;
-                        Delete(F)
-                      End;
-                    gpuBoth: Begin
-                        ProgGPU.Add(RemoveCRLF(Strings[F]));
-                        Inc(F)
+                WriteLn('Preprocessing: Pass [', PassCount+1, ']');
+                If PassCount > 0 Then
+                   Reset(Inp);
+
+                Lines := TStringList.Create;
+                // Preprocessing
+                CommentFlag := False;
+                // Read file into Lines
+                Files := TStringList.Create;
+                F := 1;
+                While Not Eof(Inp) Do
+                  Begin
+                    ReadLn(Inp,S);
+                    StripComments(S, CommentFlag);
+                    Lines.AddObject(UTF8Decode(S), TLine.Create(0, F, gpuNone));
+                    Inc(F)
+                  End;
+                FL := TStringList.Create;
+                FL.Assign(Lines);
+                Files.AddObject(Asterisk+OldName, FL);
+
+                CloseFile(Inp);
+
+                ProgGPU := TStringList.Create;
+                ProgGPU.Add('#define __GPU__');
+                ProgGPU.Add('');
+                ProgGPU.Add('#define plan_vector_size() get_global_size(0)');
+  	        ProgGPU.Add('#define plan_vector_id() get_global_id(0)');
+                ProgGPU.Add('#define vector_max_size(S) get_global_size(0)');
+                ProgGPU.Add('#define vector_max_units(S) (0)');
+                ProgGPU.Add('#define get_device_id(n) ((char *)0)');
+                ProgGPU.Add('#define last_execution_time(A) (0.0)');
+                ProgGPU.Add('');
+
+                IsVectorized := False;
+                IsClustered := False;
+                SetLength(Restrictions, 0);
+                Defines.AddObject('__REENT__', TObject(NewStr('1')));
+
+                PatternsOrder.Clear;
+                PatternsMode := pmNone;
+
+                PreprocStage1(FollowDefs, Defines, IsClustered, IsVectorized, Restrictions);
+
+                PreprocStage1a(Restrictions);
+
+                If L.Error Then
+                   Begin
+                     WriteLn('Parse error',TLine(Lines.Objects[LCounter-2]).GetDescription);
+                     Halt(-1)
+                   End;
+
+                PreprocStage2(Restrictions);
+
+                If L.Error Then
+                   Begin
+                     WriteLn('Parse error',TLine(Lines.Objects[LCounter-2]).GetDescription);
+                     Halt(-1)
+                   End;
+
+                With Lines Do
+                  Begin
+                    F := 0;
+                    While F < Count Do
+                      Case TLine(Objects[F])._ModeGPU Of
+                        gpuNone: Inc(F);
+                        gpuOnly: Begin
+                            ProgGPU.Add(RemoveCRLF(Strings[F]));
+                            TLine(Objects[F]).Free;
+                            Delete(F)
+                          End;
+                        gpuBoth: Begin
+                            ProgGPU.Add(RemoveCRLF(Strings[F]));
+                            Inc(F)
+                          End;
                       End;
                   End;
-              End;
 
-            Inc(PassCount)
-          Until PassCount >= PreprocPasses;
+                Inc(PassCount)
+              Until PassCount >= PreprocPasses;
+
+              If Length(NewFileName) > 0 Then
+                 Begin
+                   CloseFile(Out);
+                   OldName := NewFileName;
+                   WriteLn('Input file has been changed to "', NewFileName, '"');
+                 end
+          Until Length(NewFileName) = 0;
 
           // Insert Prolog code
           If Not ExtensionsOnly Then

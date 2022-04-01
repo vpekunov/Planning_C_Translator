@@ -19,6 +19,7 @@ uses
 
 Const PassCount: Integer = 0;
 Const PreprocPasses: Integer = 1;
+Const NewFileName: String = '';
 
 procedure PreprocStage1(ApplyConds: Boolean;
                         Defines: TStringList;
@@ -479,8 +480,17 @@ begin
               End
            Else If Flag And (S = idPreprocPasses) Then
               Begin
-                If L.Check(LeftBracket) And L.GetCheckedNumber(True, Rslt, 1.0, 100.0) And L.Check(RightBracket) Then
-                   PreprocPasses := Round(Rslt);
+                If L.Check(LeftBracket) And L.GetCheckedNumber(True, Rslt, 1.0, 100.0) Then
+                   Begin
+                     PreprocPasses := Round(Rslt);
+                     If L.IsNext(Comma) Then
+                        Begin
+                          L.Check(Comma);
+                          NewFileName := L.GetString(DblQuote, DblQuote);
+                          L.Check(RightBracket)
+                        End
+                     Else L.Check(RightBracket)
+                   End;
 
                 If Assigned(Lines.Objects[LCounter-1]) Then
                    Lines.Objects[LCounter-1].Free;
