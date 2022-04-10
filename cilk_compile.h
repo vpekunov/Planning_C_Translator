@@ -1650,8 +1650,8 @@
     (
      predicate_property(cilk_function(_,_,_),'dynamic'),
      cilk_function(Name,_,NPrms),
-     predicate_property(cilk_fdependent(_,_,_,_),'dynamic'),
-     cilk_fdependent(Name,NPrms,f,_)
+     predicate_property(cilk_fdependent(_,_,_),'dynamic'),
+     cilk_fdependent(Name,NPrms,f)
     )
    ),
    !,
