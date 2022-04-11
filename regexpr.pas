@@ -405,6 +405,16 @@ type
   Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
  end;
 
+ { TFastBoolConst }
+
+ TFastBoolConst = class(TFastExternal)
+   Val: Boolean;
+ public
+  Constructor Create(V: Boolean);
+
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+ end;
+
  { TFastNet }
 
  TFastNet = class(TFastPredicate)
@@ -487,7 +497,7 @@ type
  TFastCallsAction = function(Const Predicate: String; Const Descriptor: TFastPositions): Boolean of Object;
 
  TFastCalls = class(TList)
- public
+ public // Если в списке встречается TFastCalls -- вложенная цепочка
    Constructor Create;
    Destructor Destroy; override;
 
@@ -499,6 +509,7 @@ type
    Function Learn(Const DB: TFastDB; const R: TRegExpr; Var valext: TStringList; Var valsp): Boolean;
  private
    Analyzers: TList;
+   Alternation: TFastCalls; // Альтернативная цепочка после ';'
 
    function ARL(const DB: TFastDB; const R: TRegExpr; var valext: TStringList;
      var valsp; Action: TFastCallsAction; makeFillIn: Boolean): Boolean;
@@ -1801,6 +1812,21 @@ begin
    Exit(False)
 end;
 
+{ TFastBoolConst }
+
+constructor TFastBoolConst.Create(V: Boolean);
+begin
+  Inherited Create(Nil);
+  Val := V
+end;
+
+function TFastBoolConst.Unify(R: TRegExpr; ENV: TXPathEnvironment;
+  var Descriptor: TFastPositions): Boolean;
+
+begin
+   Exit(Val)
+end;
+
 { TFastXPathF }
 
 constructor TFastXPathF.Create;
@@ -2696,7 +2722,8 @@ end;
 constructor TFastCalls.Create;
 begin
   Inherited Create;
-  Analyzers := TList.Create
+  Analyzers := TList.Create;
+  Alternation := Nil
 end;
 
 destructor TFastCalls.Destroy;
@@ -2711,6 +2738,7 @@ begin
           TParallelizer(Items[F]).Free;
       Free
     end;
+  Alternation.Free;
   inherited Destroy;
 end;
 
@@ -2825,6 +2853,7 @@ function TFastCalls.Unify(ENV: TXPathEnvironment; const DB: TFastDB; const R: TR
 
  Var Pool: Array Of PoolItem;
      pcall: TFastCall;
+     pcalls: TFastCalls;
      F, After, G: Integer;
      pAnalyze, parallel: Boolean;
      pNumber: Integer;
@@ -2836,93 +2865,110 @@ function TFastCalls.Unify(ENV: TXPathEnvironment; const DB: TFastDB; const R: TR
     F := 0;
     pNumber := 0;
     While F < Count Do
-       begin
-         pcall := TFastCall(Items[F]);
-         if pcall.Predicate = dirParallel Then
-            begin
-              pAnalyze := (Length(pcall.Descriptor) = 1) And FillIn(pcall, R, valext) And
-                 (pcall.Descriptor[0].Value <> '0') And
-                 (pcall.Descriptor[0].Value <> '');
-              Inc(F);
-              After := F;
-              While After < Count Do
-                begin
-                  pcall := TFastCall(Items[After]);
-                  if pcall.Predicate = dirSequential Then
-                     Break
-                  else if pcall.Predicate = dirParallel Then
-                     Exit(False);
-                  Inc(After)
-                end;
-              If After <> F Then
-                 begin
-                   SetLength(Pool, After - F);
-                   FillChar(Pool[0], Length(Pool)*SizeOf(PoolItem), 0);
-                   G := 0;
-                   While F < After Do
-                     begin
-                       pcall := TFastCall(Items[F]);
-                       Pool[G].Call := Self;
-                       Pool[G].ENV := ENV;
-                       Pool[G].DB := DB;
-                       Pool[G].R := R;
-                       Pool[G].valext := valext;
-                       Pool[G].valsp := @valsp;
-                       Pool[G].Worker := F;
-                       For K := 0 To High(pcall.References) Do
-                           if (pcall.References[K] >= 0) And (pcall.References[K] < 1000) Then
-                              if pcall.Descriptor[K].Kind = fpBound then
-                                 Include(Pool[G].inp, pcall.References[K])
-                              else if pcall.Descriptor[K].Kind = fpFree then
-                                 Include(Pool[G].outp, pcall.References[K]);
-                       For K := 0 To G - 1 Do
-                           begin
-                             If (Pool[G].inp*Pool[K].outp <> []) Or (Pool[G].outp*(Pool[K].inp+Pool[K].outp) <> []) Then
-                                Include(Pool[G].deps, K);
-                           end;
-                       For K := 0 To 255 Do
-                           if K in Pool[G].deps Then
-                              Pool[G].inp := Pool[G].inp + Pool[K].inp;
-                       Inc(G);
-                       Inc(F)
-                     end;
-                   If pAnalyze Then
+     If TObject(Items[F]) Is TFastCall Then
+        begin
+          pcall := TFastCall(Items[F]);
+          if pcall.Predicate = dirParallel Then
+             begin
+               pAnalyze := (Length(pcall.Descriptor) = 1) And FillIn(pcall, R, valext) And
+                  (pcall.Descriptor[0].Value <> '0') And
+                  (pcall.Descriptor[0].Value <> '');
+               Inc(F);
+               After := F;
+               While After < Count Do
+                 If TObject(Items[After]) Is TFastCalls Then
+                    Exit(False)
+                 Else
+                    begin
+                      pcall := TFastCall(Items[After]);
+                      if pcall.Predicate = dirSequential Then
+                         Break
+                      else if pcall.Predicate = dirParallel Then
+                         Exit(False);
+                      Inc(After)
+                    end;
+               If After <> F Then
+                  begin
+                    SetLength(Pool, After - F);
+                    FillChar(Pool[0], Length(Pool)*SizeOf(PoolItem), 0);
+                    G := 0;
+                    While F < After Do
                       begin
-                        If Analyzers.Count = pNumber Then
-                           Analyzers.Add(TParallelizer.Create);
-                        parallel := TParallelizer(Analyzers[Analyzers.Count-1]).InParallel;
-                        If parallel Then
-                           ProcThreadPool.MaxThreadCount := Length(Pool)
-                        Else
-                           ProcThreadPool.MaxThreadCount := 1;
-                      end
-                   Else
-                      ProcThreadPool.MaxThreadCount := Length(Pool);
-                   if pAnalyze Then pTime := Now;
-                   ProcThreadPool.DoParallel(@Unificator, 0, High(Pool), Pool);
-                   For K := 0 To High(Pool) Do
-                       If Not Pool[K].Result Then
-                          Exit(False);
-                   if pAnalyze Then
-                      begin
-                        pms := MilliSecondsBetween(pTime,Now) + Random(6);
-                        TParallelizer(Analyzers[Analyzers.Count-1]).PutT(parallel, pms*0.0001)
+                        pcall := TFastCall(Items[F]);
+                        Pool[G].Call := Self;
+                        Pool[G].ENV := ENV;
+                        Pool[G].DB := DB;
+                        Pool[G].R := R;
+                        Pool[G].valext := valext;
+                        Pool[G].valsp := @valsp;
+                        Pool[G].Worker := F;
+                        For K := 0 To High(pcall.References) Do
+                            if (pcall.References[K] >= 0) And (pcall.References[K] < 1000) Then
+                               if pcall.Descriptor[K].Kind = fpBound then
+                                  Include(Pool[G].inp, pcall.References[K])
+                               else if pcall.Descriptor[K].Kind = fpFree then
+                                  Include(Pool[G].outp, pcall.References[K]);
+                        For K := 0 To G - 1 Do
+                            begin
+                              If (Pool[G].inp*Pool[K].outp <> []) Or (Pool[G].outp*(Pool[K].inp+Pool[K].outp) <> []) Then
+                                 Include(Pool[G].deps, K);
+                            end;
+                        For K := 0 To 255 Do
+                            if K in Pool[G].deps Then
+                               Pool[G].inp := Pool[G].inp + Pool[K].inp;
+                        Inc(G);
+                        Inc(F)
                       end;
-                 end;
-              Inc(pNumber)
-            end
-         else
-            begin
-              if pcall.Predicate <> dirSequential Then
-                 begin
-                   FillIn(pcall, R, valext);
-                   If DB.Unify(R, ENV, pcall.Predicate, pcall.Descriptor) = pcall.Negate Then
-                      Exit(False);
-                   FillOut(pcall, R, valsp)
-                 end;
-              Inc(F)
-            end;
-       end;
+                    If pAnalyze Then
+                       begin
+                         If Analyzers.Count = pNumber Then
+                            Analyzers.Add(TParallelizer.Create);
+                         parallel := TParallelizer(Analyzers[Analyzers.Count-1]).InParallel;
+                         If parallel Then
+                            ProcThreadPool.MaxThreadCount := Length(Pool)
+                         Else
+                            ProcThreadPool.MaxThreadCount := 1;
+                       end
+                    Else
+                       ProcThreadPool.MaxThreadCount := Length(Pool);
+                    if pAnalyze Then pTime := Now;
+                    ProcThreadPool.DoParallel(@Unificator, 0, High(Pool), Pool);
+                    For K := 0 To High(Pool) Do
+                        If Not Pool[K].Result Then
+                           Exit(False);
+                    if pAnalyze Then
+                       begin
+                         pms := MilliSecondsBetween(pTime,Now) + Random(6);
+                         TParallelizer(Analyzers[Analyzers.Count-1]).PutT(parallel, pms*0.0001)
+                       end;
+                  end;
+               Inc(pNumber)
+             end
+          else
+             begin
+               if pcall.Predicate <> dirSequential Then
+                  begin
+                    FillIn(pcall, R, valext);
+                    If DB.Unify(R, ENV, pcall.Predicate, pcall.Descriptor) = pcall.Negate Then
+                       If Assigned(Alternation) Then
+                          Exit(Alternation.Unify(ENV, DB, R, valext, valsp))
+                       Else
+                          Exit(False);
+                    FillOut(pcall, R, valsp)
+                  end;
+               Inc(F)
+             end;
+        end
+     Else
+        begin
+          pcalls := TFastCalls(Items[F]);
+          If pcalls.Unify(ENV, DB, R, valext, valsp) Then
+             Inc(F)
+          Else If Assigned(Alternation) Then
+             Exit(Alternation.Unify(ENV, DB, R, valext, valsp))
+          Else
+             Exit(False)
+        end;
     Result := True
  end;
 
@@ -2961,6 +3007,9 @@ function TFastCalls.ARL(const DB: TFastDB; const R: TRegExpr; var valext: TStrin
     F := 0;
     pNumber := 0;
     While F < Count Do
+     If TObject(Items[F]) Is TFastCalls Then
+       Exit(False)
+     Else
        begin
          pcall := TFastCall(Items[F]);
          if pcall.Predicate = dirParallel Then
@@ -2971,14 +3020,17 @@ function TFastCalls.ARL(const DB: TFastDB; const R: TRegExpr; var valext: TStrin
               Inc(F);
               After := F;
               While After < Count Do
-                begin
-                  pcall := TFastCall(Items[After]);
-                  if pcall.Predicate = dirSequential Then
-                     Break
-                  else if pcall.Predicate = dirParallel Then
-                     Exit(False);
-                  Inc(After)
-                end;
+               If TObject(Items[After]) Is TFastCalls Then
+                  Exit(False)
+               Else
+                  begin
+                    pcall := TFastCall(Items[After]);
+                    if pcall.Predicate = dirSequential Then
+                       Break
+                    else if pcall.Predicate = dirParallel Then
+                       Exit(False);
+                    Inc(After)
+                  end;
               If After <> F Then
                  begin
                    SetLength(Pool, After - F);
@@ -3075,7 +3127,9 @@ begin
 
   AddObject('xpath', TFastXPath.Create);
   AddObject('xpathf', TFastXPathF.Create);
-  AddObject('stop_fail', TFastStopFail.Create)
+  AddObject('stop_fail', TFastStopFail.Create);
+  AddObject('fail', TFastBoolConst.Create(False));
+  AddObject('true', TFastBoolConst.Create(True))
 end;
 
 destructor TFastDB.Destroy;
@@ -4436,7 +4490,8 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
   eq, neq: boolean;
   pred: ReChar;
   pcall: TFastCall;
-  pcalls: TFastCalls;
+  pmaincalls: TFastCalls;
+  pcalls: TList;
   dollarsign: Boolean;
   L: TAnalyser;
   i, j, refno : integer;
@@ -4591,7 +4646,9 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                   If regparse^ <> #0 Then Inc(regparse);
                   if pred <> #0 Then
                      begin
-                       pcalls := TFastCalls.Create;
+                       pcalls := TList.Create;
+                       pmaincalls := TFastCalls.Create;
+                       pcalls.Add(pmaincalls);
 
                        L := TAnalyser.Create(IdentSet + [Lexique.Point], [Space, Tabulation]);
                        L.AnlzLine := RegExprString(VarNames[parno]);
@@ -4601,6 +4658,37 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
 
                        While Not (L.Error Or L.Empty) Do
                          begin
+                           If L.IsNext(LeftBracket) Then
+                              begin
+                                L.Check(LeftBracket);
+                                If pred <> '?' Then
+                                   Begin
+                                     L.MakeError('Only ?=> predicates can contain groups (p1,p2,p3...) : ' + RegExprString(VarNames[parno]));
+                                     Break
+                                   End;
+                                TFastCalls(pcalls[pcalls.Count - 1]).Add(TFastCalls.Create);
+                                pcalls.Add(pcalls[pcalls.Count - 1]);
+                                Continue
+                              end
+                           Else If L.IsNext(RightBracket) Then
+                              begin
+                                L.Check(RightBracket);
+                                If pred <> '?' Then
+                                   Begin
+                                     L.MakeError('Only ?=> predicates can contain groups (p1,p2,p3...) : ' + RegExprString(VarNames[parno]));
+                                     Break
+                                   End;
+                                If pcalls.Count < 2 Then
+                                   Begin
+                                     L.MakeError('Right bracket without Left bracket. Disbalance : ' + RegExprString(VarNames[parno]));
+                                     Break
+                                   End;
+                                pcalls.Delete(pcalls.Count - 1);
+                                If (L.IsNext(Comma) And L.Check(Comma)) Or (L.IsNext(SemiColon) And L.Check(SemiColon)) Then
+                                   If L.Empty Then
+                                      L.MakeError('Predicate expected : ' + RegExprString(VarNames[parno]));
+                                Continue
+                              end;
                            pcall := TFastCall.Create;
                            pcall.Negate := L.IsNext(Exclamation) And L.Check(Exclamation);
                            If pcall.Negate And (pred <> '?') Then
@@ -4627,7 +4715,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                        begin
                                          dollarsign := L.IsNext(Dollar);
                                          if dollarsign then L.Check(Dollar);
-                                         if L.IsNextSet([Comma, RightBracket]) Then
+                                         if L.IsNextSet([Comma, SemiColon, RightBracket]) Then
                                             if dollarsign then
                                                begin
                                                  pcall.Descriptor[High(pcall.Descriptor)].Kind := fpBound;
@@ -4691,7 +4779,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                              else // const
                                                 begin
                                                   pcall.Descriptor[High(pcall.Descriptor)].Kind := fpBound;
-                                                  ST := L.GetBalancedListItem(False, [Comma, RightBracket]);
+                                                  ST := L.GetBalancedListItem(False, [Comma, SemiColon, RightBracket]);
                                                   if Length(ST) >= 2 Then
                                                      If ((ST[1] = '''') And (ST[Length(ST)] = '''')) Or ((ST[1] = '"') And (ST[Length(ST)] = '"')) Then
                                                         ST := Copy(ST, 2, Length(ST)-2);
@@ -4702,33 +4790,49 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                        end;
                                     If Not L.Error Then
                                        If L.IsNext(Comma) And L.Check(Comma) Then
-                                          If L.Empty Then
-                                             L.MakeError('Variable/const/_ expected : ' + RegExprString(VarNames[parno]))
+                                          Begin
+                                            If L.Empty Then
+                                               L.MakeError('Variable/const/_ expected : ' + RegExprString(VarNames[parno]))
+                                          End
                                   end;
                                 L.Check(RightBracket)
                               end;
                            if Not L.Error Then
                               begin
-                                pcalls.Add(pcall);
+                                TFastCalls(pcalls[pcalls.Count - 1]).Add(pcall);
                                 If L.IsNext(Comma) And L.Check(Comma) Then
-                                   If L.Empty Then
-                                      L.MakeError('Predicate expected : ' + RegExprString(VarNames[parno]))
+                                   Begin
+                                     If L.Empty Then
+                                        L.MakeError('Predicate expected : ' + RegExprString(VarNames[parno]))
+                                   End
+                                Else If L.IsNext(SemiColon) And L.Check(SemiColon) Then
+                                   Begin
+                                     If L.Empty Then
+                                        L.MakeError('Predicate expected : ' + RegExprString(VarNames[parno]))
+                                     Else
+                                        Begin
+                                          TFastCalls(pcalls[pcalls.Count - 1]).Alternation := TFastCalls.Create;
+                                          pcalls[pcalls.Count - 1] := TFastCalls(pcalls[pcalls.Count - 1]).Alternation
+                                        End
+                                   End
                               end
                          end;
 
-                       If L.Error Then
+                       If L.Error Or (pcalls.Count <> 1) Then
                           Begin
+                            pcalls.Free;
                             L.Free;
                             Error(reeInvalidPredicate);
                             Exit
                           End;
 
                        L.Free;
+                       pcalls.Free;
 
                        if Assigned(fcalls[parno]) then
                           FreeAndNil(fcalls[parno]);
-                       fcalls[parno] := pcalls;
-                       ST := hexStr(pcalls);
+                       fcalls[parno] := pmaincalls;
+                       ST := hexStr(pmaincalls);
                        FreeMem(varsp[parno]);
                        GetMem(S, (Length(ST) + 2)*SizeOf(REChar));
                        varsp[parno] := S;
