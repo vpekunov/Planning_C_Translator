@@ -1965,7 +1965,6 @@
    !.
 
 @check_outs_by_idxs([V|T],Ins,FIdxs):-
-write(V),write(FIdxs),
    !,
    \+ member(var(V,[]),FIdxs), % ¬ыходна€ переменна€ должна зависеть от индекса
    !,
