@@ -273,7 +273,7 @@
   unescapel(T,T1).
 
 @unescapel(['\\', 't'|T],['\t'|T1]):-
-  unecapel(T,T1).
+  unescapel(T,T1).
 
 @unescapel([H|T],[H|T1]):-
   unescapel(T,T1).
@@ -894,6 +894,10 @@
 % ¬ п€том параметре принимаетс€ список-карта переданных значений. Ёлемент = множество из одного элемента (им€ переданной переменной)
 %  или пустое множество (если в параметре передано выражение).
 % ¬ шестом параметре возвращаетс€ список имен переданных в качестве параметров переменных, значени€ которых используютс€ на чтение в функции
+@get_lazies(Fun, [], GP, [], _, []):-
+     get_glob_lazies(Fun,0,GP,_,_),
+     !.
+
 @get_lazies(Fun, Params, [], _, ParSingleMap, _):-
    predicate_property(cilk_farg(_,_,_,_),'dynamic')->(
      length(Params,N),
@@ -2334,9 +2338,9 @@
     (predicate_property(cilk_spawn_time(_,_),'dynamic'), cilk_spawn_time(GID,Timings))->
       (
          retractall(cilk_spawn_time(GID,_)),
-         asserta(cilk_spawn_time(GID,[TT|Timings]))
+         asserta(cilk_spawn_time(GID,[T1|Timings]))
       );(
-         asserta(cilk_spawn_time(GID,[TT]))
+         asserta(cilk_spawn_time(GID,[T1]))
       )
    ),
    stop_spawns(T,[],T0,TC),
@@ -2892,7 +2896,8 @@
           (
            cilk_op(_,CurGID,_,[],[arg(_,_,_,_,[proc(Fun,Prms)],_,_,_)]),
            length(Prms,NPrms),
-           start_spawn(CurGID,Fun,NPrms,ISP,ISP1,0.0,TSP));
+           start_spawn(CurGID,Fun,NPrms,ISP,ISP1,0.0,TSP)
+          );
           (
            ( % ≈сли это не spawn, но запуск процедуры, то прибавл€ем врем€ ее исполнени€
             cilk_op(_,CurGID,_,[],[arg(_,_,_,_,[proc(Fun,Prms)],_,_,_)])->
@@ -3282,10 +3287,13 @@
   cilk_ftime(Fun,FunGID,BaseTime),
   cilk_spawn_time(GID,Timings),
   call(avr(Timings,AvrTime)),
+  (>(BaseTime,AvrTime) -> =(MAX,BaseTime); =(MAX,AvrTime)),
   g_read('$SpawnTime', SpawnTime),
-  ParExecTime is AvrTime+SpawnTime, % — учетом расходов на собственно spawn
+  g_read('$SyncTime', SyncTime),
+  ParExecTime is SyncTime+MAX+SpawnTime, % — учетом расходов на собственно spawn
+  NonParTime is BaseTime+AvrTime,
   ( % ѕрин€тие решени€ об исключении spawn
-    >(ParExecTime,BaseTime)->(
+    >(ParExecTime,NonParTime)->(
       once(cilk_respawn(List)),
       retractall(cilk_respawn(_)),
       asserta(cilk_respawn([GID|List]))
