@@ -372,7 +372,7 @@ Var S, S1, Store, Tp, _Tp, Nm, _Nm, Reduct:String;
 Begin
      Result:='';
      gpuParams := '';
-     gpuInit := 'int __idx = plan_vector_id();'+CRLF+'int __counter__;'+CRLF;
+     gpuInit := 'int __idx = plan_vector_id();'+CRLF+'int __counter__;'+CRLF+'int __undo_locals = 0;'+CRLF;
      Names.Clear;
      Substs.Clear;
      If Assigned(LocGlob) Then LocGlob.Clear;
@@ -555,7 +555,7 @@ Begin
                      gpuInit := gpuInit + '__local ' + OCLMap(Tp) + ' ' + Nm + ' = ' + _Nm + Nm + ';' + CRLF;
                      gpuStart := gpuStart + 'for(__counter__=0;__counter__<' + LocGlob.Strings[LocGlob.Count-1] + ';__counter__++)' +
                         Nm + '[__counter__] = ' + _Nm + '[__offs[__idx*###+'+IntToStr(nLocs-1)+']+__counter__];' + CRLF;
-                     gpuStop := gpuStop + 'for(__counter__=0;__counter__<' + LocGlob.Strings[LocGlob.Count-1] + ';__counter__++)' +
+                     gpuStop := gpuStop + 'if (!__undo_locals) for(__counter__=0;__counter__<' + LocGlob.Strings[LocGlob.Count-1] + ';__counter__++)' +
                         _Nm + '[__offs[__idx*###+'+IntToStr(nLocs-1)+']+__counter__] = ' + Nm + '[__counter__];' + CRLF;
                    End
                End
@@ -2352,7 +2352,8 @@ begin
                                           '#define plan_group_vectorize(S) 1' + CRLF +
                                           '#define throw_num_stages() 1' + CRLF +
                                           '#define throw_stage() 0' + CRLF +
-                                          '#define clear_plan 1' + CRLF
+                                          '#define clear_plan 1' + CRLF +
+                                          '#define plan_undo_locals() __undo_locals = 1' + CRLF
                                end;
                             If Declared.IndexOf(ID)<0 Then
                                Begin

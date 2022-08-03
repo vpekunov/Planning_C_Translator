@@ -441,14 +441,16 @@ enumerations_point();
 @gen_reent_each_param(K,T,N,S):-
   gen_reent_each_param([K],[T],[N],[S]).
 @gen_reent_params(Kinds,Types,Names,Sizes):-
-  write('bool init, int __markCommons, _local(__planned__.__markCommons) unsigned short * TR'),
+  write('int init, int __markCommons, _local(__planned__.__markCommons) unsigned short * TR'),
   gen_reent_each_param(Kinds,Types,Names,Sizes),
   !.
 @insert_prototype([]):-!.
 @insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names,Sizes))|T]):-
   write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names,Sizes),write(') {'), nl,
-  write('  if (init) {'), nl,
+  write('  if (init == 1) {'), nl,
   write('     plan_group_vectorize('), write(Device), write(');'), nl,
+  write('  } else if (init == 2) {'), nl,
+  write('     plan_undo_locals();'),nl,
   write('  } else {'), nl,
   write(B),
   write('  }'), nl,
@@ -528,7 +530,7 @@ enumerations_point();
   read_code(S,C,TS).
 @write_starter(Offs):-
   write(Offs), write('if (__chunker > 0) {'), nl,
-  write(Offs), write('   Loop'), write(GID), write('([true, __markCommons, TR'),
+  write(Offs), write('   Loop'), write(GID), write('([1, __markCommons, TR'),
     (=(NAMES,'')->true;write(',')), !, write_param_names(NAMES),
     write(']);'), nl,
   write(Offs), write('   float t = last_execution_time('), write(DEVICE), write(');'), nl,
@@ -605,6 +607,9 @@ enumerations_point();
     write('int __total = 0;'), nl,
     write('int __n = 0;'), nl,
     write(LOOP), write(' __total++;'), nl,
+    write('int __rest = __total % ('),write(CHUNK),write(');'),nl,
+    write('int __working = __total;'),nl,
+    write('if (__rest) __total += (('),write(CHUNK),write(') - __rest);'),nl,
     write('vector<int> __plan_indexes(__total);'), nl,
     write('for (int i = 0; i < __total; i++) __plan_indexes[i] = i;'), nl,
     write('if (__total > __nn) {'), nl,
@@ -638,9 +643,10 @@ enumerations_point();
     write(LOOP),
     write('  {'), nl,
     write('    __plan_item.TR = TR + __n*__markCommons;'), nl,
-    write_fillers('    ', '__plan_item', ['', '' | KINDS], ['init', '__markCommons' | NAMES], ['false', '__markCommons' | NAMES]),
+    write_fillers('    ', '__plan_item', ['', '' | KINDS], ['init', '__markCommons' | NAMES], ['0', '__markCommons' | NAMES]),
     write('    __plan_sorted[__n] = __plan_item;'), nl,
     write('    __n++;'), nl,
+    write('    if (__n == __working) { __plan_item.init = 2; for (; __n < __total; __n++) { __plan_item.TR = TR + __n*__markCommons; __plan_sorted[__n] = __plan_item; } }'),nl,
     write('  }'), nl,
 % Sort indexes of plan
     get_pivot(KINDS, NAMES, TYPES, Pivot, PivotType),
@@ -673,9 +679,9 @@ enumerations_point();
     write('int __chunker = 0;'), nl,
     write('int __start_block = 0;'), nl,
     write('__n = 0;'), nl,
-    write(LOOP),
+    write('while (__n < __total)'),nl,
     write('  {'), nl,
-    write('    if (__chunker == 0) { __plan_item.init = true; *Loop'), write(GID), write(' << __plan_item; }'), nl,
+    write('    if (__chunker == 0) { __plan_item.init = 1; *Loop'), write(GID), write(' << __plan_item; }'), nl,
     write('    *Loop'), write(GID), write(' << __plan_sorted[__plan_indexes[__n]];'), nl,
     write('    __n++;'), nl,
     write('    if (++__chunker == ('), write(CHUNK), write(')) {'), nl,
@@ -691,7 +697,7 @@ enumerations_point();
        true;
        (
         write('std::function<'), write(PivotType), write('(int)> getPivot = [&](int raw_index)->'), write(PivotType), write('{'), nl,
-        write('   return __plan_sorted[raw_index].'), write(Pivot), write('[raw_index];'), nl,
+        write('   return raw_index < __working ? __plan_sorted[raw_index].'), write(Pivot), write('[raw_index] : ('),write(PivotType), write(')0;'), nl,
         write('};'), nl,
         write('trace_balancing(np, TraceWNotFound, TraceW, Timings, __total, Winners, WOrder, Besters, TR, TR1, TR2, TR3, Prognosed0, Prognosed1, Prognosed2, getPivot);'), nl
        )
@@ -793,14 +799,16 @@ enumerations_point();
 @gen_reent_each_param(K,T,N,S):-
   gen_reent_each_param([K],[T],[N],[S]).
 @gen_reent_params(Kinds,Types,Names,Sizes):-
-  write('bool init, int __markCommons, _local(__planned__.__markCommons) unsigned short * TR'),
+  write('int init, int __markCommons, _local(__planned__.__markCommons) unsigned short * TR'),
   gen_reent_each_param(Kinds,Types,Names,Sizes),
   !.
 @insert_prototype([]):-!.
 @insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names,Sizes))|T]):-
   write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names,Sizes),write(') {'), nl,
-  write('  if (init) {'), nl,
+  write('  if (init == 1) {'), nl,
   write('     plan_group_vectorize('), write(Device), write(');'), nl,
+  write('  } else if (init == 2) {'), nl,
+  write('     plan_undo_locals();'),nl,
   write('  } else {'), nl,
   write(B),
   write('  }'), nl,

@@ -699,7 +699,8 @@ Begin
   WriteLn(Out,'#define soft_transact_var(Type) TScalar<Type>');
   WriteLn(Out,'#define soft_transact_in(Type) TIn<Type>');
   WriteLn(Out,'#define soft_transact_out(Type) TOut<Type>');
-  WriteLn(Out,'#define reduction(A) /* reduction */')
+  WriteLn(Out,'#define reduction(A) /* reduction */');
+  WriteLn(Out,'void plan_undo_locals() { }')
 End;
 
 End.
