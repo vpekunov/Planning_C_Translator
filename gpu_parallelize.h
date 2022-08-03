@@ -64,7 +64,8 @@ using namespace std;
 @write_enums('', [], Last):-
   write(', '), write(Last), write(' };'), nl,
   !.
-@write_enums(_, [[]], _):-
+@write_enums(_, [[]], Last):-
+  write('enum { '), write(Last), write(' = 1'), write(' };'), nl,
   !.
 @write_enums('0', [], Last):-
   write('enum { '), write(Last), write(' = 1'), write(' };'), nl,
@@ -586,6 +587,7 @@ enumerations_point();
     write('static float TraceW[__markCommons] = { 0.0f };'), nl,
     write('static float * Timings = NULL;'), nl,
     write('static WinnersType * Winners = NULL;'), nl,
+    write('static BestersType * Besters = NULL;'), nl,
     write('static bool initialized = false;'), nl,
     write('if (!initialized) {'), nl,
     write('   np = omp_get_num_procs();'), nl,
@@ -615,12 +617,14 @@ enumerations_point();
     write('   Prognosed2 = (unsigned short *) realloc(Prognosed2, __total*__markCommons*sizeof(unsigned short));'), nl,
     write('   Timings = (float *) realloc(Timings, __total*__HistorySize*sizeof(float));'), nl,
     write('   Winners = (WinnersType *) realloc(Winners, __total*sizeof(WinnersType));'), nl,
+    write('   Besters = (BestersType *) realloc(Besters, __total*sizeof(BestersType));'), nl,
     write('   for (int i = __nn; i < __total; i++) {'), nl,
     write('       for (int j = 0; j < __HistorySize; j++) Timings[i*__HistorySize + j] = 1.0f;'), nl,
     write('       for (int j = 0; j < __markCommons; j++) Prognosed0[i*__markCommons + j] = 1;'), nl,
     write('       for (int j = 0; j < __markCommons; j++) Prognosed1[i*__markCommons + j] = 1;'), nl,
     write('       for (int j = 0; j < __markCommons; j++) Prognosed2[i*__markCommons + j] = 1;'), nl,
     write('       memset(Winners[i], 0, sizeof(WinnersType));'), nl,
+    write('       memset(Besters[i], 0, sizeof(BestersType));'), nl,
     write('       memset(&TR[i*__markCommons], 0, __markCommons*sizeof(unsigned short));'), nl,
     write('       memset(&TR1[i*__markCommons], 0, __markCommons*sizeof(unsigned short));'), nl,
     write('       memset(&TR2[i*__markCommons], 0, __markCommons*sizeof(unsigned short));'), nl,
@@ -689,7 +693,7 @@ enumerations_point();
         write('std::function<'), write(PivotType), write('(int)> getPivot = [&](int raw_index)->'), write(PivotType), write('{'), nl,
         write('   return __plan_sorted[raw_index].'), write(Pivot), write('[raw_index];'), nl,
         write('};'), nl,
-        write('trace_balancing(np, TraceWNotFound, TraceW, Timings, __total, Winners, TR, TR1, TR2, TR3, Prognosed0, Prognosed1, Prognosed2, getPivot);'), nl
+        write('trace_balancing(np, TraceWNotFound, TraceW, Timings, __total, Winners, WOrder, Besters, TR, TR1, TR2, TR3, Prognosed0, Prognosed1, Prognosed2, getPivot);'), nl
        )
     ),
     !,
@@ -866,15 +870,15 @@ void GetPredictor(int p, int Iters3, int Iters2, int Iters1, int Iters, float * 
 		s1 = Iters1*Iters2 + Iters*Iters1;
 		s2 = Iters1 + Iters;
 	} else if (p == 1) {
-		*W1 = 0.0;
-		*Q = Iters;
+		*W1 = 1.0;
+		*Q = 0.0;
 		return;
 	}
 
 	float d = determ(a1, b1, a2, b2);
 	if (fabsf(d) < 1E-5) {
-		*W1 = 0.0;
-		*Q = Iters;
+		*W1 = 1.0;
+		*Q = 0.0;
 	} else {
 		*W1 = determ(s1, b1, s2, b2) / d;
 		*Q = determ(a1, s1, a2, s2) / d;
@@ -884,7 +888,9 @@ void GetPredictor(int p, int Iters3, int Iters2, int Iters1, int Iters, float * 
 const int __HistorySize = 6;
 
 typedef signed char _WinnersType[__markCommons];
+typedef signed char _BestersType[__markCommons];
 typedef _WinnersType WinnersType[__HistorySize];
+typedef _BestersType BestersType[__HistorySize];
 
 typedef float mnk_vector[__markCommons];
 typedef mnk_vector mnk_matrix[__markCommons];
@@ -897,6 +903,8 @@ void trace_balancing(
   float * Timings, /* NN*__HistorySize */
   int NN,
   WinnersType * Winners, /* NN */
+  const vector<int> & WOrder,
+  BestersType * Besters, /* NN */
   unsigned short * TR, /* NN*__markCommons */
   unsigned short * TR1,/* NN*__markCommons */
   unsigned short * TR2,/* NN*__markCommons */
@@ -967,42 +975,69 @@ void trace_balancing(
 
 	#pragma omp parallel for schedule(guided) num_threads(np)
 	for (int j = 0; j < NN; j++) {
-		float f, maxt = 0.0000001f;
+		float f, maxt = 0.000000001f;
+		int errs[3];
+		short int ks;
+		signed char nump;
 
 		for (int k = 0; k < __HistorySize; k++)
                     if (Timings[j*__HistorySize + k] > maxt)
 			maxt = Timings[j*__HistorySize + k];
 
-		for (int k = 0; k < __markCommons; k++) {
+		for (int ks = 0; ks < __markCommons; ks++) {
 			unsigned short int buf;
-			if (fabsf(TraceW[k]) <= 1E-6f) {
+
+			int k = WOrder[ks];
+
+			errs[0] = abs(Prognosed0[j*__markCommons+k] - TR[j*__markCommons+k]);
+			errs[1] = abs(Prognosed1[j*__markCommons+k] - TR[j*__markCommons+k]);
+			errs[2] = abs(Prognosed2[j*__markCommons+k] - TR[j*__markCommons+k]);
+
+			if (errs[0] < errs[1])
+				if (errs[0] < errs[2])
+					nump = 0;
+				else
+					nump = 2;
+			else
+				if (errs[2] < errs[1])
+					nump = 2;
+				else
+					nump = 1;
+
+			for (int s = __HistorySize-1; s > 0; s--)
+				Besters[j][s][k] = Besters[j][s-1][k];
+			Besters[j][0][k] = nump;
+
+			if (ks >= (__markCommons / 4) || fabsf(TraceW[k]) <= 1E-6f) {
+				for (int s = __HistorySize-1; s > 0; s--)
+					Winners[j][s][k] = Winners[j][s-1][k];
+				Winners[j][0][k] = 0;
+
+				Prognosed0[j*__markCommons+k] = Prognosed1[j*__markCommons+k] = Prognosed2[j*__markCommons+k] = TR[j*__markCommons + k];
+
 				buf = TR[j*__markCommons + k];
 			} else {
-				float errs[3];
+				float Quality[3] = { 0.0f, 0.0f, 0.0f };
 				float W1[3];
 				float Q[3];
-				signed char nump;
 
-				errs[0] = errs[1] = errs[2] = 0.0f;
-				for (int s = 0; s < __HistorySize; s++) {
-					if (errs[Winners[j][s][k]] < Timings[j*__HistorySize + s]/maxt) errs[Winners[j][s][k]] = Timings[j*__HistorySize + s]/maxt;
+				for (int s = __HistorySize-1; s > 0; s--) {
+					char w = Winners[j][s][k];
+					float t = Timings[j*__HistorySize + s];
+					float d = t > 1E-9f ? maxt/t : maxt/1E-9f;
+					if (w == Besters[j][s][k])
+						Quality[w] += d;
+					else
+						Quality[w] -= d;
 				}
 
-				if (errs[0] == 0.0f) errs[0] = 0.85f; else errs[0] *= errs[0];
-				if (errs[1] == 0.0f) errs[1] = 0.85f; else errs[1] *= errs[1];
-				if (errs[2] == 0.0f) errs[2] = 0.85f; else errs[2] *= errs[2];
-
-				errs[0] *= abs(Prognosed0[j*__markCommons+k] - TR[j*__markCommons+k]);
-				errs[1] *= abs(Prognosed1[j*__markCommons+k] - TR[j*__markCommons+k]);
-				errs[2] *= abs(Prognosed2[j*__markCommons+k] - TR[j*__markCommons+k]);
-
-				if (errs[0] < errs[1])
-					if (errs[0] < errs[2])
+				if (Quality[0] > Quality[1])
+					if (Quality[0] > Quality[2])
 						nump = 0;
 					else
 						nump = 2;
-				else /* errs[1] <= errs[0] */
-					if (errs[2] < errs[1])
+				else
+					if (Quality[2] > Quality[1])
 						nump = 2;
 					else
 						nump = 1;

@@ -1995,7 +1995,15 @@
    gpu_op('clsGPUFor',GID,_,LGIDs,Exprs),
    (
     (predicate_property(gpu_for_time(_,_),'dynamic'),gpu_for_time(GID,T))->
-       (g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY), TPAR is TSP + 2*T + TSY, TSEQ is 8*T, TPAR < TSEQ);
+       (
+        (predicate_property(gpu_for(_),'dynamic'),gpu_for(GID))->
+          (g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY), TPAR is TSP + 2*T + TSY, TSEQ is 8*T, TPAR < TSEQ);
+          (
+           (predicate_property(omp_for(_),'dynamic'),omp_for(GID))->
+             (g_read('$OMPSpawnTime',TSP), g_read('$OMPSyncTime',TSY), TPAR is TSP + 2*T + TSY, TSEQ is 8*T, TPAR < TSEQ);
+             true
+          )
+       );
        true
    ),
    member(init(_,_,_,_,_,_,_,[[id(Counter),'='|_]]),Exprs),
@@ -2013,12 +2021,20 @@
     member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'+','+']]),Exprs);
     member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'-','-']]),Exprs)
    ),
-   ( predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_) ),
+   ( once(
+       (
+        (predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_));
+        (predicate_property(omp_for_interface(_,_),'dynamic'), omp_for_interface(GID,_))
+       )
+     )
+   ),
    once(block_has_no_derefs(LGIDs)),
    once(get_fblock_deps(LGIDs)),
    once(for_content(Counter,LGIDs)),
-   once(mark_fblock_deps(LGIDs)),
-   asserta(gpu_for(GID)),
+   ( (predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_))->
+       (once(mark_fblock_deps(LGIDs)), asserta(gpu_for(GID)));
+       asserta(omp_for(GID))
+   ),
    !.
 
 % Нельзя распараллелить for
@@ -2043,7 +2059,11 @@
     =(Flag,t)->(
       analyze_for(GID),
       (
-       (predicate_property(gpu_for(_),'dynamic'),gpu_for(GID))->
+       (
+        once((
+          (predicate_property(gpu_for(_),'dynamic'),gpu_for(GID));(predicate_property(omp_for(_),'dynamic'),omp_for(GID))
+        ))
+       )->
          get_fors([LGID],f);
          get_fors([LGID],t)
       )
@@ -2270,9 +2290,11 @@
    retractall(gpu_for_time(_,_)),
    asserta(gpu_do_not_worry('','','')), retractall(gpu_do_not_worry(_,_,_)),
    asserta(gpu_for_interface('','')), retractall(gpu_for_interface(_,_)),
+   asserta(omp_for_interface('','')), retractall(omp_for_interface(_,_)),
    asserta(gpu_retime), retractall(gpu_retime),
    asserta(gpu_reanalyze), retractall(gpu_reanalyze),
    asserta(gpu_for('')), retractall(gpu_for(_)),
+   asserta(omp_for('')), retractall(omp_for(_)),
    retractall(gpu_break(_)),
    retractall(gpu_continue(_)),
    retractall(params(_)),
@@ -2730,11 +2752,11 @@
    !,
    union(Used3, Used0, Used3X), subtract(Used3, NEWS1, Used3E), !,
    retractall(gpu_for_interface(CurGID,_)),
+   retractall(omp_for_interface(CurGID,_)),
    (
-    once(find_pivot(Used3E,_)),
     once(check_no_multidim_or_glob(Used3E)),
     once(add_modifiers(Used3E,Used3F)),
-    asserta(gpu_for_interface(CurGID,Used3F));
+    ( once(find_pivot(Used3E,_))-> asserta(gpu_for_interface(CurGID,Used3F));asserta(omp_for_interface(CurGID,Used3F)) );
     true
    ),
    !,
@@ -2917,6 +2939,26 @@
    write_interface(S, [B|T]),
    !.
 
+@write_omp_interface(S, [], ''):-
+   write(S, '_'),
+   !.
+
+@write_omp_interface(S, [loc(_,_,type([id('_global')|_],_))], ''):-
+   !.
+
+@write_omp_interface(S, [loc(_,Name,_)], ','):-
+   write(S, Name),
+   !.
+
+@write_omp_interface(S, [ITEM], ','):- write(S, ITEM), !.
+
+@write_omp_interface(S, [A,B|T], ','):-
+   write_omp_interface(S, [A], C),
+   !,
+   write(S, C),
+   write_omp_interface(S, [B|T], _),
+   !.
+
 @write_program(_,_,_,[]):-!.
 
 @write_program(Shift,[SPC|ST],S,[gid('clsGPUOper',GID)|T]):-
@@ -2980,7 +3022,13 @@
       (
        write(S,'vectorized(NULL,50) gpu<'), write_interface(S, INTRF), write(S,'> for ( ')
       );
-      write(S,'for ( ')
+      (
+        (predicate_property(omp_for(_),'dynamic'), omp_for(GID), omp_for_interface(GID,INTRF))->
+           (
+            write(S,'#pragma omp parallel for schedule(guided) private('), write_omp_interface(S, INTRF, _), write(S,')'), nl(S), write(S,' for ( ')
+           );
+        write(S,'for ( ')
+      )
    ),
    !,
    db_content('args',GID,L),
@@ -3174,8 +3222,10 @@
 @processing:-
   g_assign('$DefFTime', 15.0), % Время исполнения функции/процедуры по умолчанию (внешней или внутренней до расчета)
   g_assign('$SpawnTime', 35.0), % Время, затрачиваемое мастер-процессом на ответвление spawn-процесса
+  g_assign('$OMPSpawnTime', 10.0), % Время, затрачиваемое мастер-процессом на ответвление openmp-spawn-процесса
   g_assign('$DefOperTime', 1.0), % Время исполнения элементарного математического выражения без функций по умолчанию
   g_assign('$SyncTime', 15.0), % Время, затрачиваемое слиянием ответвленных процессов (без ожидания)
+  g_assign('$OMPSyncTime', 5.0), % Время, затрачиваемое слиянием ответвленных openmp-процессов (без ожидания)
   prepare_data,
   iterative_times(15), % Предсказываем время исполнения функций
   handle_fors(0,15),
