@@ -3728,10 +3728,10 @@ Const Transact: PChar =
 '   }'+CRLF+
 '   // Реинициализация. Если блок работал, то сначала следует вызвать sync(), и только затем reinit()'+CRLF+
 '   virtual void reinit(bool sync_children = true) {'+CRLF+
+'     TObj<C>::reinit(sync_children);'+CRLF+
 '     omp_set_lock(&this->__join_lock__);'+CRLF+
 '     Q = queue<queue_item>();'+CRLF+
 '     omp_unset_lock(&this->__join_lock__);'+CRLF+
-'     TObj<C>::reinit(sync_children);'+CRLF+
 '   }'+CRLF+
 '   // Помещает работу в очередь или запускает, если есть свободный поток. Всегда возвращает true'+CRLF+
 '   virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) {'+CRLF+

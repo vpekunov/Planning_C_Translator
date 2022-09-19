@@ -1369,10 +1369,10 @@ public:
    }
    // Реинициализация. Если блок работал, то сначала следует вызвать sync(), и только затем reinit()
    virtual void reinit(bool sync_children = true) {
+     TObj<C>::reinit(sync_children);
      omp_set_lock(&this->__join_lock__);
      Q = queue<queue_item>();
      omp_unset_lock(&this->__join_lock__);
-     TObj<C>::reinit(sync_children);
    }
    // Помещает работу в очередь или запускает, если есть свободный поток. Всегда возвращает true
    virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) {
