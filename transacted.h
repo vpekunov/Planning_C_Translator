@@ -56,6 +56,9 @@
 
 #def_module() make_spawn(GID, OBJID, REFERER, NPRECONDS, PRECONDS, FUNID, PRMID, PRMTAIL) {
 @goal:-brackets_off.
+@make_obj_ref('this'):-write(',this'),!.
+@make_obj_ref(''):-write(',this'),!.
+@make_obj_ref(A):-!.
 @get_non_capture('', ''):-!.
 @get_non_capture([], ''):-!.
 @get_non_capture([''], ''):-!.
@@ -94,7 +97,7 @@
    get_params([A], [B], C),
    !.
 @goal:-
-   write('[&] ()->int {'), nl,
+   write('[&'), make_obj_ref(OBJID), write('] ()->int {'), nl,
    write('  int __id__ = 0;'), nl,
    write('  auto __runner__ = [&'), get_non_capture(PRMID, C),
    (
@@ -103,7 +106,7 @@
       ( write(','), write(C) )
    ),
    !,
-   write('] () {'), nl,
+   make_obj_ref(OBJID), write('] () {'), nl,
    write('    '), write(FUNID), write('('), get_params(PRMID, PRMTAIL, CP), write(CP), write(';'), nl,
    write('  };'), nl,
    write('  '), write(OBJID), write(REFERER), write('join(__runner__, __id__'),
