@@ -1163,7 +1163,7 @@ private:
 		   if (__joined != 0) {
 			   int stored_joined = __joined;
 			   omp_unset_lock(&__join_lock__);
-			   #pragma omp parallel num_threads(__nthreads)
+			   #pragma omp parallel num_threads(stored_joined)
 			   {
 				   int id = omp_get_thread_num();
 					transaction_atomic(__this_id) {
@@ -1188,13 +1188,14 @@ private:
 			   }
              omp_set_lock(&__join_lock__);
 			 omp_set_lock(&__lock_atomics__);
-			 __joined = 0;
-             for (int i = 0; i < __nthreads; i++)
+             for (int i = stored_joined; i < __nthreads; i++)
                  if (info->__funs[i] != nullptr) {
-                    info->parents[__joined] = info->parents[i];
-                    info->parent_ids[__joined] = info->parent_ids[i];
-                    info->__funs[__joined++] = info->__funs[i];
+                    info->parents[i - stored_joined] = info->parents[i];
+                    info->parent_ids[i - stored_joined] = info->parent_ids[i];
+                    info->__funs[i - stored_joined] = info->__funs[i];
+                    info->__funs[i] = nullptr;
                  }
+             __joined -= stored_joined;
 			 omp_unset_lock(&__lock_atomics__);
 			 make_pump();
              omp_unset_lock(&__join_lock__);

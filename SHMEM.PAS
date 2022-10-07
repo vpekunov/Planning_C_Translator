@@ -3522,7 +3522,7 @@ Const Transact: PChar =
 '		   if (__joined != 0) {'+CRLF+
 '			   int stored_joined = __joined;'+CRLF+
 '			   omp_unset_lock(&__join_lock__);'+CRLF+
-'			   #pragma omp parallel num_threads(__nthreads)'+CRLF+
+'			   #pragma omp parallel num_threads(stored_joined)'+CRLF+
 '			   {'+CRLF+
 '				   int id = omp_get_thread_num();'+CRLF+
 '					transaction_atomic(__this_id) {'+CRLF+
@@ -3547,13 +3547,14 @@ Const Transact: PChar =
 '			   }'+CRLF+
 '             omp_set_lock(&__join_lock__);'+CRLF+
 '			 omp_set_lock(&__lock_atomics__);'+CRLF+
-'			 this->__joined = 0;'+CRLF+
-'             for (int i = 0; i < __nthreads; i++)'+CRLF+
+'             for (int i = stored_joined; i < __nthreads; i++)'+CRLF+
 '                 if (info->__funs[i] != nullptr) {'+CRLF+
-'                    info->parents[__joined] = info->parents[i];'+CRLF+
-'                    info->parent_ids[__joined] = info->parent_ids[i];'+CRLF+
-'                    info->__funs[__joined++] = info->__funs[i];'+CRLF+
+'                    info->parents[i - stored_joined] = info->parents[i];'+CRLF+
+'                    info->parent_ids[i - stored_joined] = info->parent_ids[i];'+CRLF+
+'                    info->__funs[i - stored_joined] = info->__funs[i];'+CRLF+
+'                    info->__funs[i] = nullptr;'+CRLF+
 '                 }'+CRLF+
+'             __joined -= stored_joined;'+CRLF+
 '			 omp_unset_lock(&__lock_atomics__);'+CRLF+
 '			 make_pump();'+CRLF+
 '             omp_unset_lock(&__join_lock__);'+CRLF+
