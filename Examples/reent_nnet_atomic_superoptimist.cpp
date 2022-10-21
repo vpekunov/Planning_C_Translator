@@ -17,7 +17,7 @@ using namespace std;
 
 #ifndef __LINUX__
 
-#define THROW_EXCEPTION(msg) throw exception(msg)
+#define THROW_EXCEPTION(msg) throw runtime_error(msg)
 
 #define _strcat(Dest, N, Src) strcat_s(Dest, N, Src)
 #define _strcpy(Dest, N, Src) strcpy_s(Dest, N, Src)

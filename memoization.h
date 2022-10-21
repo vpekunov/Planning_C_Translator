@@ -130,7 +130,7 @@ private:
 	else if (mode == 'r')
 		return s < 0.0 ? 0.0 : s;
 	else
-		throw exception("Unknown activation function");
+		throw runtime_error("Unknown activation function");
    }
 
    inline double D(char mode, double s, double f_s) {
@@ -143,7 +143,7 @@ private:
 	else if (mode == 'r')
 		return s < 0.0 ? 0.0 : 1.0;
 	else
-		throw exception("Unknown activation function");
+		throw runtime_error("Unknown activation function");
    }
 public:
 
@@ -359,7 +359,7 @@ public:
 #define min(A,B) ((A) < (B) ? (A) : (B))
 #endif
 
-#ifdef _POSIX_SOURCE
+#if _POSIX_C_SOURCE >= 200112L
 #define _isnan isnan
 #endif
 
@@ -1275,6 +1275,8 @@ public:
    !,
    fill_point(OO, OT, OI, OM).
 @fill_point([F|OO],[FT|OT],[FI|OI],[FM|OM]):-
+   (sub_atom(FM, 'g')->(\+ =(MODE, 'lin_extrapolator')); true),
+   !,
    (
     =(FI, '')->
      ( write('         X->push_back(h.'), write(F), write(');'), nl);
@@ -1282,10 +1284,12 @@ public:
    ),
    !,
    fill_point(OO, OT, OI, OM).
+@fill_point([_|OO],[_|OT],[_|OI],[_|OM]):-
+   fill_point(OO, OT, OI, OM).
 @fill_x([], _, _, _):-!.
 @fill_x([''], _, _, _):-!.
 @fill_x([F|OO],[FT|OT],[FI|OI],[FM|OM]):-
-   ( sub_atom(FM, 'i'); sub_atom(FM, 'g'); sub_atom(FM, 't') ),
+   ( sub_atom(FM, 'i'); (\+ =(MODE, 'lin_extrapolator'), sub_atom(FM, 'g')); sub_atom(FM, 't') ),
    !,
    (
     =(FI, '')->
@@ -1397,7 +1401,7 @@ public:
          !,
          write('     map< '), write(RULETYPE), write(', set<history_memo_'), write(UID), write('> * >::iterator itt = table_memo_'), write(UID), write('.find('), write(RULE), write(');'), nl,
          write('     if (itt == table_memo_'), write(UID), write('.end()) {'), nl,
-         write('        throw exception("No training data");'), nl,
+         write('        throw runtime_error("No training data");'), nl,
          write('     }'), nl,
          prepare_params(MODE, [FIRST_DESC|ODS]),
          write('     for (const history_memo_'), write(UID), write(' & h : *itt->second) '),
