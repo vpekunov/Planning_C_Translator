@@ -3,6 +3,8 @@
 
 #parse(clsCilkProgram,clsCilkSpace,clsCilkInclude,clsCilkPreproc,clsCilkComments,clsCilkTypedef,clsCilkCVar,clsCilkFunction,clsCilkFor,clsCilkSwitch,clsCilkWhile,clsCilkIf,clsCilkElse,clsCilkDo,clsCilkAlternation,clsCilkReturn,clsCilkOper,clsCilkBegin,clsCilkEnd,clsCilkTerminator)
 
+#preproc_passes(1,"_cilk.cpp")
+
 #def_pattern clsCilkAlternation => [prog] ('clsCilkAlternation', gid(), /root/TYPE/@Value, [['arg', /root/CASE/@Value]]) {
   (((^)|(\;)+|\}|\{|\\n|\:)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
@@ -1362,6 +1364,12 @@
    analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES),
    !.
 
+@prepare_ops('clsCilkPreproc',GID,[arg([],[],[],[],[],[],[],[L])]):-
+   db_content('args',GID,[[_,Opnd]]),
+   !,
+   parse_expr(Opnd,L),
+   !.
+
 @prepare_ops('clsCilkAlternation',GID,[arg(INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L])]):-
    db_content('args',GID,[[_,Opnd]]),
    !,
@@ -2155,7 +2163,7 @@
 % Очистка + Загрузка необходимых данных перед анализом
 @prepare_cilk:-
    retractall(db_content(_,_,_)),
-   retractall(cilk_function(_,_,_)),
+   asserta(cilk_function('','','')), retractall(cilk_function(_,_,_)),
    retractall(cilk_fdependent(_,_,_)),
    retractall(cilk_fpure(_)),
    retractall(cilk_farg(_,_,_,_)),

@@ -1951,7 +1951,7 @@
    retractall(atomic_fpure(_)),
    retractall(atomic_farg(_,_,_,_,_,_)),
    retractall(atomic_fprocs(_,_,_)),
-   retractall(atomic_op(_,_,_,_,_)),
+   asserta(atomic_op('','','','','')), retractall(atomic_op(_,_,_,_,_)),
    retractall(atomic_globals(_)),
    retractall(atomic_fanalyzed(_,_,_,_,_)),
    retractall(atomic_ftime(_,_,_)),
