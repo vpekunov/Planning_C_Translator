@@ -1960,7 +1960,7 @@
    retractall(atomic_auto(_)),
    retractall(atomic_split(_,_,_,_,_)),
    asserta(atomic_reanalyze),retractall(atomic_reanalyze),
-   retractall(atomic_splitted(_,_)),
+   asserta(atomic_splitted('','')), retractall(atomic_splitted(_,_)),
    retractall(atomic_splitted_time(_,_)),
    retractall(atomic_break(_)),
    retractall(atomic_continue(_)),
