@@ -1,9 +1,9 @@
-#ifndef __ATOMIC_CILK_COMPILE_H__
-#define __ATOMIC_CILK_COMPILE_H__
+#ifndef __ATOMIC_CILK_GPU_OMP_COMPILE_H__
+#define __ATOMIC_CILK_GPU_OMP_COMPILE_H__
 
 #parse(clsProgram,clsSpace,clsInclude,clsPreproc,clsComments,clsTypedef,clsCVar,clsFunction,clsFor,clsSwitch,clsWhile,clsIf,clsElse,clsDo,clsAlternation,clsReturn,clsOper,clsBegin,clsEnd,clsTerminator)
 
-#preproc_passes(1,"_atomic_cilk.cpp")
+#preproc_passes(1,"_atomic_cilk_gpu_omp.cpp")
 
 #def_pattern clsAlternation => [prog] ('clsAlternation', gid(), /root/TYPE/@Value, [['arg', /root/CASE/@Value]]) {
   (((^)|(\;)+|\}|\{|\\n|\:)((\s|\\t)*\\n)*)(\s|\\t)*
@@ -221,6 +221,7 @@
 @goal:-brackets_off.
 
 % #pragma auto for -- включает Cilk-автораспараллеливание циклов
+% #pragma auto omp_gpu for -- включает GPU/OpenMP-автораспараллеливание циклов
 % #pragma auto pure(fun1,fun2,...) -- обозначает функции без сторонних эффектов по отношению к текущей итерации цикла for
 % #pragma auto split(auto|(var1[N1],var2[N1][N2],var3,...)) [omp-params] -- помечает цикл как потенциально параллелизуемый расщеплением
 % split_private type var-decl -- помечает переменную как локальную при распараллеливании циклов. Такие переменные попадают в private-пометки,
@@ -1941,10 +1942,12 @@
 % Анализ возможности распараллелить for
 @clk_analyze_for(GID):-
    cilk_op('clsFor',GID,_,LGIDs,Exprs),
+   g_read('$SpawnTime',TSP),
+   g_read('$SyncTime',TSY),
    (
     (predicate_property(cilk_for_time(_,_),'dynamic'),cilk_for_time(GID,T))->
-       (g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY), TPAR is T + 3*(TSP + TSY), TSEQ is 8*T, TPAR < TSEQ); % 2^3 = 8 (бинарное дерево ветвления)
-       true
+       (TPAR is T + 3*(TSP + TSY), TSEQ is 8*T, TPAR < TSEQ); % 2^3 = 8 (бинарное дерево ветвления)
+       TPAR is 10000 
    ),
    \+ once(clk_block_has_sync(LGIDs)),
    member(init(_,_,_,_,_,_,_,[[id(Counter),'='|_]]),Exprs),
@@ -1966,6 +1969,10 @@
    once(clk_get_fblock_deps(LGIDs)),
    once(clk_for_content(Counter,LGIDs)),
    asserta(cilk_for(GID)),
+   retractall(par_for(GID)),
+   asserta(par_for(GID)),
+   retractall(par_for_time(GID,_)),
+   asserta(par_for_time(GID, TPAR)),
    !.
 
 % Нельзя распараллелить for
@@ -2177,6 +2184,9 @@
    retractall(cilk_fanalyzed(_,_,_,_,_)),
    retractall(cilk_ftime(_,_,_)),
    retractall(cilk_auto_for),
+   asserta(par_for('')), retractall(par_for(_)),
+   asserta(par_for_time('','')), retractall(par_for_time(_,_)),
+   asserta(cilk_auto_omp_gpu_for),retractall(cilk_auto_omp_gpu_for),
    retractall(cilk_for_time(_,_)),
    asserta(cilk_retime), retractall(cilk_retime),
    asserta(cilk_reanalyze), retractall(cilk_reanalyze),
@@ -2219,6 +2229,24 @@
      once(retractall(global_trace(_))),
      once(asserta(global_trace(GTR2X))),
      fail);
+     true
+   ),
+   !,
+   (
+    (db_content('prog',GID2,[['preproc']]),db_content('args',GID2,[[body,S2]]),clk_parse_expr(S2,['#',id('pragma'),id('auto'),id('omp_gpu'),id('for')]))->
+     (
+      !,
+      (
+       (predicate_property(cilk_auto_omp_gpu_for,'dynamic'), cilk_auto_omp_gpu_for)->
+         true;
+         asserta(cilk_auto_omp_gpu_for)
+      ),
+      once(global_trace(GTRW)),
+      append(LEFTRW,[gid(_,GID2)|RIGHTRW],GTRW),
+      append(LEFTRW,RIGHTRW,GTR2W),
+      once(retractall(global_trace(_))),
+      once(asserta(global_trace(GTR2W)))
+     );
      true
    ),
    !,
@@ -2419,7 +2447,7 @@
             clk_put_cilk_sync(EGID);
             (
              retractall(cilk_op('clsWhile',TopGID,_,[IGID],Ops)),
-             NewIGID is IGID+10000,
+             NewIGID is IGID+15000,
              NewEGID is NewIGID+1,
              NewDGID is NewIGID+2,
              asserta(cilk_op('clsWhile',TopGID,-1,[NewIGID],Ops)),
@@ -2562,7 +2590,7 @@
             clk_put_cilk_sync(EGID);
             (
              retractall(cilk_op('clsDo',TopGID,_,[IGID],Ops)),
-             NewIGID is IGID+10000,
+             NewIGID is IGID+15000,
              NewEGID is NewIGID+1,
              NewDGID is NewIGID+2,
              asserta(cilk_op('clsDo',TopGID,LastGID,[NewIGID],Ops)),
@@ -2644,7 +2672,7 @@
             clk_put_cilk_sync(EGID);
             (
              retractall(cilk_op('clsFor',TopGID,_,[IGID],Ops)),
-             NewIGID is IGID+10000,
+             NewIGID is IGID+15000,
              NewEGID is NewIGID+1,
              NewDGID is NewIGID+2,
              asserta(cilk_op('clsFor',TopGID,-1,[NewIGID],Ops)),
@@ -3092,6 +3120,12 @@
      )
    ),
    write(S,SPC1), write(S,'}'), nl(S),
+   (
+    ( predicate_property(gpu_end_function(_),'dynamic'), gpu_end_function(GID) )->
+       ( write(S, '#pragma plan common end'), nl(S), nl(S), retractall(gpu_end_function(_)) );
+       true
+   ),
+   !,
    clk_write_program('',[SPC|ST],S,T),
    !.
 
@@ -3119,7 +3153,19 @@
    (
     (predicate_property(cilk_for(_),'dynamic'), cilk_for(GID))->
       write(S,'cilk_for ( ');
-      write(S,'for ( ')
+      (
+        (predicate_property(gpu_for(_),'dynamic'), gpu_for(GID), gpu_for_interface(GID,INTRF))->
+          (
+           write(S,'vectorized(NULL,50) gpu<'), gpu_write_interface(S, INTRF), write(S,'> for ( ')
+          );
+          (
+            (predicate_property(omp_for(_),'dynamic'), omp_for(GID), omp_for_interface(GID,INTRF))->
+               (
+                write(S,'#pragma omp parallel for schedule(guided) private('), gpu_write_omp_interface(S, INTRF, _), write(S,')'), nl(S), write(S,' for ( ')
+               );
+            write(S,'for ( ')
+          )
+      )
    ),
    !,
    db_content('args',GID,L),
@@ -3228,6 +3274,17 @@
    member(['args',Args],L),
    member(['ret',Ret],L),
    !,
+   (
+    (=(T,[gid('clsBegin',_)|_]), predicate_property(gpu_do_not_worry(_,_,_),'dynamic'), gpu_do_not_worry(_,GID,_))->
+      (
+       write(S, '#pragma plan common begin'), nl(S), write(S,'$ '),
+       gpu_bypass_complex(T,BODY,_),
+       last(BODY,gid('clsEnd',GIDE)),
+       asserta(gpu_end_function(GIDE))
+      );
+      true
+   ),
+   !,
    write(S,SPC), write(S, Ret), write(S, ' '), write(S, ID), write(S,'( '), write(S,Args), write(S,' )'),
    clk_write_program('',[SPC|ST],S,T),
    !.
@@ -3236,6 +3293,13 @@
 @clk_recreate_program(FName):-
   open(FName,write,S),
   global_trace(TR),
+  (
+   (predicate_property(gpu_for(_),'dynamic'), gpu_for(_))->
+     ( write(S, '#include "gpu_parallelize.h"'), nl(S), nl(S) );
+     true
+  ),
+  !,
+  write(S, '#define __pivot /* Pivot of optimized loops */'), nl(S), nl(S),
   clk_write_program('',[''],S,TR),
   close(S).
 
@@ -6207,21 +6271,21 @@
       once(atomic_resplitteds(List)),
       retractall(atomic_resplitteds(_)),
       asserta(atomic_resplitteds([GID|List]))
-    ); % Теперь сравним с возможным распараллеливанием cilk_for
-    ( (predicate_property(cilk_for(_),'dynamic'), cilk_for(GID))->
+    ); % Теперь сравним с возможным распараллеливанием cilk_for/gpu_for/omp_for
+    ( (predicate_property(par_for(_),'dynamic'), par_for(GID))->
         (
-         (predicate_property(cilk_for_time(_,_),'dynamic'), cilk_for_time(GID,CILKT))->
+         (predicate_property(par_for_time(_,_),'dynamic'), par_for_time(GID,ParT))->
            (
-            g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY),
-            TPARCILK is (CILKT + 3*(TSP + TSY)), % 2^3 = 8 (бинарное дерево ветвления)
             TPARSPLITTED is 8*AvrTime+SplittedTime, % С учетом расходов на собственно splitted
-            ( <(TPARCILK, TPARSPLITTED)->
+            ( <(ParT, TPARSPLITTED)->
                 (
                   once(atomic_resplitteds(List)),
                   retractall(atomic_resplitteds(_)),
                   asserta(atomic_resplitteds([GID|List]))
                 );
-                retractall(cilk_for(GID))
+                ( retractall(cilk_for(GID)), retractall(omp_for(GID)), retractall(gpu_for(GID)),
+                  retractall(par_for_time(GID,_)), asserta(par_for_time(GID, TPARSPLITTED))
+                )
             )
            );
            true
@@ -6481,7 +6545,7 @@
   atom_concat(PPL2, RestParams, NewRestParams),
   atom_concat('#pragma omp parallel num_threads(2) ', NewRestParams, NewPragma),
   asserta(db_content('args',PragmaGID,[['body',NewPragma]])),
-  NewBegGID is 50*LoopGID+10000,
+  NewBegGID is 50*LoopGID+15000,
   NewEndGID is NewBegGID+1,
   NewIdGID is NewBegGID+2,
   NewStartGID is NewBegGID+3,
@@ -6628,6 +6692,2706 @@
   atom_restructure,
   atom_insert_transact_h.
 
+@gpu_into_paired_list_f(_, [], []).
+
+@gpu_into_paired_list_f(TYPE, [H|T], [[TYPE, H]|LL]):-
+  once(gpu_into_paired_list_f(TYPE, T, LL)).
+
+@gpu_into_paired_list_f(TYPE, V, [[TYPE, V]]).
+
+@gpu_strip_list_f([[type,''], [arg,''], [idxs,'']], []).
+
+@gpu_strip_list_f(L, L).
+
+@gpu_into_paired_list(_, '', []).
+
+@gpu_into_paired_list(_, [], []).
+
+@gpu_into_paired_list(TYPE, [H|T], [[TYPE, H]|LL]):-
+  once(gpu_into_paired_list(TYPE, T, LL)).
+
+@gpu_into_paired_list(TYPE, V, [[TYPE, V]]).
+
+@gpu_make_arg(TYPE, F, N, L):-
+  once(gpu_into_paired_list(TYPE, F, L1)),
+  once(gpu_into_paired_list(TYPE, N, L2)),
+  append(L1, L2, L).
+
+@gpu_make_fargs([], [], [], [], []).
+
+@gpu_make_fargs([['arg','']|REFT],[TP|TPT],[NM|NMT],[IDXS|IDXST], [TP,NM,IDXS|T]):-
+  once(gpu_make_fargs(REFT, TPT, NMT, IDXST, T)).
+
+@gpu_make_fargs([REF|REFT],[TP|TPT],[NM|NMT],[IDXS|IDXST], [REF,TP,NM,IDXS|T]):-
+  once(gpu_make_fargs(REFT, TPT, NMT, IDXST, T)).
+
+@gpu_analyze_args(_, _, '').
+
+@gpu_analyze_args(GID, _, [[Name, Val]]):-
+  asserta(db_content('args', GID, [[Name, Val]])).
+
+@gpu_analyze_args(GID, 'for', [['init',INITF], ['init',INITN], ['cond',COND], ['chng',CHNGF], ['chng',CHNGN]]):-
+  once(gpu_make_arg('init', INITF, INITN, L1)),
+  once(gpu_make_arg('chng', CHNGF, CHNGN, L2)),
+  append(L1, [['cond',COND]], L3),
+  append(L3, L2, L4),
+  asserta(db_content('args', GID, L4)).
+
+@gpu_analyze_args(GID, 'func', [['arg',REF1], ['type',TYPE1], ['arg',NM1], ['idxs',IDXS1], ['arg',REFN], ['type',TYPEN], ['arg',NMN], ['idxs',IDXSN], ['arg',THREEP], ARGSV, RETV, NAMEV]):-
+  once(gpu_into_paired_list_f('type', TYPE1, TYPE1L)),
+  once(gpu_into_paired_list_f('arg', REF1, REF1L)),
+  once(gpu_into_paired_list_f('arg', NM1, NM1L)),
+  once(gpu_into_paired_list_f('idxs', IDXS1, IDXS1L)),
+  once(gpu_make_fargs(REF1L, TYPE1L, NM1L, IDXS1L, L1)),
+  once(gpu_strip_list_f(L1, L11)),
+  once(gpu_into_paired_list_f('type', TYPEN, TYPENL)),
+  once(gpu_into_paired_list_f('arg', REFN, REFNL)),
+  once(gpu_into_paired_list_f('arg', NMN, NMNL)),
+  once(gpu_into_paired_list_f('idxs', IDXSN, IDXSNL)),
+  once(gpu_make_fargs(REFNL, TYPENL, NMNL, IDXSNL, L2)),
+  once(gpu_strip_list_f(L2, L22)),
+  append(L11, L22, LM),
+  once((
+    =(THREEP, '...')->
+     append(LM, [['arg', '...']], LK);
+     =(LK, LM)
+  )),
+  append(LK, [ARGSV, RETV, NAMEV], LL),
+  asserta(db_content('args', GID, LL)).
+
+@gpu_read_db:-
+  prog(_, GID, TYPE, ARGS),
+  number_atom(NGID, GID),
+  asserta(db_content('prog', NGID, [[TYPE]])),
+  gpu_analyze_args(NGID, TYPE, ARGS),
+  fail.
+
+@gpu_read_db:-
+  !.
+
+@gpu_number_sym(C):-
+  member(C, ['0','1','2','3','4','5','6','7','8','9']),
+  !.
+
+@gpu_ident_first_sym(C):-
+  member(C, ['_','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z']),
+  !.
+
+@gpu_ident_other_sym(C):-
+  (
+   gpu_ident_first_sym(C) -> true; gpu_number_sym(C)
+  ),
+  !.
+
+@gpu_find_ident2([Sym|Tag], Id, Rest):-
+  gpu_ident_other_sym(Sym),
+  gpu_find_ident2(Tag, TId, Rest),
+  atom_concat(Sym, TId, Id),
+  !.
+@gpu_find_ident2(L, '', L):-!.
+
+@gpu_find_ident([Sym|Tag], Id, Rest):-
+  gpu_ident_first_sym(Sym),
+  !,
+  gpu_find_ident2(Tag, S, Rest),
+  atom_concat(Sym, S, Id),
+  !.
+
+@gpu_find_intn([Sym|Tag], Num, Rest):-
+  gpu_number_sym(Sym),
+  gpu_find_intn(Tag, TNum, Rest),
+  atom_concat(Sym, TNum, Num),
+  !.
+@gpu_find_intn(L, '', L):-!.
+
+@gpu_find_int2([Sym|Tag], Num, Rest):-
+  gpu_number_sym(Sym),
+  gpu_find_intn([Sym|Tag], Num, Rest),
+  !.
+
+@gpu_find_int([Sym|Tag], Num, Rest):-
+  gpu_number_sym(Sym),
+  gpu_find_ident2(Tag, T, Rest),
+  atom_concat(Sym, T, Num),
+  !.
+
+@gpu_find_real(L, Num, Rest):-
+  gpu_find_int2(L, _, R1),
+  (append(['.'], R2, R1), gpu_find_int2(R2, _, R3); =(R3, R1)),
+  (append(['E'], R4, R3); append(['e'], R4, R3)),
+  !,
+  (append(['+'], R5, R4); append(['-'], R5, R4); =(R5, R4)),
+  !,
+  gpu_find_ident2(R5, _, Rest),
+  append(NumL, Rest, L),
+  atom_chars(Num, NumL),
+  !.
+
+@gpu_find_real(L, Num, Rest):-
+  gpu_find_int2(L, _, R1),
+  append(['.'], R2, R1),
+  gpu_find_ident2(R2, _, Rest),
+  append(NumL, Rest, L),
+  atom_chars(Num, NumL),
+  !.
+
+@gpu_parse_string(_,[], [], []):-!,fail.
+
+@gpu_parse_string(Delim, [Delim,Delim|T], [Delim|S1], Rest):-
+  gpu_parse_string(Delim, T, S1, Rest),
+  !.
+
+@gpu_parse_string(Delim, [Delim|T], [], T):-
+  !.
+
+@gpu_parse_string(Delim, [H|T], [H|S1], R):-
+  gpu_parse_string(Delim, T, S1, R),
+  !.
+
+@gpu_parse_expr2([], []):-!.
+
+@gpu_parse_expr2([First|RR], L):-
+  member(First, [' ', '\t', '\n', '\r']),
+  gpu_parse_expr2(RR, L).
+
+@gpu_parse_expr2(CL, L):-
+  append(['\\', '\\', 'n'], RR, CL),
+  gpu_parse_expr2(RR, L).
+
+@gpu_parse_expr2(CL, L):-
+  append(['\\', '\\', 't'], RR, CL),
+  gpu_parse_expr2(RR, L).
+
+@gpu_parse_expr2(['"'|RR], [dstring(H)|T]):-
+  gpu_parse_string('"', RR, HH, Rest),
+  atom_chars(H,HH),
+  gpu_parse_expr2(Rest, T).
+
+@gpu_parse_expr2(['/','*'|RR], T):-
+  append(_,['*','/'|Rest],RR),
+  !,
+  gpu_parse_expr2(Rest, T).
+
+@gpu_parse_expr2([''''|RR], [cstring(H)|T]):-
+  gpu_parse_string('''', RR, HH, Rest),
+  atom_chars(H,HH),
+  gpu_parse_expr2(Rest, T).
+
+@gpu_parse_expr2(CL, [H|T]):-
+  append([First], RR, CL),
+  (
+   gpu_ident_other_sym(First)->(
+    (
+     (gpu_find_real(CL, HH, R),
+      =(H, real(HH)));
+     (gpu_find_int(CL, HH, R),
+      =(H, integ(HH)));
+     (gpu_find_ident(CL, HH, R),
+      =(H, id(HH)))
+    ),
+    !,
+    gpu_parse_expr2(R, T)
+   );(
+     =(H, First),
+     !,
+     gpu_parse_expr2(RR, T)
+   )
+  ),
+  !.
+
+@gpu_parse_expr(S,L):-
+  atom_chars(S,CL),
+  gpu_parse_expr2(CL, L).
+
+@gpu_get_balanced(Depth,['('|T],Delims,BAL,Rest):-
+  !,
+  Depth1 is Depth+1,
+  gpu_get_balanced(Depth1,T,Delims,BAL0,[')'|R0]),
+  gpu_get_balanced(Depth,R0,Delims,BAL1,Rest),
+  append(['('|BAL0],[')'|BAL1],BAL),
+  !.
+
+@gpu_get_balanced(Depth,['['|T],Delims,BAL,Rest):-
+  !,
+  Depth1 is Depth+1,
+  gpu_get_balanced(Depth1,T,Delims,BAL0,[']'|R0]),
+  gpu_get_balanced(Depth,R0,Delims,BAL1,Rest),
+  append(['['|BAL0],[']'|BAL1],BAL),
+  !.
+
+@gpu_get_balanced(Depth,['{'|T],Delims,BAL,Rest):-
+  !,
+  Depth1 is Depth+1,
+  gpu_get_balanced(Depth1,T,Delims,BAL0,['}'|R0]),
+  gpu_get_balanced(Depth,R0,Delims,BAL1,Rest),
+  append(['{'|BAL0],['}'|BAL1],BAL),
+  !.
+
+@gpu_get_balanced(Depth,[H|T],_,[],[H|T]):-
+  \+ =(Depth,0),
+  member(H,[')',']','}']),
+  !.
+
+@gpu_get_balanced(Depth,[H|T],Delims,[],[H|T]):-
+  =(Depth,0),
+  member(H,Delims),
+  !.
+
+@gpu_get_balanced(Depth,[H|T],Delims,[H|T1],Rest):-
+  gpu_get_balanced(Depth,T,Delims,T1,Rest),
+  !.
+
+@gpu_get_balanced(0,[],_,[],[]):-!.
+
+@gpu_get_balanced(_,[],_,_,_):-!,fail.
+
+@gpu_union([H|T], L, L1):-
+  member(H, L),
+  gpu_union(T, L, L1),
+  !.
+@gpu_union([H|T], L, [H|T1]):-
+  gpu_union(T, L, T1),
+  !.
+@gpu_union([], L, L):-!.
+
+@gpu_intersect([], _, []):-!.
+
+@gpu_intersect(_, [], []):-!.
+
+@gpu_intersect([H|T],V,[H|T1]):-
+   member(H,V),
+   !,
+   subtract(V,[H],V1),
+   !,
+   gpu_intersect(T,V1,T1),
+   !.
+
+@gpu_intersect([_|T],V,T1):-
+   gpu_intersect(T,V,T1).
+
+@gpu_unique([],[]):-!.
+
+@gpu_unique([H|T],L):-
+   append(Left,[H|Right],T),
+   append(Left,Right,T1),
+   !,
+   gpu_unique([H|T1],L),
+   !.
+
+@gpu_unique([H|T],[H|T1]):-
+   gpu_unique(T,T1),
+   !.
+
+@gpu_bypass_idxs(['['|T],T1,INS,OUTS,FUNS,Lazies):-
+   gpu_get_balanced(0,T,[']'],EXPR,[']'|T0]),
+   gpu_get_expr(EXPR,INS0,OUTS0,FUNS0,LZ0),
+   gpu_bypass_idxs(T0,T1,INS1,OUTS1,FUNS1,LZ1),
+   gpu_union(INS0,INS1,INS), gpu_union(OUTS0,OUTS1,OUTS),
+   append(FUNS0,FUNS1,FUNS), gpu_union(LZ0,LZ1,Lazies),
+   !.
+
+@gpu_bypass_idxs(L,L,[],[],[],[]):-!.
+
+@gpu_rbypass_idxs(L,L1,INS,OUTS,FUNS,Lazies):-
+   last(L,']'),
+   !,
+   append(Left1,['['|Right1],L),
+   gpu_get_balanced(0,Right1,[']'],EXPR,[']']),
+   gpu_get_expr(EXPR,INS0,OUTS0,FUNS0,LZ0),
+   gpu_rbypass_idxs(Left1,L1,INS1,OUTS1,FUNS1,LZ1),
+   gpu_union(INS0,INS1,INS), gpu_union(OUTS0,OUTS1,OUTS),
+   append(FUNS0,FUNS1,FUNS), gpu_union(LZ0,LZ1,Lazies),
+   !.
+
+@gpu_rbypass_idxs(L,L,[],[],[],[]):-!.
+
+@gpu_rbypass_var(L,V,R,INS,OUTS,FUNS,Lazies):-
+   gpu_rbypass_idxs(L,R0,INS0,OUTS0,FUNS0,LZ0),
+   append(Left,[id(VV)],R0),
+   !,
+   (
+    ( append(Left1,['.'],Left); append(Left1,['-','>'],Left) )->
+     (
+      gpu_rbypass_var(Left1,V,R,INS1,OUTS1,FUNS1,LZ1),
+      gpu_union(INS0,INS1,INS), gpu_union(OUTS0,OUTS1,OUTS),
+      append(FUNS0,FUNS1,FUNS), gpu_union(LZ0,LZ1,Lazies)
+     );
+     (=(V,VV),=(R,Left),=(INS,INS0),=(OUTS,OUTS0),=(FUNS,FUNS0),=(Lazies,LZ0))
+   ),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
+   append(Left,['<','<','='|Right],L),
+   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
+   append(Left,['>','>','='|Right],L),
+   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
+   append(Left,[A,'='|Right],L),
+   member(A,['+','-','*','/','|','&','^','%']),
+   !,
+   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
+   append(Left,['+','+'|Right],L),
+   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
+   append(Left,['-','-'|Right],L),
+   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
+   append(Left,['+','+',id(V)|Right],L),
+   gpu_bypass_var([id(V)|Right],Right0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right0,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
+   append(Left,['-','-',id(V)|Right],L),
+   gpu_bypass_var([id(V)|Right],Right0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right0,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
+   append(Left,['='|Right],L),
+   last(Left,A),
+   \+ member(A,['=','!','<','>']),
+   \+ =(Right,['='|_]),
+   !,
+   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,Outs,Ins,Funs,Lazs):-
+   gpu_get_vars(L,Ins,Outs,Funs,Lazs),
+   !.
+
+@gpu_bypass_var([id(_)|T],R,INS,OUTS,FUNS,Lazies):-
+   gpu_bypass_idxs(T,R0,INS0,OUTS0,FUNS0,LZ0),
+   (
+    ( =(['.'|R1],R0); =(['-','>'|R1],R0) )->
+     (
+      gpu_bypass_var(R1,R,INS1,OUTS1,FUNS1,LZ1),
+      gpu_union(INS0,INS1,INS), gpu_union(OUTS0,OUTS1,OUTS),
+      append(FUNS0,FUNS1,FUNS), gpu_union(LZ0,LZ1,Lazies)
+     );(
+      =(R,R0),=(INS,INS0),=(OUTS,OUTS0),=(FUNS,FUNS0),=(Lazies,LZ0)
+     )
+   ),
+   !.
+
+@gpu_glob_prefixate([],[]):-!.
+
+@gpu_glob_prefixate([var(H,TP)|T],[global(H,TP)|T1]):-
+   gpu_glob_prefixate(T,T1).
+
+@gpu_get_glob_lazies(Fun,NPrms,GP,LP,ILP):-
+   gpu_function(Fun,GID,NPrms),
+   predicate_property(gpu_fanalyzed(_,_,_,_,_),'dynamic'),
+   gpu_fanalyzed(Fun,GID,Globs,LP,ILP),
+   gpu_glob_prefixate(Globs, GP),
+   !.
+
+@gpu_get_glob_lazies(_,_,[],0,[]):-!.
+
+@gpu_get_ftime(Fun,NPrms,T):-
+   gpu_function(Fun,GID,NPrms),
+   predicate_property(gpu_ftime(_,_,_),'dynamic'),
+   gpu_ftime(Fun,GID,T),
+   !.
+
+@gpu_get_ftime(_,_,T):-  % Содержит время исполнения функции по умолчанию
+  g_read('$DefFTime',T),
+  !.
+
+@gpu_put_ftime(Fun,NPrms,T):-
+   gpu_function(Fun,GID,NPrms),
+   (
+    (predicate_property(gpu_ftime(_,_,_),'dynamic'), gpu_ftime(Fun,GID,T0))->(
+         D is T-T0,
+         (
+          ;(<(D,-1),>(D,1))->(
+             retractall(gpu_ftime(Fun,GID,_)),
+             asserta(gpu_ftime(Fun,GID,T)),
+             retractall(gpu_retime),
+             asserta(gpu_retime)
+            );
+            true
+         )
+       );(
+         retractall(gpu_retime),
+         asserta(gpu_retime),
+         asserta(gpu_ftime(Fun,GID,T))
+       )
+   ),
+   !.
+
+@gpu_put_for_time(GID,T):-
+   (
+    (predicate_property(gpu_for_time(_,_),'dynamic'), gpu_for_time(GID,T0))->(
+         D is T-T0,
+         (
+          ;(<(D,-1),>(D,1))->(
+             retractall(gpu_for_time(GID,_)),
+             asserta(gpu_for_time(GID,T))
+            );
+            true
+         )
+       );(
+         asserta(gpu_for_time(GID,T))
+       )
+   ),
+   !.
+
+@gpu_getTime([],T):-
+   g_read('$DefOperTime', T),
+   !.
+
+@gpu_getTime([V|T],TM):-
+   =..(V,[_,F,Prms]),
+   length(Prms,N),
+   gpu_get_ftime(F,N,T0),
+   gpu_getTime(T,T1),
+   TM is T0+T1,
+   !.
+
+@gpu_extract_singles([],[]):-!.
+
+@gpu_extract_singles([[]|T],L):-
+  gpu_extract_singles(T,L),
+  !.
+
+@gpu_extract_singles([[V]|T],[V|L]):-
+  gpu_extract_singles(T,L),
+  !.
+
+% Анализ вызова функций на предмет наличия ленивых переменных (модифицируемых глобальных и модифицируемых &|*-параметров)
+% Если уже есть результаты предварительного анализа в фактах gpu_fanalyzed, то данные о "ленивости" берутся из них, если же их
+% нет, то считается, что глобальных ленивых переменных для этой функции нет, а ленивыми являются все &|*-параметры
+% Во втором параметре принимает список разобранных параметров, каждый из которых = список токенов
+% В третьем параметре возвращает список ленивых переменных [global(имя,тип),...,par(функция,имя_параметра,переданная переменная,тип,индексы),...]
+% В четвертом параметре возвращается список имен, переданных в неленивые &|* - параметры
+% В пятом параметре принимается список-карта переданных значений. Элемент = множество из одного элемента (имя переданной переменной)
+%  или пустое множество (если в параметре передано выражение).
+% В шестом параметре возвращается список имен переданных в качестве параметров переменных, значения которых используются на чтение в функции
+@gpu_get_lazies(Fun, [], GP, [], _, []):-
+     gpu_get_glob_lazies(Fun,0,GP,_,_),
+     !.
+
+@gpu_get_lazies(Fun, Params, [], _, ParSingleMap, _):-
+   predicate_property(gpu_farg(_,_,_,_,_,_),'dynamic')->(
+     length(Params,N),
+     once(gpu_farg(Fun,N,_,_,_,_)),
+     asserta(counter(0)),
+     gpu_get_glob_lazies(Fun,N,GP,LP,ReadParams),
+     asserta(params(GP)),
+     asserta(isingles([])),
+     asserta(refs([])),
+     gpu_farg(Fun,_,REF,V,_,_),
+     once(counter(I)),
+     I1 is I+1,
+     retract(counter(I)),
+     asserta(counter(I1)),
+     once(isingles(ISI)),
+     once(nth(I1,ParSingleMap,VAL)),
+     (
+      (=(VAL,[Passed]),once(member(V,ReadParams)))->(
+           retract(isingles(ISI)),asserta(isingles([Passed|ISI]))
+         );(
+           true
+         )
+     ),
+     once(member(REF,['&','*','**','***','[]'])),
+     once(;(nth(I1,Params,[id(P)|TT]),nth(I1,Params,['&',id(P)|TT]))),
+     gpu_bypass_var([id(P)|TT],[],_,_,_,_),
+     (
+      once(;(=(LP,0),member(V,LP)))->
+        true;
+        (once(refs(RF)),retract(refs(RF)),asserta(refs([P|RF])))
+     ),
+     once(params(LZ)),
+     retract(params(_)),
+     once(append(LZ,[par(Fun,V,P)],LZ1)),
+     asserta(params(LZ1)),
+     fail
+   );(
+     fail
+   ).
+
+@gpu_get_lazies(_, Params, LZ, Refs, _, ISingles):-
+   predicate_property(params(_),'dynamic'),
+   params(LZ),
+   counter(N),
+   isingles(ISingles),
+   refs(Refs),
+   retractall(params(_)),
+   retractall(counter(_)),
+   retractall(isingles(_)),
+   retractall(refs(_)),
+   !,
+   length(Params,N),
+   !.
+
+@gpu_get_lazies(_, _, [], [], ParSingleMap, ISingles):-
+   gpu_extract_singles(ParSingleMap,ISingles),
+   !.
+
+@gpu_get_fparams(Mode, Fun, NPrms, []):-
+   predicate_property(gpu_farg(_,_,_,_,_,_),'dynamic')->(
+     once(gpu_farg(Fun,NPrms,_,_,Type,Idxs)),
+     asserta(counter(0)),
+     asserta(params([])),
+     gpu_farg(Fun,_,REF,V,_,_),
+     once(counter(I)),
+     I1 is I+1,
+     retract(counter(I)),
+     asserta(counter(I1)),
+     (
+      =(Mode,lazy)->once(member(REF,['&','*','**','***','[]']));true
+     ),
+     once(params(LZ)),
+     retract(params(_)),
+     ( =(Idxs,'[]')->once(=(ParsedIdxs,[]));once(gpu_parse_expr(Idxs,ParsedIdxs)) ),
+     once(gpu_parse_expr(Type,ParsedType)),
+     once(append(LZ,[var(V,type(ParsedType,ParsedIdxs))],LZ1)),
+     asserta(params(LZ1)),
+     fail
+   );(
+     true,!
+   ).
+
+@gpu_get_fparams(_, _, NPrms, LZ):-
+   predicate_property(params(_),'dynamic'),
+   params(LZ),
+   counter(NPrms),
+   retractall(params(_)),
+   retractall(counter(_)),
+   !.
+
+@gpu_get_fparams(_, _, _, []):-!.
+
+@gpu_get_funs(L,[func(F,Params)|T],INS,OUTS,Lazies):-
+   append(_,[id(F),'('|Right],L),
+   !,
+   gpu_get_fun_params(F,Right,[')'|Rest],Params,INS0,ParSingleMap,OUTS0,FUNS0,LZZ),
+   !,
+   gpu_get_lazies(F,Params,LZ0,_,ParSingleMap,INSI),
+   !,
+   gpu_get_funs(Rest,FUNS1,INS1,OUTS1,LZ1),
+   gpu_union(OUTS0,OUTS1,OUTS),
+   gpu_union(INS0,INS1,INS2), gpu_union(INS2,INSI,INS),
+   append(FUNS0,FUNS1,T),
+   gpu_union(LZZ,LZ0,LZ2),
+   gpu_union(LZ2,LZ1,Lazies),
+   !.
+
+@gpu_get_funs(_,[],[],[],[]):-!.
+
+@gpu_extract_lzv([],[]):-!.
+
+@gpu_extract_lzv([par(_,_,V)|T],[V|T1]):-
+   gpu_extract_lzv(T,T1),
+   !.
+
+@gpu_extract_lzv([global(V,_)|T],[V|T1]):-
+   gpu_extract_lzv(T,T1),
+   !.
+
+@gpu_get_vars([],[],[],[],[]):-!.
+
+@gpu_get_vars([id(V),A|T],[V|TT],Outs,FUNS,Lazies):-
+   \+ =(A,'('),
+   gpu_bypass_var([id(V),A|T],T0,INS0,OUTS0,FUNS0,LZ0),
+   !,
+   gpu_get_vars(T0,INS1,OUTS1,FUNS1,LZ1),
+   gpu_union(INS0,INS1,TT), gpu_union(OUTS0,OUTS1,Outs),
+   append(FUNS0,FUNS1,FUNS), gpu_union(LZ0,LZ1,Lazies).
+
+@gpu_get_vars([id(_),'('|T],Ins,Outs,FUNS,Lazies):-
+   gpu_get_balanced(0,T,[')'],_,[')'|T0]),
+   !,
+   gpu_get_vars(T0,Ins,Outs,FUNS,Lazies).
+
+@gpu_get_vars([id(V)],[V],[],[],[]):-
+   !.
+
+@gpu_get_vars([_|T],INS,OUTS,FUNS,Lazies):-
+   gpu_get_vars(T,INS,OUTS,FUNS,Lazies).   
+
+@gpu_get_expr(L,INS,OUTS,FUNS,Lazies):-
+   gpu_get_assgns(L,OUTS0,INS0,FUNSV,LZV),!,
+   gpu_get_funs(L,FUNS0,INS1,OUTS1,LZ0),
+   gpu_union(INS0,INS1,INS2),
+   gpu_unique(INS2,INS),
+   gpu_union(OUTS0,OUTS1,OUTS2),
+   gpu_unique(OUTS2,OUTS20), !,
+   append(FUNS0,FUNSV,FUNS),
+   gpu_union(LZ0,LZV,LZB),
+   gpu_unique(LZB,Lazies),
+   gpu_extract_lzv(Lazies,LaziesV),
+   gpu_union(OUTS20,LaziesV,OUTSZ),
+   gpu_unique(OUTSZ,OUTS),
+   !.
+
+@gpu_check_arg([id(V)|Rest],[V]):-
+   gpu_bypass_var([id(V)|Rest],[],_,_,_,_),
+   !.
+
+@gpu_check_arg(['&',id(V)|Rest],[V]):-
+   gpu_bypass_var([id(V)|Rest],[],_,_,_,_),
+   !.
+
+@gpu_check_arg(_,[]):-
+   !.
+
+@gpu_get_fun_params(_,[')'|R],[')'|R],[],[],[],[],[],[]):-!.
+
+@gpu_get_fun_params(Fun,L,R,[P|T],INS,[V|MAP],OUTS,FUNS,Lazies):-
+   gpu_get_balanced(0,L,[',',')'],P,[','|Rest]),
+   gpu_get_expr(P,INS1,OUTS1,FUNS1,LZ1),
+   ((gpu_function(Fun,_,_),=(OUTS3,[]));gpu_check_arg(P,OUTS3)),
+   gpu_check_arg(P,V),
+   !,
+   gpu_get_fun_params(Fun,Rest,R,T,INS2,MAP,OUTS2,FUNS2,LZ2),
+%   (
+%    =(V,[Single])->
+%      subtract(INS1,[Single],INSQ);
+      =(INSQ,INS1),
+%   ),
+   gpu_union(INSQ,INS2,INS),
+   gpu_union(OUTS1,OUTS2,OUTSK), gpu_union(OUTSK,OUTS3,OUTS), append(FUNS1,FUNS2,FUNS), gpu_union(LZ1,LZ2,Lazies),
+   !.
+
+@gpu_get_fun_params(Fun,L,[')'|Rest],[Item],INS,[V],OUTS,FUNS,Lazies):-
+   gpu_get_balanced(0,L,[',',')'],Item,[')'|Rest]),
+   gpu_get_expr(Item,INS1,OUTS0,FUNS,Lazies),
+   ((gpu_function(Fun,_,_),=(OUTS3,[]));gpu_check_arg(Item,OUTS3)),
+   gpu_check_arg(Item,V),
+   !,
+   (
+    =(V,[Single])->
+      subtract(INS1,[Single],INS);
+      =(INS,INS1)
+   ),
+   gpu_union(OUTS0,OUTS3,OUTS),
+   !.
+
+@gpu_analyze_item_expr(intros(TP),[id(V)|T],INS,[V|OUTT],[var(V,type(TP,IDXS))],FUNS,[],[],[]):-
+   gpu_bypass_idxs(T,['='|Rest],INS0,OUTS0,FUNS0,_),
+   append(IDXS,['='|Rest],T),
+   \+ =(Rest,['='|_]),
+   gpu_get_expr(Rest,INS1,OUTS1,FUNS1,_),
+   !,
+   gpu_union(INS0,INS1,INSA), gpu_union(OUTS0,OUTS1,OUTTA), append(FUNS0,FUNS1,FUNS),
+   gpu_unique(INSA,INS), gpu_unique(OUTTA,OUTT),
+   !.
+
+@gpu_analyze_item_expr(intros(TP),[id(V)|T],INS,[V|OUTS],[var(V,type(TP,T))],FUNS,[],[],LAZIES):-
+   gpu_bypass_idxs(T,[],INS,OUTS,FUNS,LAZIES),
+   !.
+
+@gpu_analyze_item_expr(inits,[id(V),'('|T],INS,OUTS,[],FUNS,[proc(V,L)],REFS,Lazies):-
+   gpu_get_fun_params(V,T,[')'],L,INS0,ParSingleMap,OUTS0,FUNS,LZ0),
+   !,
+   gpu_get_lazies(V,L,Lazies,Refs0,ParSingleMap,INSI),
+   !,
+   % gpu_get_lazies возвращает ленивые выходные переменные Lazies уже с учетом результатов анализа. Возвращает Refs0 -- переменные
+   % в параметрах &|*, не являющиеся выходными. Возвращает INSI -- все входные переменные в параметрах, используемые в функции
+   gpu_extract_lzv(LZ0,LZV),
+   gpu_union(OUTS0,LZV,OUTP),
+   gpu_extract_lzv(Lazies,LaziesV),
+   subtract(Refs0,LaziesV,REFS),
+   gpu_union(OUTP,LaziesV,OUTS2),
+   gpu_unique(OUTS2,OUTS),
+   gpu_union(INS0,INSI,INS2), gpu_unique(INS2,INS),
+   !.
+
+@gpu_analyze_item_expr(inits,L,INS,OUTS,[],FUNS,[expr],[],[]):-
+   gpu_get_expr(L,INS,OUTS,FUNS,_),
+   !.
+
+@gpu_analyze_list_expr(_,[],[],[],[],[],[],[],[]):-!.
+
+@gpu_analyze_list_expr(Mode,L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
+   gpu_get_balanced(0,L,[','],Item,Rest),
+   (=([','|T],Rest)->true;=(T,Rest)),
+   !,
+   gpu_analyze_item_expr(Mode,Item,INS0,OUTS0,NEWS0,FUNS0,PROCS0,REFS0,LZ0),
+   !,
+   gpu_analyze_list_expr(Mode,T,INS1,OUTS1,NEWS1,FUNS1,PROCS1,REFS1,LZ1),
+   gpu_union(INS0,INS1,INS2),
+   gpu_union(OUTS0,OUTS1,OUTS2),
+   gpu_union(NEWS0,NEWS1,NEWS2),
+   append(FUNS0,FUNS1,FUNS),
+   gpu_union(PROCS0,PROCS1,PROCS2),
+   gpu_union(REFS0,REFS1,REFS2),
+   gpu_union(LZ0,LZ1,LZ2),
+   !,
+   gpu_unique(INS2,INS), gpu_unique(OUTS2,OUTS), gpu_unique(NEWS2,NEWS),
+   gpu_unique(PROCS2,PROCS), gpu_unique(REFS2,REFS), gpu_unique(LZ2,Lazies),
+   !.
+
+@gpu_declaration([id(_)]):-!.
+
+@gpu_declaration([id(_)|T]):-
+  gpu_declaration(T).
+
+% gpu_analyze_expr(parsed_list,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES)
+% INS -- список переменных, значения которых = входные для выражения
+% OUTS -- список переменных, которые в выражении получают значения в результате ПРИСВАИВАНИЙ (простых и совмещенных) и в &-параметрах
+%           функций (не ленивых). Ленивая -- только главная функция! Новые переменные выходными НЕ ЯВЛЯЮТСЯ!
+% NEWS -- переменные, декларированные в текущем выражении
+% FUNS -- список элементов func(V,L) = вызываемых функций с именами V и списками аргументов L
+% PROCS -- список элементов proc(V,L) = вызываемых процедур с именами V и списками аргументов L. В норме -- список из одного элемента
+% REFS -- список выходных (&,*)-параметров в процедуре, не относящихся к ленивым. Они не получают в такой процедуре значения
+% LAZIES -- список потенциально ленивых переменных = выходных (&,*) в процедуре. Не имеет прямого отношения к OUTS, ДОЛЖЕН с ним пересекаться
+@gpu_analyze_expr([],[],[],[],[],[],[],[]):-!.
+
+@gpu_analyze_expr(['*'|Rest],Ins,Outs,News,Funs,Procs,Refs,Lazies):-
+   gpu_analyze_expr(Rest,Ins,Outs,News,Funs,Procs,Refs,Lazies),
+   !.
+
+@gpu_analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
+   append(D,['*',id(V1)],L),
+   gpu_declaration(D),
+   append(D,['*'],DD),
+   !.
+
+@gpu_analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
+   append(D,['*','*',id(V1)],L),
+   gpu_declaration(D),
+   append(D,['*','*'],DD),
+   !.
+
+@gpu_analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
+   append(D,['*','*','*',id(V1)],L),
+   gpu_declaration(D),
+   append(D,['*','*','*'],DD),
+   !.
+
+@gpu_analyze_expr(L,[],[V1],[var(V1,type(DD,[]))],[],[],[],[]):-
+   append(D,['&',id(V1)],L),
+   gpu_declaration(D),
+   append(D,['&'],DD),
+   !.
+
+@gpu_analyze_expr(L,[],[V1],[var(V1,type(D,[]))],[],[],[],[]):-
+   append(D,[id(V1)],L),
+   gpu_declaration(D),
+   !.
+
+@gpu_analyze_expr([id(V)],[V],[],[],[],[],[],[]):-
+   !.
+
+@gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
+   append(D,['*',id(V1),A|T1],L),
+   gpu_declaration(D),
+   member(A,['=',',','[']),
+   !,
+   append(D,['*'],DD),
+   !,
+   gpu_analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   gpu_union(OUTS0,[V1],OUTS),
+   !.
+
+@gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
+   append(D,['*','*',id(V1),A|T1],L),
+   gpu_declaration(D),
+   member(A,['=',',','[']),
+   !,
+   append(D,['*','*'],DD),
+   !,
+   gpu_analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   gpu_union(OUTS0,[V1],OUTS),
+   !.
+
+@gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
+   append(D,['*','*','*',id(V1),A|T1],L),
+   gpu_declaration(D),
+   member(A,['=',',','[']),
+   !,
+   append(D,['*','*','*'],DD),
+   !,
+   gpu_analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   gpu_union(OUTS0,[V1],OUTS),
+   !.
+
+@gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
+   append(D,['&',id(V1),A|T1],L),
+   gpu_declaration(D),
+   member(A,['=',',','[']),
+   !,
+   append(D,['&'],DD),
+   !,
+   gpu_analyze_list_expr(intros(DD),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   gpu_union(OUTS0,[V1],OUTS),
+   !.
+
+@gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
+   append(D,[id(V1),A|T1],L),
+   gpu_declaration(D),
+   member(A,['=',',','[']),
+   !,
+   gpu_analyze_list_expr(intros(D),[id(V1),A|T1],INS,OUTS0,NEWS,FUNS,PROCS,REFS,Lazies),
+   gpu_union(OUTS0,[V1],OUTS),
+   !.
+
+@gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies):-
+   gpu_analyze_list_expr(inits,L,INS,OUTS,NEWS,FUNS,PROCS,REFS,Lazies),
+   !.
+
+@gpu_get_params_length([], 0):-!.
+
+@gpu_get_params_length([[type,_]|T], N):-
+   gpu_get_params_length(T,N),
+   !.
+
+@gpu_get_params_length([[arg,'...']],infinity):-!.
+
+@gpu_get_params_length([[idxs,_]|T], N):-
+   gpu_get_params_length(T,N),
+   !.
+
+@gpu_get_params_length([[arg,'&']|T], N):-
+   gpu_get_params_length(T,N),
+   !.
+
+@gpu_get_params_length([[arg,'*']|T], N):-
+   gpu_get_params_length(T,N),
+   !.
+
+@gpu_get_params_length([[arg,'**']|T], N):-
+   gpu_get_params_length(T,N),
+   !.
+
+@gpu_get_params_length([[arg,'***']|T], N):-
+   gpu_get_params_length(T,N),
+   !.
+
+@gpu_get_params_length([_|T], N1):-
+   gpu_get_params_length(T,N),
+   (
+    =(N,infinity)->
+     =(N1,infinity);
+     N1 is N+1
+   ),
+   !.
+
+@gpu_prepare_gpu_function(_,_,[]):-!.
+
+@gpu_prepare_gpu_function(Name,N,[[name,Name]|T]):-
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[args,_]|T]):-
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[ret,_]|T]):-
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[type,TP],[arg,V],[idxs,Idxs]|T]):-
+   \+ atom_length(Idxs,0),
+   assertz(gpu_farg(Name,N,'[]',V,TP,Idxs)),
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[arg,'&'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'&',V,TP,[])),
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[arg,'*'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'*',V,TP,[])),
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[arg,'**'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'**',V,TP,[])),
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[arg,'***'],[type,TP],[arg,V],[idxs,_]|T]):-
+   assertz(gpu_farg(Name,N,'***',V,TP,[])),
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_function(Name,N,[[type,TP],[arg,V],[idxs,'']|T]):-
+   assertz(gpu_farg(Name,N,'',V,TP,[])),
+   !,
+   gpu_prepare_gpu_function(Name,N,T).
+
+@gpu_prepare_gpu_functions:-
+   global_trace(TR),
+   db_content('prog',GID,[[func]]),
+   db_content('args',GID,Params),
+   once(append(_,[gid('clsFunction',GID),gid('clsBegin',_)|_],TR)),
+   member([name,Name],Params),
+   gpu_get_params_length(Params,N),
+   \+ =(N,infinity),
+   N1 is N-3, % -args, -ret, -name
+   asserta(gpu_function(Name,GID,N1)),
+   call(gpu_prepare_gpu_function(Name,N1,Params)),
+   fail.
+
+@gpu_prepare_gpu_functions:-!.
+
+@gpu_prepare_ifor([],_,[]):-!.
+
+@gpu_prepare_ifor([[Type,V]|T],Type,[VAL|TT]):-
+   gpu_parse_expr(V,L),
+   !,
+   gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES),
+   !,
+   =..(VAL,[Type,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L]]),
+   gpu_prepare_ifor(T,Type,TT).
+
+@gpu_prepare_ifor([_|T],Type,TT):-
+   !,
+   gpu_prepare_ifor(T,Type,TT).
+
+@gpu_prepare_ops(Type,GID,[arg(INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L])]):-
+   member(Type,['clsWhile','clsSwitch','clsIf','clsReturn','clsOper']),
+   !,
+   db_content('args',GID,[[_,Opnd]]),
+   !,
+   gpu_parse_expr(Opnd,L),
+   !,
+   gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES),
+   !.
+
+@gpu_prepare_ops('clsPreproc',GID,[arg([],[],[],[],[],[],[],[L])]):-
+   db_content('args',GID,[[_,Opnd]]),
+   !,
+   gpu_parse_expr(Opnd,L),
+   !.
+
+@gpu_prepare_ops('clsAlternation',GID,[arg(INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L])]):-
+   db_content('args',GID,[[_,Opnd]]),
+   !,
+   gpu_parse_expr(Opnd,L),
+   !,
+   gpu_analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES),
+   !.
+
+% (default:) in switch-case
+@gpu_prepare_ops('clsAlternation',_,[arg([],[],[],[],[],[],[],[])]):-
+   !.
+
+@gpu_prepare_ops('clsFor',GID,OPL):-
+   db_content('args',GID,L),
+   gpu_prepare_ifor(L,'init',OPL1),
+   gpu_prepare_ifor(L,'cond',OPL2),
+   gpu_prepare_ifor(L,'chng',OPL3),
+   !,
+   append(OPL1,OPL2,OPLP), append(OPLP,OPL3,OPL),
+   !.
+
+% Помещает в базу факт gpu_op(Class,GID1,GID2,IDs,Ops) только в том случае, если его еще в базе не было,
+% или он был, но с другими ops. В последнем случае устанавливается флаг-факт gpu_recalculate. Это требуется
+% для нормальной работы итеративной процедуры уточнения состава ленивых переменных/параметров для каждой функции
+@gpu_put_gpu_op(Class,GID1,GID2,IDs,Ops):-
+   (
+      (predicate_property(gpu_op(_,_,_,_,_),'dynamic'), gpu_op(Class,GID1,GID2,IDs,Ops1))->(
+        =(Ops,Ops1)->(
+          true, !
+        );(
+          retractall(gpu_op(Class,GID1,GID2,_,_)),
+          (
+           (predicate_property(gpu_reanalyze,'dynamic'), gpu_reanalyze)->(
+             true, !
+           );(
+             asserta(gpu_reanalyze)
+           )
+          ),
+          asserta(gpu_op(Class,GID1,GID2,IDs,Ops))
+        )
+      );(
+        asserta(gpu_op(Class,GID1,GID2,IDs,Ops))
+      )
+   ),
+   !.
+
+@gpu_get_gpu_fseq([gid('clsEnd',GID)|Rest],[gid('clsEnd',GID)|Rest],[]):-!.
+
+@gpu_get_gpu_fseq(L,Rest,[GID|IDT]):-
+   gpu_get_gpu_fop(L,Rest0,GID),
+   !,
+   gpu_get_gpu_fseq(Rest0,Rest,IDT),
+   !.
+
+@gpu_get_gpu_fop([gid('clsBegin',GID1)|T],Rest,GID1):-
+   gpu_get_gpu_fseq(T,[gid('clsEnd',GID2)|Rest],IDs),
+   !,
+   gpu_put_gpu_op('clsBegin',GID1,GID2,IDs,[]),
+   !.
+
+@gpu_get_gpu_fop([gid(Type,GID)|T],Rest,GID):-
+   member(Type,['clsFor','clsSwitch','clsWhile']),
+   !,
+   gpu_get_gpu_fop(T,Rest,OPID),
+   !,
+   gpu_prepare_ops(Type,GID,OPL),
+   gpu_put_gpu_op(Type,GID,-1,[OPID],OPL),
+   !.
+
+@gpu_get_gpu_fop([gid('clsDo',GID)|T],Rest,GID):-
+   gpu_get_gpu_fop(T,[gid('clsWhile',GID1),gid('clsOper',EmptyGID)|Rest],OPID),
+   db_content('args',EmptyGID,[[op,'']]),
+   !,
+   gpu_prepare_ops('clsWhile',GID1,OPL),
+   gpu_put_gpu_op('clsDo',GID,GID1,[OPID],OPL),
+   !.
+
+@gpu_get_gpu_fop([gid('clsIf',GID)|T],Rest,GID):-
+   gpu_get_gpu_fop(T,Rest0,OPID0),
+   !,
+   gpu_prepare_ops('clsIf',GID,OPL),
+   (
+    =(Rest0,[gid('clsElse',GID1)|Rest1])->(
+       gpu_get_gpu_fop(Rest1,Rest,OPID1),
+       gpu_put_gpu_op('clsIf',GID,GID1,[OPID0,OPID1],OPL)
+    );(
+       gpu_put_gpu_op('clsIf',GID,-1,[OPID0],OPL),
+       =(Rest,Rest0)
+    )
+   ),
+   !.
+
+@gpu_get_gpu_fop([gid('clsPreproc',GID)|T],T,GID):-
+   gpu_put_gpu_op('clsPreproc',GID,-1,[],[]),
+   !.
+
+@gpu_get_gpu_fop([gid(Type,GID)|T],T,GID):-
+   gpu_prepare_ops(Type,GID,OPL),
+   gpu_put_gpu_op(Type,GID,-1,[],OPL),
+   !.
+
+@gpu_get_gpu_fprocs([],[]):-!.
+
+@gpu_get_gpu_fprocs([GID|T],[GID|TT]):-
+   gpu_op('clsOper',GID,_,[],[arg(_,_,_,_,[proc(Name,_)],_,_,_)]),
+   gpu_function(Name,_,_),
+   !,
+   gpu_get_gpu_fprocs(T,TT),
+   !.
+   
+@gpu_get_gpu_fprocs([GID|T],PGIDS):-
+   gpu_op(_,GID,_,LGIDs,_),
+   !,
+   gpu_get_gpu_fprocs(LGIDs,PGIDS0),
+   gpu_get_gpu_fprocs(T,PGIDS1),
+   !,
+   append(PGIDS0,PGIDS1,PGIDS),
+   !.
+
+@gpu_build_gpu_function(Fun,FGID,Body):-
+   gpu_get_gpu_fop(Body,[],OPID),
+   gpu_put_gpu_op('clsFunction',FGID,-1,[OPID],[]),
+   gpu_get_gpu_fprocs([OPID],ProcsGIDs),
+   asserta(gpu_fprocs(Fun,FGID,ProcsGIDs)),
+   !.
+
+% Анализ (структурный, в глубину) всех функций с разбором выражений, результаты которого попадают в gpu_op
+@gpu_build_gpu_functions:-
+   global_trace(TR),
+   retractall(gpu_fprocs(_,_,_)),
+   !,
+   (
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
+     (
+      gpu_function(Fun,GID,_),
+      once(append(_,[gid('clsFunction',GID)|T],TR)),
+      gpu_bypass_complex(T,Body,_),
+      call(gpu_build_gpu_function(Fun,GID,Body)),
+      fail);
+     true,!
+    );(
+     true,!
+    )
+   ).
+
+@gpu_get_globals([],[]):-!.
+
+@gpu_get_globals([gid('clsCVar',GID)|T],[var(V,type(TP,IDXS))|T1]):-
+   db_content('args',GID,[[_,Arg]]),
+   !,
+   gpu_parse_expr(Arg,L),
+   gpu_rbypass_var(L,V,TP,_,_,_,_,_),
+   append(TP,[id(V)|IDXS],L),
+   gpu_get_globals(T,T1).
+
+@gpu_get_globals([gid('clsOper',GID)|T],T1):-
+   db_content('args',GID,[[_,Arg]]),
+   !,
+   gpu_parse_expr(Arg,L),
+   gpu_analyze_expr(L,_,_,NEWS,_,_,_,_),
+   gpu_get_globals(T,T0),
+   append(NEWS,T0,T1),
+   !.
+
+@gpu_get_globals([gid('clsFunction',_)|T],T1):-
+   gpu_bypass_complex(T,_,After),
+   gpu_get_globals(After,T1),
+   !.
+
+@gpu_get_globals([_|T],T1):-
+   gpu_get_globals(T,T1).
+
+@gpu_find_globals:-
+   global_trace(TR),
+   gpu_get_globals(TR,GLOBS),
+   asserta(gpu_globals(GLOBS)),
+   !.
+
+@gpu_extract_var_names([],[]):-
+   !.
+
+@gpu_extract_var_names([var(Name,_)|T],[Name|T1]):-
+   gpu_extract_var_names(T,T1),
+   !.
+
+@gpu_addLocals([],News,[News]):-!.
+
+@gpu_addLocals([L|T],News,[L1|T]):-
+   append(L,News,L0),
+   !,
+   gpu_unique(L0,L1),
+   !.
+
+@gpu_excludeLocals(V,[],V):-!.
+
+@gpu_excludeLocals(Vars,[Locs|T],Outs):-
+   subtract(Vars,Locs,Vars0),
+   gpu_excludeLocals(Vars0,T,Outs),
+   !.
+
+@gpu_getNewInOutLazies([],[],[],[],[],0.0):-!.
+
+@gpu_getNewInOutLazies([V|T],News,Ins,Outs,Lazies,TM):-
+   =..(V,[_,Ins0,Outs0,News0,Funs0,_,_,Laz0,_]),
+   gpu_getTime(Funs0,T0),
+   gpu_getNewInOutLazies(T,News1,Ins1,Outs1,Laz1,T1),
+   !,
+   append(News0,News1,News2), append(Outs0,Outs1,Outs2), append(Laz0,Laz1,Laz2), append(Ins0,Ins1,Ins2),
+   gpu_unique(News2,News), gpu_unique(Outs2,Outs), gpu_unique(Laz2,Lazies), gpu_unique(Ins2,Ins),
+   TM is T0+T1,
+   !.
+
+@gpu_analyze_one_flazies([],_,_,_,[],[],[]):-!.
+
+% ReadParams -- читаемые в самой функции ее ленивые параметры (не только выходные, но и входные)
+@gpu_analyze_one_flazies([GID|GIDS],Globs,Pars,Locals,GLazies,PLazies,ReadParams):-
+   gpu_op(_,GID,_,IGIDs,Ops),
+   gpu_getNewInOutLazies(Ops,News,Ins,Outs,_,_),
+   gpu_addLocals(Locals,News,Locals1),
+   gpu_excludeLocals(Outs,Locals1,PreOuts),
+   gpu_excludeLocals(Ins,Locals1,PreIns),
+   gpu_intersect(PreOuts,Pars,PLA),
+   gpu_intersect(PreIns,Pars,ILA),
+   subtract(PreOuts,PLA,PreOuts1),
+   gpu_intersect(PreOuts1,Globs,GLA),
+   gpu_analyze_one_flazies(IGIDs,Globs,Pars,[News|Locals],GL0,PL0,IL0),
+   gpu_analyze_one_flazies(GIDS,Globs,Pars,Locals1,GL1,PL1,IL1),
+   append(GL0,GL1,GL2), append(GL2,GLA,GL3), append(PL0,PL1,PL2), append(PL2,PLA,PL3),
+   append(IL0,IL1,IL2), append(IL2,ILA,IL3),
+   gpu_unique(GL3,GLazies), gpu_unique(PL3,PLazies), gpu_unique(IL3,ReadParams),
+   !.
+
+@gpu_analyze_flazies(Fun,NPrms,GLazies,PLazies,ReadParams):-
+   gpu_function(Fun,GID,NPrms),
+   !,
+   (
+    (predicate_property(gpu_fanalyzed(_,_,_,_,_),'dynamic'), gpu_fanalyzed(Fun,GID,GLazies,PLazies,ReadParams))->(
+     true,!
+     );(
+     gpu_get_fparams(lazy,Fun,NPrms,LPars0),
+     !,
+     gpu_globals(GlobVars),
+     gpu_extract_var_names(GlobVars,Glob0),
+     !,
+     asserta(gpu_fanalyzed(Fun,GID,[],LPars0,LPars0)),
+     gpu_analyze_one_flazies([GID],Glob0,LPars0,[],GLazies,PLazies,ReadParams),
+     retractall(gpu_fanalyzed(Fun,GID,[],_,_)),
+     asserta(gpu_fanalyzed(Fun,GID,GLazies,PLazies,ReadParams)),
+     !
+    )
+   ).
+
+% Определение выходных переменных (глобальных и потенциально модифицируемых параметров) для каждой функции. Для этого проводится
+% структурный анализ функции в глубину (с отслеживанием локально декларированных переменных, изменение которых нас здесь не интересует),
+% выявляются модифицируемые переменные. Модифицируемые глобалы и параметры попадают в gpu_fanalyzed
+@gpu_analyze_gpu_functions:-
+   (
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
+     (
+      gpu_function(Fun,_,N),
+      call(gpu_analyze_flazies(Fun,N,_,_,_)),
+      fail);
+     true,!
+    );(
+     true,!
+    )
+   ).
+
+% Итерационное сходящееся уточнение состава ленивых переменных/параметров функций (gpu_fanalyzed). На каждой итерации
+% для каждой функции уточняется список модифицируемых глобальных переменных и &|*-параметров. Это делается в gpu_analyze_gpu_functions.
+% Это уточнение может влиять на другие функции, вызывающие уточненные. Сначала считается, что функция модифицирует все свои &|*-параметры,
+% они входят в соответствующие списки gpu_fanalyzed, потом эти списки урезаются, в то время как списки глобальных переменных расщиряются.
+% Проходит "волна" уточнений, в результате которой, например, функции int p1(int &x) { p2(x); }, int p2(int & x) { cout << x; } в последнем
+% приближении уже не имеют выходных ленивых значений вообще, в то время как функции int p1() { p2(); }, int p2() { X = 11; } имеют один
+% ленивый результат -- глобальную переменную X.
+% После очередного уточнения, выполняется перестройка gpu_op-фактов, в которых выполняется новый разбор выражений с учетом новых данных
+% о ленивости. Если при этом изменится хоть один факт, то устанавливается gpu_reanalyze, что свидетельствует о необходимости как минимум
+% еще одной итерации.
+@gpu_iterative_build_funs:-
+   retractall(gpu_reanalyze),
+   gpu_build_gpu_functions,
+   (
+    (predicate_property(gpu_reanalyze,'dynamic'), gpu_reanalyze)->(
+      retractall(gpu_fanalyzed(_,_,_,_,_)),
+      gpu_analyze_gpu_functions,
+      gpu_iterative_build_funs,
+      !
+    );(
+      true, !
+    )
+   ),
+   !.
+
+@gpu_get_flist_deps([]):-
+   !.
+
+@gpu_get_flist_deps([V|T]):-
+   =..(V,[_,Name,Prms]),
+   length(Prms,NPrms),
+   !,
+   (
+    (predicate_property(cilk_fpure(_),'dynamic'), cilk_fpure(Name));
+    (
+     predicate_property(gpu_function(_,_,_),'dynamic'),
+     gpu_function(Name,_,NPrms),
+     predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),
+     gpu_fdependent(Name,NPrms,f,_)
+    )
+   ),
+   !,
+   gpu_get_flist_deps(T),
+   !.
+
+@gpu_get_fexpr_deps([]):-
+   !.
+
+@gpu_get_fexpr_deps([V|T]):-
+   =..(V,[_,_,_,_,FUNS,[expr],_,_,_]),
+   !,
+   gpu_get_flist_deps(FUNS),
+   gpu_get_fexpr_deps(T),
+   !.
+
+@gpu_get_fexpr_deps([V|T]):-
+   =..(V,[_,_,_,_,FUNS,PROCS,_,_,_]),
+   !,
+   gpu_get_flist_deps(FUNS),
+   !,
+   gpu_get_flist_deps(PROCS),
+   gpu_get_fexpr_deps(T),
+   !.
+
+@gpu_get_fblock_deps([]):-
+   !.
+
+@gpu_get_fblock_deps([GID|T]):-
+   gpu_op(_,GID,_,LGIDs,Exprs),
+   !,
+   gpu_get_fexpr_deps(Exprs),
+   !,
+   gpu_get_fblock_deps(LGIDs),
+   !,
+   gpu_get_fblock_deps(T),
+   !.
+
+@gpu_exprs_has_no_derefs([]):-
+   !.
+
+@gpu_exprs_has_no_derefs([E|T]):-
+   =..(E,[_,_,_,_,_,_,_,_,[L]]),
+   !,
+   \+ (
+     append(['*'],_,L);
+     (append(_,[S,'*'|_],L),member(S,['(','[','+','-','*','%','!','~','=','<','>',',',';']))
+   ),
+   !,
+   gpu_exprs_has_no_derefs(T).
+
+@gpu_mark_flist_deps([]):-
+   !.
+
+@gpu_mark_flist_deps([V|T]):-
+   =..(V,[_,Name,Prms]),
+   length(Prms,NPrms),
+   !,
+   (
+    (predicate_property(cilk_fpure(_),'dynamic'), cilk_fpure(Name));
+    (
+     predicate_property(gpu_function(_,_,_),'dynamic'),
+     gpu_function(Name,GID,NPrms),
+     predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),
+     gpu_fdependent(Name,NPrms,f,_),
+     (
+      (predicate_property(gpu_do_not_worry(_,_,_),'dynamic'), gpu_do_not_worry(Name,GID,NPrms))->
+        true;
+        ( asserta(gpu_do_not_worry(Name,GID,NPrms)), gpu_mark_fblock_deps([GID]) )
+     )
+    )
+   ),
+   !,
+   gpu_mark_flist_deps(T),
+   !.
+
+@gpu_mark_fexpr_deps([]):-
+   !.
+
+@gpu_mark_fexpr_deps([V|T]):-
+   =..(V,[_,_,_,_,FUNS,[expr],_,_,_]),
+   !,
+   gpu_mark_flist_deps(FUNS),
+   gpu_mark_fexpr_deps(T),
+   !.
+
+@gpu_mark_fexpr_deps([V|T]):-
+   =..(V,[_,_,_,_,FUNS,PROCS,_,_,_]),
+   !,
+   gpu_mark_flist_deps(FUNS),
+   !,
+   gpu_mark_flist_deps(PROCS),
+   gpu_mark_fexpr_deps(T),
+   !.
+
+@gpu_mark_fblock_deps([]):-
+   !.
+
+@gpu_mark_fblock_deps([GID|T]):-
+   gpu_op(_,GID,_,LGIDs,Exprs),
+   !,
+   gpu_mark_fexpr_deps(Exprs),
+   !,
+   gpu_mark_fblock_deps(LGIDs),
+   !,
+   gpu_mark_fblock_deps(T),
+   !.
+
+% Содержит ли блок разыменование указателей
+@gpu_block_has_no_derefs([]):-
+   !.
+
+@gpu_block_has_no_derefs([GID|T]):-
+   gpu_op(_,GID,_,LGIDs,Exprs),
+   !,
+   gpu_exprs_has_no_derefs(Exprs),
+   !,
+   gpu_block_has_no_derefs(LGIDs),
+   gpu_block_has_no_derefs(T).
+
+@gpu_exprs_in_outs([],[],[],[]):-
+   !.
+
+@gpu_exprs_in_outs([E|T],Ins,Outs,News):-
+   =..(E,[_,Ins0,Outs0,News0,_,_,_,_,_]),
+   !,
+   gpu_extract_var_names(News0, NewsE),
+   !,
+   gpu_exprs_in_outs(T,Ins1,Outs1,News1),
+   gpu_union(Ins0,Ins1,Ins),
+   gpu_union(Outs0,Outs1,Outs),
+   gpu_union(NewsE,News1,News),
+   !.
+
+@gpu_for_in_outs([],[],[],[]):-
+   !.
+
+@gpu_for_in_outs([GID|T],Ins,Outs,News):-
+   gpu_op(C,GID,_,LGIDs,Exprs),
+   !,
+   (
+    =(C,'clsFor')->
+      (gpu_exprs_in_outs(Exprs,Ins0,_,News0),=(Outs0,[]));
+      gpu_exprs_in_outs(Exprs,Ins0,Outs0,News0)
+   ),
+   !,
+   gpu_for_in_outs(LGIDs,Ins1,Outs1,News1),
+   gpu_for_in_outs(T,Ins2,Outs2,News2),
+   !,
+   gpu_union(Ins0,Ins1,InsA), gpu_union(InsA,Ins2,Ins),
+   gpu_union(Outs0,Outs1,OutsA), gpu_union(OutsA,Outs2,Outs),
+   gpu_union(News0,News1,NewsA), gpu_union(NewsA,News2,News),
+   !.
+
+@gpu_extract_idx(['-','>',id(_)|Rest],EXPR):-
+   gpu_extract_idx(Rest,EXPR),
+   !.
+
+@gpu_extract_idx(['.',id(_)|Rest],EXPR):-
+   gpu_extract_idx(Rest,EXPR),
+   !.
+
+@gpu_extract_idx(['['|Rest],[EXPR|EXPRT]):-
+   gpu_get_balanced(0,Rest,[']'],EXPR,[']'|Rest0]),
+   !,
+   gpu_extract_idx(Rest0,EXPRT),
+   !.
+
+@gpu_extract_idx(_,[]):-
+   !.
+
+@gpu_extract_idxs(L,T):-
+   append(_,[id(V)|TT],L),
+   !,
+   gpu_extract_idx(TT,Idxs),
+   !,
+   gpu_extract_idxs(TT,T0),
+   gpu_union([var(V,Idxs)],T0,T),
+   !.
+
+@gpu_extract_idxs(_,[]):-
+   !.
+
+@gpu_get_expr_idxs([],[]):-
+   !.
+
+@gpu_get_expr_idxs([E|T],Idxs):-
+   =..(E,[_,_,_,_,_,_,_,_,[L]]),
+   !,
+   gpu_extract_idxs(L,Idxs1),
+   gpu_get_expr_idxs(T,Idxs2),
+   gpu_union(Idxs1,Idxs2,Idxs),
+   !.
+
+@gpu_get_var_idxs([],[]):-
+   !.
+
+@gpu_get_var_idxs([GID|T],Idxs):-
+   gpu_op(_,GID,_,LGIDs,Exprs),
+   !,
+   gpu_get_expr_idxs(Exprs,Idxs0),
+   !,
+   gpu_get_var_idxs(LGIDs,Idxs1),
+   gpu_get_var_idxs(T,Idxs2),
+   gpu_union(Idxs0,Idxs1,IdxsA), gpu_union(IdxsA,Idxs2,Idxs),
+   !.
+
+@gpu_check_idx_one(_,[]):-
+   !.
+
+@gpu_check_idx_one(V,[L|T]):-
+   !,
+   \+ member(id(V),L),
+   gpu_check_idx_one(V,T).
+
+@gpu_check_idx(_,[]):-
+   !.
+
+@gpu_check_idx(V,[var(_,Idxs)|T]):-
+   gpu_check_idx_one(V,Idxs),
+   gpu_check_idx(V,T).
+
+% Проверка -- зависит ли индекс от выходных переменных
+@gpu_check_idxs([],_):-
+   !.
+
+@gpu_check_idxs([V|T],VarIdxs):-
+   gpu_check_idx(V,VarIdxs),
+   !,
+   gpu_check_idxs(T,VarIdxs).
+
+@gpu_filter_idx_one(_,_,[],[]):-
+   !.
+
+@gpu_filter_idx_one(V,N,[L|T],[idx(N,L)|TT]):-
+   member(id(V),L),
+   !,
+   N1 is N+1,
+   gpu_filter_idx_one(V,N1,T,TT).
+
+@gpu_filter_idx_one(V,N,[_|T],TT):-
+   gpu_filter_idx_one(V,N,T,TT).
+
+@gpu_filter_idxs(_,[],[]):-
+   !.
+
+% Превращаем индексы в список зависящих от счетчика индексов
+@gpu_filter_idxs(V,[var(P,Idxs)|T],[var(P,OIdxs)|TT]):-
+   call(gpu_filter_idx_one(V,0,Idxs,OIdxs)),
+   !,
+   gpu_filter_idxs(V,T,TT),
+   !.
+
+@gpu_same_indexes(_,_,[]):-
+   !.
+
+@gpu_same_indexes(V,Idxs,[var(V,Idxs1)|T]):-
+   !,
+   =(Idxs,Idxs1),
+   gpu_same_indexes(V,Idxs,T),
+   !.
+
+@gpu_same_indexes(V,Idxs,[_|T]):-
+   !,
+   gpu_same_indexes(V,Idxs,T).
+
+@gpu_eq_indexes(V,FIdxs):-
+   append(_,[var(V,Idxs)|T],FIdxs),
+   !,
+   gpu_same_indexes(V,Idxs,T).
+
+@gpu_eq_indexes(_,_):-
+   !.
+
+@gpu_check_outs_by_idxs([],_,_):-
+   !.
+
+@gpu_check_outs_by_idxs([V|T],Ins,FIdxs):-
+   !,
+   \+ member(var(V,[]),FIdxs), % Выходная переменная должна зависеть от индекса
+   !,
+   (
+    \+ member(V,Ins); % Выходная переменная -- не входная
+    gpu_eq_indexes(V,FIdxs) % Выходная переменная имеет везде одинаковую индексацию по счетчику
+   ),
+   !,
+   gpu_check_outs_by_idxs(T,Ins,FIdxs).
+
+% Не содержит ли цикл связей между итерациями по индексам
+@gpu_for_content(Counter,LGIDs):-
+   once(gpu_for_in_outs(LGIDs,Ins,Outs0,News)),
+   subtract(Outs0,News,Outs),
+   gpu_get_var_idxs(LGIDs,VarIdxs),
+   gpu_check_idxs(Outs,VarIdxs),
+   !,
+   gpu_filter_idxs(Counter,VarIdxs,FIdxs),
+   !,
+   gpu_check_outs_by_idxs(Outs,Ins,FIdxs).
+
+% Анализ возможности распараллелить for
+@gpu_analyze_for(GID):-
+   gpu_op('clsFor',GID,_,LGIDs,Exprs),
+   ( (predicate_property(cilk_for(_),'dynamic'), cilk_for(GID))->
+       (
+        (predicate_property(cilk_for_time(_,_),'dynamic'), cilk_for_time(GID,CILKT))->
+          (
+           g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY),
+           TPARCILK is (CILKT + 3*(TSP + TSY)) % 2^3 = 8 (бинарное дерево ветвления)
+          );
+          TPARCILK is 400000.0
+       );
+       TPARCILK is 400000.0
+   ),
+   !,
+   (
+    (predicate_property(gpu_for_time(_,_),'dynamic'),gpu_for_time(GID,T))->
+       (
+        TSEQ is 8*T,
+        (
+          (g_read('$GPUSpawnTime',TSPG), g_read('$GPUSyncTime',TSYG), TPARGPU is TSPG + 2*T + TSYG)
+        ),
+        (
+          (g_read('$OMPSpawnTime',TSPO), g_read('$OMPSyncTime',TSYO), TPAROMP is TSPO + 2*T + TSYO)
+        )
+       );
+       ( TPARGPU is 400000.0, TPAROMP is 400000.0, TSEQ is 0.0)
+   ),
+   once(( TPARGPU < TPARCILK; TPAROMP < TPARCILK )),
+   once(( TPARGPU < TSEQ; TPAROMP < TSEQ )),
+   member(init(_,_,_,_,_,_,_,[[id(Counter),'='|_]]),Exprs),
+   (
+    member(cond(_,[],_,_,_,_,_,[[id(Counter),'<','='|_]]),Exprs);
+    member(cond(_,[],_,_,_,_,_,[[id(Counter),'>','='|_]]),Exprs);
+    member(cond(_,[],_,_,_,_,_,[[id(Counter),'<'|_]]),Exprs);
+    member(cond(_,[],_,_,_,_,_,[[id(Counter),'>'|_]]),Exprs);
+    member(cond(_,[],_,_,_,_,_,[[id(Counter),'=','='|_]]),Exprs);
+    member(cond(_,[],_,_,_,_,_,[[id(Counter),'!','='|_]]),Exprs)
+   ),
+   (
+    member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'+','='|_]]),Exprs);
+    member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'-','='|_]]),Exprs);
+    member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'+','+']]),Exprs);
+    member(chng(_,[Counter],_,_,_,_,_,[[id(Counter),'-','-']]),Exprs)
+   ),
+   ( once(
+       (
+        (predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_));
+        (predicate_property(omp_for_interface(_,_),'dynamic'), omp_for_interface(GID,_))
+       )
+     )
+   ),
+   once(gpu_block_has_no_derefs(LGIDs)),
+   once(gpu_get_fblock_deps(LGIDs)),
+   once(gpu_for_content(Counter,LGIDs)),
+   ( (predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_), TPARGPU < TPAROMP)->
+       (once(gpu_mark_fblock_deps(LGIDs)), asserta(gpu_for(GID)), retractall(cilk_for(GID)),
+        retractall(par_for(GID)), asserta(par_for(GID)), retractall(par_for_time(GID,_)), asserta(par_for_time(GID, TPARGPU)));
+       (asserta(omp_for(GID)), retractall(cilk_for(GID)),
+        retractall(par_for(GID)), asserta(par_for(GID)), retractall(par_for_time(GID,_)), asserta(par_for_time(GID, TPAROMP))
+       )
+   ),
+   !.
+
+% Нельзя распараллелить for
+@gpu_analyze_for(GID):-
+   gpu_op('clsFor',GID,_,_,_),
+   !.
+
+@gpu_get_fors([],_):-!.
+
+@gpu_get_fors([GID|T],_):-
+   gpu_op(_,GID,_,[],_),
+   !,
+   gpu_get_fors(T,t),
+   !.
+   
+% Пытаемся распараллелить самый внешний цикл
+@gpu_get_fors([GID|T],Flag):-
+   gpu_op('clsFor',GID,_,[LGID],_),
+   gpu_op('clsFor',LGID,_,_,_),
+   !,
+   (
+    =(Flag,t)->(
+      gpu_analyze_for(GID),
+      (
+       (
+        once((
+          (predicate_property(gpu_for(_),'dynamic'),gpu_for(GID));(predicate_property(omp_for(_),'dynamic'),omp_for(GID))
+        ))
+       )->
+         gpu_get_fors([LGID],f);
+         gpu_get_fors([LGID],t)
+      )
+    );(
+      gpu_get_fors([LGID],f)
+    )
+   ),
+   !,
+   gpu_get_fors(T,t),
+   !.
+
+% Пытаемся распараллелить цикл
+@gpu_get_fors([GID|T],Flag):-
+   gpu_op('clsFor',GID,_,LGIDs,_),
+   !,
+   (
+    =(Flag,t)->
+      gpu_analyze_for(GID);
+      true
+   ),
+   !,
+   gpu_get_fors(LGIDs,t),
+   !,
+   gpu_get_fors(T,t),
+   !.
+
+% Прочие составные операторы
+@gpu_get_fors([GID|T],_):-
+   gpu_op(_,GID,_,LGIDs,_),
+   !,
+   gpu_get_fors(LGIDs,t),
+   !,
+   gpu_get_fors(T,t),
+   !.
+   
+% Обработка и распараллеливание циклов в функции Fun
+@gpu_handle_fors_in_function(FGID):-
+   gpu_op('clsFunction',FGID,_,LGIDs,_),
+   gpu_get_fors(LGIDs,t),
+   !.
+
+% Обработка и распараллеливание подходящих циклов в каждой функции на уровне Level
+@gpu_handle_fors_level(Level):-
+   (
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
+     (
+      gpu_function(Name,GID,NPrms),
+      gpu_fdependent(Name,NPrms,_,Level),
+      \+ gpu_do_not_worry(Name,GID,NPrms),
+      call(gpu_handle_fors_in_function(GID)),
+      fail);
+     true,!
+    );(
+     true,!
+    )
+   ).
+
+% Обработка и распараллеливание подходящих циклов
+@gpu_handle_fors(Level,Max):-
+   once(gpu_handle_fors_level(Level)),
+   !,
+   Level1 is Level + 1,
+   !,
+   (
+    ==(Level,Max)->
+      true;
+      ( gpu_handle_fors(Level1,Max), ! )
+   ),
+   !.
+
+@gpu_get_list_deps(_,[]):-
+   !.
+
+@gpu_get_list_deps(NamePath,[V|T]):-
+   =..(V,[_,Name,Prms]),
+   length(Prms,NPrms),
+   gpu_get_fdeps(Name,NamePath,NPrms),
+   gpu_get_list_deps(NamePath,T),
+   !.
+
+@gpu_get_expr_deps(_,[]):-
+   !.
+
+@gpu_get_expr_deps(NamePath,[V|T]):-
+   =..(V,[_,_,_,_,FUNS,[expr],_,_,_]),
+   gpu_get_list_deps(NamePath,FUNS),
+   gpu_get_expr_deps(NamePath,T),
+   !.
+
+@gpu_get_expr_deps(NamePath,[V|T]):-
+   =..(V,[_,_,_,_,FUNS,PROCS,_,_,_]),
+   gpu_get_list_deps(NamePath,FUNS),
+   gpu_get_list_deps(NamePath,PROCS),
+   gpu_get_expr_deps(NamePath,T),
+   !.
+
+@gpu_get_block_deps(_,[]):-
+   !.
+
+@gpu_get_block_deps([path(Name,NPrms,Level)|NT],[GID|T]):-
+   =(NamePath, [path(Name,NPrms,Level)|NT]),
+   gpu_op(_,GID,_,LGIDs,Exprs),
+   gpu_get_expr_deps(NamePath,Exprs),
+   gpu_get_block_deps(NamePath,LGIDs),
+   !,
+   gpu_get_block_deps(NamePath,T),
+   !,
+   (
+    (
+     (predicate_property(atomic_splitted(_,_),'dynamic'), atomic_splitted(GID,_));
+     (predicate_property(cilk_spawn,'dynamic'), cilk_spawn(GID));
+     (predicate_property(cilk_sync,'dynamic'), cilk_sync(GID));
+     (predicate_property(cilk_for,'dynamic'), cilk_for(GID))
+    )->
+     (
+      retractall(gpu_fdependent(Name,NPrms,_,_)), asserta(gpu_fdependent(Name,NPrms,t,Level))
+     );
+     true
+   ),
+   !.
+
+@gpu_mark_deps([]):-
+   !.
+
+@gpu_mark_deps([path(Name,NPrms,Level)|T]):-
+   (
+    (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,t,_))->(
+      true,!
+    );(
+      retractall(gpu_fdependent(Name,NPrms,_,_)), asserta(gpu_fdependent(Name,NPrms,t,Level))
+    )
+   ),
+   gpu_mark_deps(T).
+
+@gpu_get_fdeps(Name,NamePath,NPrms):-
+   member(path(Name,NPrms,Level),NamePath),
+   !,
+% Важно! Кольцо рекурсии даже для независимых функций считается ЗАВИСИМОСТЯМИ, поскольку векторные вычислители с таким кольцом могут не работать!
+   retractall(gpu_fdependent(Name,NPrms,_,_)), asserta(gpu_fdependent(Name,NPrms,t,Level)),
+   !.
+
+@gpu_get_fdeps(Name,NamePath,NPrms):-
+   gpu_function(Name,GID,NPrms),
+   gpu_op('clsFunction',GID,_,LGIDs,_),
+   (
+    (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,_,_))->(
+      true,!
+    );(
+      (
+        =(NamePath,[])->
+         =(Level,0);
+         (=(NamePath,[path(_,_,Level0)|_]), Level is Level0 + 1)
+      ),
+      !,
+      gpu_get_block_deps([path(Name,NPrms,Level)|NamePath],LGIDs),
+      (
+       (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,_,_))->(
+         true,!
+       );(
+         asserta(gpu_fdependent(Name,NPrms,f,Level))
+       )
+      )
+    )
+   ),
+   (
+     (predicate_property(gpu_fdependent(_,_,_,_),'dynamic'),gpu_fdependent(Name,NPrms,t,_))->
+        gpu_mark_deps(NamePath);
+        true
+   ).
+
+@gpu_get_fdeps(Name,NamePath,NPrms):-
+   \+ gpu_function(Name,_,NPrms),
+   (
+    (predicate_property(cilk_fpure(_),'dynamic'),cilk_fpure(Name))->
+       true;
+       gpu_mark_deps(NamePath)
+   ),
+   !.
+
+% Определение зависимостей функций от внешних функций или splitted/cilk - циклов/функций
+@gpu_find_dependents:-
+   (
+    predicate_property(gpu_function(_,_,_),'dynamic')->(
+     (
+      gpu_function('main',_,NPrms),
+      call(gpu_get_fdeps('main',[],NPrms)),
+      gpu_function(Name,_,NPrms),
+      call(gpu_get_fdeps(Name,[],NPrms)),
+      fail);
+     true,!
+    );(
+     true,!
+    )
+   ).
+
+@gpu_get_comma_list([V,')'],[F]):-
+   =..(V,[_,F]),
+   !.
+
+@gpu_get_comma_list([V,','|R],[F|T]):-
+   =..(V,[_,F]),
+   gpu_get_comma_list(R,T).
+
+@gpu_get_next_op(GID,Next):-
+   gpu_op(_,_,_,GIDs,_),
+   append(_,[GID,Next|_],GIDs),
+   !.
+
+@gpu_get_next_op(GID,Next):-
+   global_trace(GIDs),
+   append(_,[gid(_,GID),gid(_,Next)|_],GIDs),
+   !.
+
+@gpu_analyze_pragma_pure([]):-
+   !.
+
+@gpu_analyze_pragma_pure([F|T]):-
+   (
+    (predicate_property(cilk_fpure(_),'dynamic'),cilk_fpure(F))->
+       true;
+       asserta(cilk_fpure(F))
+   ),
+   !,
+   gpu_analyze_pragma_pure(T).
+
+% Очистка + Загрузка необходимых данных перед анализом
+@gpu_prepare_data:-
+   retractall(gpu_function(_,_,_)),
+   retractall(gpu_fdependent(_,_,_,_)),
+   retractall(gpu_farg(_,_,_,_,_,_)),
+   retractall(gpu_fprocs(_,_,_)),
+   retractall(gpu_op(_,_,_,_,_)),
+   retractall(gpu_globals(_)),
+   retractall(gpu_fanalyzed(_,_,_,_,_)),
+   retractall(gpu_ftime(_,_,_)),
+   retractall(gpu_for_time(_,_)),
+   asserta(gpu_do_not_worry('','','')), retractall(gpu_do_not_worry(_,_,_)),
+   asserta(gpu_for_interface('','')), retractall(gpu_for_interface(_,_)),
+   asserta(omp_for_interface('','')), retractall(omp_for_interface(_,_)),
+   asserta(gpu_retime), retractall(gpu_retime),
+   asserta(gpu_reanalyze), retractall(gpu_reanalyze),
+   asserta(gpu_for('')), retractall(gpu_for(_)),
+   asserta(omp_for('')), retractall(omp_for(_)),
+   retractall(gpu_break(_)),
+   retractall(gpu_continue(_)),
+   retractall(params(_)),
+   retractall(counter(_)),
+   !,
+   gpu_prepare_gpu_functions,
+   !,
+   gpu_find_globals,
+   !,
+   gpu_build_gpu_functions,
+   !,
+   gpu_analyze_gpu_functions,
+   !,
+   gpu_iterative_build_funs,
+   !,
+   gpu_find_dependents,
+   !.
+
+@gpu_find_lvar(V,[Globals],global(V,TP)):-
+   member(global(V,TP),Globals),
+   !.
+
+@gpu_find_lvar(V,[TopVars|_],loc(TopGID,V,TP)):-
+   member(loc(TopGID,V,TP),TopVars),
+   !.
+
+@gpu_find_lvar(V,[_|RestVars],V1):-
+   gpu_find_lvar(V,RestVars,V1),
+   !.
+
+@gpu_find_lvars([],_,[]):-!.
+
+@gpu_find_lvars([global(V,TP)|T],Vars,[global(V,TP)|T1]):-
+   gpu_find_lvars(T,Vars,T1),
+   !.
+
+@gpu_find_lvars([par(_,_,V)|T],Vars,[V1|T1]):-
+   gpu_find_lvar(V,Vars,V1),
+   gpu_find_lvars(T,Vars,T1),
+   !.
+
+@gpu_find_lvars([V|T],Vars,[V1|T1]):-
+   gpu_find_lvar(V,Vars,V1),
+   gpu_find_lvars(T,Vars,T1),
+   !.
+
+@gpu_find_lvars([V|T],Vars,T1):-
+   \+ gpu_find_lvar(V,Vars,_),
+   gpu_find_lvars(T,Vars,T1),
+   !.
+
+@gpu_loc_prefixate(_,[],[]):-!.
+
+@gpu_loc_prefixate(TopGID,[var(V,TP)|T],[loc(TopGID,V,TP)|T1]):-
+   gpu_loc_prefixate(TopGID,T,T1),
+   !.
+
+@gpu_getNewInOutRefLazies(_,_,[],[],[],[],[],[],0.0):-!.
+
+@gpu_getNewInOutRefLazies(TopGID,Vars,[V|T],News,Ins,Outs,Refs,Lazies,TM):-
+   =..(V,[_,Ins0,Outs0,News0,Funs0,_,Ref0,Laz0,_]),
+   gpu_find_lvars(Ins0,Vars,InsP),
+   gpu_find_lvars(Outs0,Vars,OutsP),
+   gpu_find_lvars(Ref0,Vars,RefsP),
+   gpu_find_lvars(Laz0,Vars,LazP),
+   gpu_loc_prefixate(TopGID,News0,NewsP),
+   !,
+   gpu_getTime(Funs0,T0),
+   gpu_getNewInOutRefLazies(TopGID,Vars,T,News1,Ins1,Outs1,Refs1,Laz1,T1),
+   !,
+   append(NewsP,News1,News2), append(InsP,Ins1,Ins2), append(LazP,Laz1,Laz2),
+   append(OutsP,Outs1,Outs2), append(RefsP,Refs1,Ref2),
+   gpu_unique(News2,News), gpu_unique(Ins2,Ins), gpu_unique(Laz2,Lazies),
+   append(Outs2,News,Outs3), gpu_unique(Outs3,Outs), gpu_unique(Ref2,Refs),
+   TM is T0+T1,
+   !.
+
+@gpu_getForNewInOutRefLazies(_,_,_,[],[],[],[],[],[],0.0):-!.
+
+@gpu_getForNewInOutRefLazies(Types,TopGID,Vars,[V|T],News,Ins,Outs,Refs,Lazies,TM):-
+   =..(V,[Type,Ins0,Outs0,News0,Funs0,_,Ref0,Laz0,_]),
+   (
+    member(Type,Types)->(
+      !,
+      gpu_find_lvars(Ins0,Vars,InsP),
+      gpu_find_lvars(Outs0,Vars,OutsP),
+      gpu_find_lvars(Ref0,Vars,RefsP),
+      gpu_find_lvars(Laz0,Vars,LazP),
+      gpu_loc_prefixate(TopGID,News0,NewsP),
+      !,
+      gpu_getTime(Funs0,T0),
+      gpu_getForNewInOutRefLazies(Types,TopGID,Vars,T,News1,Ins1,Outs1,Refs1,Laz1,T1),
+      !,
+      append(NewsP,News1,News2), append(InsP,Ins1,Ins2), append(LazP,Laz1,Laz2),
+      append(OutsP,Outs1,Outs2), append(RefsP,Refs1,Ref2),
+      gpu_unique(News2,News), gpu_unique(Ins2,Ins), gpu_unique(Laz2,Lazies),
+      gpu_unique(Outs2,Outs), gpu_unique(Ref2,Refs),
+      TM is T0+T1
+    );(
+      gpu_getForNewInOutRefLazies(Types,TopGID,Vars,T,News,Ins,Outs,Refs,Lazies,TM)
+    )
+   ),
+   !.
+
+@gpu_check_no_multidim_or_glob([]):-!.
+
+@gpu_check_no_multidim_or_glob([loc(_,_,type(_,[]))|T]):-
+   gpu_check_no_multidim_or_glob(T),
+   !.
+
+@gpu_check_no_multidim_or_glob([global(_,_)|_]):-
+   !,
+   fail.
+
+@gpu_check_no_multidim_or_glob([loc(_,_,type(_,['['|IDXS]))|T]):-
+   append(_,[']'|Rest],IDXS),
+   !,
+   (=(Rest,[])->
+     (gpu_check_no_multidim_or_glob(T), !);
+     (!, fail)
+   ).
+
+@gpu_find_pivot([],_):-
+   !, fail.
+
+@gpu_find_pivot([loc(_,Pivot,type([id('__pivot')|_],['['|_]))|_],Pivot):-
+   !.
+
+@gpu_find_pivot([global(Pivot,type([id('__pivot')|_],['['|_]))|_],Pivot):-
+   !.
+
+@gpu_find_pivot([_|T],Pivot):-
+   gpu_find_pivot(T,Pivot).
+
+@gpu_add_modifiers([],[]):-!.
+
+@gpu_add_modifiers([loc(GID,Pivot,type([id('__pivot')|RestType],IDXS))|T],[loc(GID,Pivot,type([id('_pivot')|RestType],IDXS))|T1]):-
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_add_modifiers([loc(GID,Name,type(TYPE,[]))|T],[loc(GID,Name,type([id('_global')|TYPE],[]))|T1]):-
+   member('*',TYPE),
+   !,
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_add_modifiers([loc(GID,Name,type(TYPE,IDXS))|T],[loc(GID,Name,type([id('_global')|TYPE],IDXS))|T1]):-
+   \+ =(IDXS,[]),
+   \+ member('*',TYPE),
+   !,
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_add_modifiers([loc(GID,Name,type(TYPE,IDXS))|T],[loc(GID,Name,type(TYPE,IDXS))|T1]):-
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_add_modifiers([global(Pivot,type([id('__pivot')|RestType],IDXS))|T],[global(Pivot,type([id('_pivot')|RestType],IDXS))|T1]):-
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_add_modifiers([global(Name,type(TYPE,[]))|T],[global(Name,type([id('_global')|TYPE],[]))|T1]):-
+   member('*',TYPE),
+   !,
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_add_modifiers([global(Name,type(TYPE,IDXS))|T],[global(Name,type([id('_global')|TYPE],IDXS))|T1]):-
+   \+ =(IDXS,[]),
+   \+ member('*',TYPE),
+   !,
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_add_modifiers([global(Name,type(TYPE,IDXS))|T],[global(Name,type(TYPE,IDXS))|T1]):-
+   gpu_add_modifiers(T,T1),
+   !.
+
+@gpu_not_used(_).
+
+% Альтернативы из switch {}
+@gpu_traverse_alters([CurGID|GIDs], [TopGID|StackGIDs], [switch(TopGID,Pass)|StackConstrs], StackConstrs, Vars, Time, Used0, Used, NEWS0, NEWS, NAlt):-
+   gpu_op('clsAlternation',CurGID,_,[],_),
+   (
+    (append(ALT,[NextGID|_],GIDs),gpu_op('clsOper',NextGID,_,[],_),db_content('args',NextGID,[['op','break']]),!)->
+       (
+        !,
+        gpu_traverse_fun(ALT,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,Used0,Used1,NEWS0,NEWS1,T1),
+        !
+       );
+       (
+        gpu_traverse_fun(GIDs,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,Used0,Used1,NEWS0,NEWS1,T1),
+        !
+       )
+   ),
+   retractall(gpu_break(_)),
+   (
+    (append(_,[NextGID1|Rest1],GIDs),gpu_op('clsAlternation',NextGID1,_,[],_))->(
+       !,
+       gpu_traverse_alters([NextGID1|Rest1],[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,T2,Used1,Used,NEWS1,NEWS,NAlt1),
+       Time is T1+T2,
+       NAlt is NAlt1+1,
+       !
+    );(
+       =(Time,T1), =(NAlt,1), =(Used,Used1), =(NEWS,NEWS1),
+       !
+    )
+   ),
+   !.
+
+@gpu_traverse_alters([], [TopGID|_], [switch(TopGID,_)|CRest], CRest, _, 0.0, Used, Used, NEWS, NEWS, 0):-!.
+
+% Окончание while
+@gpu_traverse_fun([], [TopGID|StackGIDs], [while(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsWhile',TopGID,_,[_],Ops),
+   !,
+   gpu_getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,News,Ins,Outs,_,_,BaseTime),
+   !,
+   gpu_union(Used0, Ins, Used1), gpu_union(Used1, Outs, Used2), gpu_union(NEWS0, News, NEWSX), !,
+   (
+    (predicate_property(gpu_continue(_),'dynamic'), gpu_continue(_))->(
+      =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+    );(
+      =(CONT,0)
+    )
+   ),
+   retractall(gpu_continue(_)),
+   (
+    (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+       retractall(gpu_break(_)),
+       =(T1,0.0), =(Used, Used2), =(NEWS, NEWSX)
+      );(
+       =(Pass,1)->
+         ( % IGID внутреннего оператора мог измениться
+          gpu_op('clsWhile',TopGID,_,[IGID1],_),
+          gpu_traverse_fun([IGID1],[TopGID|StackGIDs],[while(TopGID,2)|StackConstrs],_,[LVars|Vars],Used2,Used,NEWSX,NEWS,T1)
+         );
+         (=(T1,0.0), =(Used, Used2), =(NEWS, NEWSX))
+      )
+   ),
+   (
+    (=(CONT,1))->(
+      Time is BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+    );(
+      Time is T1+BaseTime
+    )
+   ),
+   !.
+
+% Прерывание break
+@gpu_traverse_fun([CurGID|_], StackGIDs, [Top|StackConstrs], StackConstrs, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsOper',CurGID,_,[],_),
+   db_content('args',CurGID,[['op','break']]),
+   !,
+   asserta(gpu_break(CurGID)),
+   =..(Top,[_,TopGID,_]),
+   !, % Цикл выхода из конструкций верхнего уровня
+     asserta(vr(Vars)), asserta(tm(0.0)), asserta(us(Used0)), asserta(nw(NEWS0)),
+     append(_,[CurTopGID|Rest],StackGIDs),
+     once(vr(VAR0)), once(tm(T0)), once(us(U0)), once(nw(N0)),
+     gpu_traverse_fun([],[CurTopGID|Rest],[Top|StackConstrs],_,VAR0,U0,U1,N0,N1,TT),
+     T1 is T0+TT,
+     retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
+     =(VAR0,[_|VAR1]),
+     asserta(vr(VAR1)), asserta(tm(T1)), asserta(us(U1)), asserta(nw(N1)),
+     =(TopGID,CurTopGID), % Проверка -- условие окончания цикла
+   !,
+   =(Time,T1), =(Used,U1), =(NEWS,N1),
+   retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
+   !.
+
+% Возобновление continue
+@gpu_traverse_fun([CurGID|_], StackGIDs, StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsOper',CurGID,_,[],_),
+   db_content('args',CurGID,[['op','continue']]),
+   !,
+   asserta(gpu_continue(CurGID)),
+   !, % Цикл выхода из конструкций верхнего уровня
+     asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(tm(0.0)), asserta(us(Used0)), asserta(nw(NEWS0)),
+     append(_,[CurTopGID|Rest],StackGIDs),
+     once(st(ST0)), once(vr(VAR0)), once(tm(T0)), once(us(U0)), once(nw(N0)),
+     gpu_traverse_fun([],[CurTopGID|Rest],ST0,ST1,VAR0,U0,U1,N0,N1,TT),
+     T1 is T0+TT,
+     retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
+     =(VAR0,[_|VAR1]),
+     asserta(st(ST1)), asserta(vr(VAR1)), asserta(tm(T1)), asserta(us(U1)), asserta(nw(N1)),
+     \+ gpu_continue(CurGID), % Проверка -- условие окончания цикла
+   !,
+   =(OutCStack,ST1), =(Time,T1), =(Used,U1), =(NEWS,N1),
+   retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
+   !.
+
+% Возврат return
+@gpu_traverse_fun([CurGID|_], StackGIDs, StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsReturn',CurGID,_,[],_),
+   !, % Цикл выхода из конструкций верхнего уровня
+     asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(tm(0.0)), asserta(us(Used0)), asserta(nw(NEWS0)),
+     append(_,[CurTopGID|Rest],StackGIDs),
+     once(st(ST0)), once(vr(VAR0)), once(tm(T0)), once(us(U0)), once(nw(N0)),
+     gpu_traverse_fun([],[CurTopGID|Rest],ST0,ST1,VAR0,U0,U1,N0,N1,TT),
+     T1 is T0+TT,
+     retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
+     =(VAR0,[_|VAR1]),
+     asserta(st(ST1)), asserta(vr(VAR1)), asserta(tm(T1)), asserta(us(U1)), asserta(nw(N1)),
+     =(Rest,[-1]), % Проверка -- условие окончания цикла
+   !,
+   =(OutCStack,ST1), =(Time,T1), =(Used,U1), =(NEWS,N1),
+   retractall(st(_)), retractall(vr(_)), retractall(tm(_)), retractall(us(_)), retractall(nw(_)),
+   !.
+
+% Окончание do-while
+@gpu_traverse_fun([], [TopGID|StackGIDs], [do(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsDo',TopGID,LastGID,[_],Ops),
+   !,
+   gpu_getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,News,Ins,Outs,_,_,BaseTime),
+   !,
+   gpu_union(Used0, Ins, Used1), gpu_union(Used1, Outs, Used2), gpu_union(NEWS0, News, NEWSX), !,
+   (
+    (predicate_property(gpu_continue(_),'dynamic'), gpu_continue(_))->(
+      =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+    );(
+      =(CONT,0)
+    )
+   ),
+   retractall(gpu_continue(_)),
+   (
+    (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+       retractall(gpu_break(_)),
+       =(T2,0.0), =(Used,Used2), =(NEWS,NEWSX)
+      );(
+       =(Pass,1)->
+         ( % IGID внутреннего оператора мог измениться
+          gpu_op('clsDo',TopGID,LastGID,[IGID1],_),
+          gpu_traverse_fun([IGID1],[TopGID|StackGIDs],[do(TopGID,2)|StackConstrs],_,[LVars|Vars],Used2,Used,NEWSX,NEWS,T2)
+         );
+         (=(T2,0.0), =(Used,Used2), =(NEWS,NEWSX))
+      )
+   ),
+   (
+    (=(CONT,1))->(
+      Time is BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+    );(
+      Time is T2+BaseTime
+    )
+   ),
+   !.
+
+% Окончание for
+@gpu_traverse_fun([], [TopGID|StackGIDs], [for(TopGID,Pass)|StackConstrs], StackConstrs, [LVars|Vars], Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsFor',TopGID,_,[_],Ops),
+   !,
+   gpu_getForNewInOutRefLazies(['cond','chng'],TopGID,[LVars|Vars],Ops,News,Ins,Outs,_,_,BaseTime),
+   !,
+   gpu_union(Used0, Ins, Used1), gpu_union(Used1, Outs, Used2), gpu_union(NEWS0, News, NEWSX), !,
+   (
+    (predicate_property(gpu_continue(_),'dynamic'), gpu_continue(_))->(
+      =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+    );(
+      =(CONT,0)
+    )
+   ),
+   retractall(gpu_continue(_)),
+   (
+    (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+       retractall(gpu_break(_)),
+       =(T2,0.0), =(Used,Used2), =(NEWS,NEWSX)
+      );(
+       =(Pass,1)->
+         ( % IGID внутреннего оператора мог измениться
+          gpu_op('clsFor',TopGID,_,[IGID1],_),
+          gpu_traverse_fun([IGID1],[TopGID|StackGIDs],[for(TopGID,2)|StackConstrs],_,[LVars|Vars],Used2,Used,NEWSX,NEWS,T2),
+          gpu_put_for_time(TopGID,T2)
+         );
+         (=(T2,0.0), =(Used,Used2), =(NEWS, NEWSX))
+      )
+   ),
+   (
+    (=(CONT,1))->(
+      Time is BaseTime % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
+    );(
+      Time is T2+BaseTime
+    )
+   ),
+   !.
+
+% Окончание произвольного {}
+@gpu_traverse_fun([], [TopGID|_], StackConstrs, StackConstrs, _, Used, Used, NEWS, NEWS, 0.0):-
+   gpu_op('clsBegin',TopGID,_,_,_),
+   !.
+
+% Окончание функции
+@gpu_traverse_fun([], [-1], StackConstrs, StackConstrs, _, Used, Used, NEWS, NEWS, 0.0):-
+   !.
+
+% Окончание произвольного (не{}) оператора. Может вызываться в операторе окончания различных конструктов
+@gpu_traverse_fun([], [TopGID|_], StackConstrs, StackConstrs, _, Used, Used, NEWS, NEWS, 0.0):-
+   \+ gpu_op('clsBegin',TopGID,_,_,_),
+   !.
+
+% Полный if-else, IGIDs = [IfGID,EGID]. Краткий if -- обрабатывается обычным образом, IGIDs = [IfGID]
+@gpu_traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsIf',CurGID,_,[IfGID,EGID],Ops),
+   !,
+   gpu_getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
+   !,
+   gpu_union(Ins, Outs, Used2), !,
+   gpu_traverse_fun([IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used30,News,NEWS30,T20),
+   gpu_traverse_fun([EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used31,News,NEWS31,T21),
+   gpu_union(Used30,Used31,Used3X), gpu_union(Used0, Used3X, Used3XX),
+   gpu_union(NEWS30, NEWS31, NEWS3X), subtract(Used3X, NEWS3X, Used3E), !,
+   gpu_not_used(Used3E),
+   gpu_traverse_fun(GIDs,[TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3XX,Used,NEWS0,NEWS,T3),
+   Time is BaseTime+0.5*(T20+T21)+T3,
+   !.
+
+% Полный while
+@gpu_traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsWhile',CurGID,_,[IGID],Ops),
+   !,
+   gpu_getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
+   !,
+   gpu_union(Ins, Outs, Used2), !,
+   gpu_traverse_fun([IGID],[CurGID,TopGID|StackGIDs],[while(CurGID,1)|StackConstrs],_,[News|Vars],Used2,Used3,News,NEWSX,T2),
+   !,
+   gpu_union(Used0, Used3, Used3X), subtract(Used3, NEWSX, Used3E), !,
+   gpu_not_used(Used3E),
+   gpu_traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3X,Used,NEWS0,NEWS,T3),
+   Time is BaseTime+T2+T3,
+   !.
+
+% Полный for
+@gpu_traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsFor',CurGID,_,[IGID],Ops),
+   !,
+   gpu_getForNewInOutRefLazies(['init','cond'],CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
+   !,
+   gpu_union(Ins, Outs, Used2), !,
+   gpu_traverse_fun([IGID],[CurGID,TopGID|StackGIDs],[for(CurGID,1)|StackConstrs],_,[News|Vars],Used2,Used3,News,NEWS1,T2),
+   !,
+   gpu_union(Used3, Used0, Used3X), subtract(Used3, NEWS1, Used3E), !,
+   retractall(gpu_for_interface(CurGID,_)),
+   retractall(omp_for_interface(CurGID,_)),
+   (
+    once(gpu_check_no_multidim_or_glob(Used3E)),
+    once(gpu_add_modifiers(Used3E,Used3F)),
+    ( once(gpu_find_pivot(Used3E,_))-> asserta(gpu_for_interface(CurGID,Used3F));asserta(omp_for_interface(CurGID,Used3F)) );
+    true
+   ),
+   !,
+   gpu_traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3X,Used,NEWS0,NEWS,T3),
+   Time is BaseTime+T2+T3,
+   !.
+
+% Полный do-while
+@gpu_traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsDo',CurGID,_,[IGID],_),
+   !,
+   gpu_traverse_fun([IGID],[CurGID,TopGID|StackGIDs],[do(CurGID,1)|StackConstrs],_,[[]|Vars],[],Used1,[],NEWS1,T1),
+   !,
+   gpu_union(Used0, Used1, Used1X), subtract(Used1, NEWS1, Used1E), !,
+   gpu_not_used(Used1E),
+   gpu_traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used1X,Used,NEWS0,NEWS,T2),
+   Time is T1+T2,
+   !.
+
+% switch
+@gpu_traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   gpu_op('clsSwitch',CurGID,_,[IGID],Ops),
+   gpu_op('clsBegin',IGID,_,IGIDs,_),
+   !,
+   gpu_getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
+   !,
+   gpu_union(Ins, Outs, Used2), !,
+   gpu_traverse_alters(IGIDs,[CurGID,TopGID|StackGIDs],[switch(CurGID,1)|StackConstrs],_,[News|Vars],TNN,Used2,Used3,News,NEWS1,NAlt),
+   !,
+   gpu_union(Used0, Used3, Used3X), subtract(Used3, NEWS1, Used3E), !,
+   gpu_not_used(Used3E),
+   gpu_traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used3X,Used,NEWS0,NEWS,T2),
+   (
+    =(NAlt,0)->
+      Time is BaseTime+T2;
+      Time is BaseTime+TNN/NAlt+T2
+   ),
+   !.
+
+@gpu_traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
+   (predicate_property(gpu_break(_),'dynamic'), gpu_break(_))->(
+      gpu_traverse_fun([], [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Used0,Used,NEWS0,NEWS,Time),
+      !
+   );(
+      gpu_op(_,CurGID,_,IGIDs,Ops),
+      !,
+      gpu_getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
+      gpu_union(Ins, Outs, Used2), !,
+      ( % Если это запуск процедуры, то прибавляем время ее исполнения
+       gpu_op(_,CurGID,_,[],[arg(_,_,_,_,[proc(Fun,Prms)],_,_,_)])->
+         (gpu_getTime([proc(Fun,Prms)],TSP1), g_read('$DefOperTime',TOp0), TSP is TSP1-TOp0);
+         =(TSP,0.0)
+      ),
+      gpu_addLocals(Vars,News,Vars1),
+      !,
+      gpu_traverse_fun(IGIDs,[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used3,News,NEWS1,T2),
+      gpu_union(Used0, Used3, Used3X), gpu_union(NEWS0, NEWS1, NEWSX), !,
+      gpu_traverse_fun(GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars1,Used3X,Used,NEWSX,NEWS,T3),
+      Time is TSP+BaseTime+T2+T3,
+      !
+   ).
+
+@gpu_process_fun(Fun,GID,NPrms):-
+   retractall(gpu_break(_)),
+   retractall(gpu_continue(_)),
+   gpu_globals(GLOB),
+   gpu_glob_prefixate(GLOB,G1),
+   gpu_get_fparams(all,Fun,NPrms,PARMS),
+   gpu_loc_prefixate(GID,PARMS,P1),
+   gpu_traverse_fun([GID],[-1],[],_,[P1,G1],[],_,[],_,Time),
+   gpu_put_ftime(Fun,NPrms,Time),
+   !.
+
+@gpu_bypass_sequence([],[],[]):-!.
+
+@gpu_bypass_sequence([gid('clsEnd',GID)|T],[],[gid('clsEnd',GID)|T]):-
+   !.
+
+@gpu_bypass_sequence([gid('clsBegin',GID)|T],TT,T3):-
+   gpu_bypass_complex([gid('clsBegin',GID)|T],T0,T1),
+   gpu_bypass_sequence(T1,T2,T3),
+   append(T0,T2,TT),
+   !.
+
+@gpu_bypass_sequence([H|T],[H|T1],T2):-
+   gpu_bypass_sequence(T,T1,T2),
+   !.
+
+@gpu_bypass_complex([gid('clsBegin',GID)|T],[gid('clsBegin',GID)|T1],T2):-
+   gpu_bypass_sequence(T,T0,[gid('clsEnd',GID2)|T2]),
+   append(T0,[gid('clsEnd',GID2)],T1).
+
+@gpu_bypass_op([A|T],[A|BeforeWith],After):-
+   member(A,[gid('clsFor',_),gid('clsSwitch',_),gid('clsWhile',_)]),
+   !,
+   gpu_bypass_op(T,BeforeWith,After),
+   !.
+
+@gpu_bypass_op([gid('clsDo',GID)|T],[gid('clsDo',GID)|T1],T2):-
+   gpu_bypass_op(T,BeforeWhile,[gid('clsWhile',GIDW),gid('clsOper',EMPTY)|T2]),
+   append(BeforeWhile,[gid('clsWhile',GIDW),gid('clsOper',EMPTY)],T1),
+   !.
+
+@gpu_bypass_op([gid('clsIf',GID)|T],[gid('clsIf',GID)|T1],T2):-
+   gpu_bypass_op(T,BeforeWith,[A|AfterT]),
+   (
+    =(gid('clsElse',_),A)->(
+      gpu_bypass_op(AfterT,BeforeWith2,T2),
+      append(BeforeWith,[A|BeforeWith2],T1),
+      !
+    );(
+      =(T1,BeforeWith),=(T2,[A|AfterT]),!
+    )
+   ),
+   !.
+
+@gpu_bypass_op([gid('clsBegin',GID)|T],T1,T2):-
+   gpu_bypass_complex([gid('clsBegin',GID)|T],T1,T2),
+   !.
+
+@gpu_bypass_op([A|T],[A],T):-!.
+
+@gpu_insert_ending_bracket(L1,L2):-
+   gpu_bypass_op(L1,BeforeWith,After),
+   !,
+   append(BeforeWith,[gid('clsEnd',-1)|After],L2),
+   !.
+
+@gpu_into_atom([],_,''):-
+   !.
+
+@gpu_into_atom([id(V)|T],Gap,A):-
+   gpu_into_atom(T,Gap,A1),
+   atom_concat(V,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@gpu_into_atom([real(V)|T],Gap,A):-
+   gpu_into_atom(T,Gap,A1),
+   atom_concat(V,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@gpu_into_atom([integ(V)|T],Gap,A):-
+   gpu_into_atom(T,Gap,A1),
+   atom_concat(V,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@gpu_into_atom([Z|T],Gap,A):-
+   gpu_into_atom(T,Gap,A1),
+   atom_concat(Z,Gap,A2),
+   atom_concat(A2,A1,A),
+   !.
+
+@gpu_write_interface(S, []):-
+   write(S, '_'),
+   !.
+
+@gpu_write_interface(S, [loc(_,Name,type(TYPE,[]))]):-
+   gpu_into_atom(TYPE,' ', ATYPE),
+   !,
+   write(S, ATYPE), write(S, ' '), write(S, Name),
+   !.
+
+@gpu_write_interface(S, [loc(_,Name,type(TYPE,IDX))]):-
+   gpu_into_atom(TYPE,' ', ATYPE),
+   !,
+   gpu_into_atom(IDX,'', AIDX),
+   !,
+   write(S, ATYPE), write(S, ' '), write(S, Name), write(S, AIDX),
+   !.
+
+@gpu_write_interface(S, [ITEM]):- write(S, ITEM), !.
+
+@gpu_write_interface(S, [A,B|T]):-
+   gpu_write_interface(S, [A]),
+   !,
+   write(S, ','),
+   gpu_write_interface(S, [B|T]),
+   !.
+
+@gpu_write_omp_interface(S, [], ''):-
+   write(S, '_'),
+   !.
+
+@gpu_write_omp_interface(S, [loc(_,_,type([id('_global')|_],_))], ''):-
+   !.
+
+@gpu_write_omp_interface(S, [loc(_,Name,_)], ','):-
+   write(S, Name),
+   !.
+
+@gpu_write_omp_interface(S, [ITEM], ','):- write(S, ITEM), !.
+
+@gpu_write_omp_interface(S, [A,B|T], ','):-
+   gpu_write_omp_interface(S, [A], C),
+   !,
+   write(S, C),
+   gpu_write_omp_interface(S, [B|T], _),
+   !.
+
+@gpu_restructure_program:-
+   asserta(gpu_new_id(10000)),
+   (predicate_property(gpu_for(_),'dynamic'), gpu_for(GID), gpu_for_interface(GID,_)),
+   gpu_new_id(NewBegGID),
+   global_trace(TR),
+   once(\+(append(_,[gid('clsFor',GID),gid('clsBegin',_)|_],TR))),
+   retractall(gpu_new_id(_)),
+   NewestGID is NewBegGID + 2,
+   NewEndGID is NewBegGID + 1,
+   asserta(gpu_new_id(NewestGID)),
+   asserta(db_content('prog',NewBegGID,[['{']])),
+   asserta(db_content('prog',NewEndGID,[['}']])),
+   once(append(Left,[gid(C,GID)|Right],TR)),
+   once(gpu_bypass_op([gid(C,GID)|Right],_,[NEXT|RIGHT])),
+   once(append(BODY,[NEXT|RIGHT],Right)),
+   once(append(Left,[gid(C,GID),gid('clsBegin',NewBegGID)|BODY],L1)),
+   once(append(L1,[gid('clsEnd',NewEndGID)|[NEXT|RIGHT]],TR1)),
+   retractall(global_trace(_)),
+   asserta(global_trace(TR1)),
+   fail.
+
+@gpu_restructure_program.  
+
+@gpu_process_all_funs:-
+  predicate_property(gpu_function(_,_,_),'dynamic'),
+  gpu_function(Fun,GID,NPrms),
+  once(gpu_process_fun(Fun,GID,NPrms)),
+  gpu_get_ftime(Fun,NPrms,_), % Time
+%  write(Fun),write(':'),write(Time),nl,
+  fail.
+
+@gpu_process_all_funs:-
+%  write('--------------'), nl,
+  !.
+
+@gpu_iterative_times(0):-!.
+
+% Итерационный алгоритм пересчета времен исполнения функций. Алгоритм заканчивается, когда
+% времена исполнения практически перестают меняться (+/-1) или превышено число итераций N
+@gpu_iterative_times(N):-
+  retractall(gpu_retime),
+  gpu_process_all_funs,
+  gpu_retime,
+  !,
+  N1 is N-1,
+  gpu_iterative_times(N1).
+
+@gpu_iterative_times(_):-!.
+
+@gpu_sum([],0.0):-!.
+
+@gpu_sum([H|T],S):-
+  gpu_sum(T,S0),
+  S is S0+H,
+  !.
+
+@gpu_avr([],0.0):-!.
+
+@gpu_avr(L,Avr):-
+  gpu_sum(L,S),
+  length(L,N),
+  Avr is S/N.
+
+@gpu_processing:-
+  gpu_prepare_data,
+  gpu_iterative_times(15), % Предсказываем время исполнения функций
+  gpu_handle_fors(0,15),
+  gpu_restructure_program.
+
 @atom_collect_global_trace:-
   prog(Cls, GID, _, _),
   global_trace(G),
@@ -6648,11 +9412,21 @@
   g_assign('$SyncTime', 5.0), % Время, затрачиваемое собственно вызовом sync (без ожидания)
   g_assign('$SplittedTime', 25.0), % Время исполнения splitted по умолчанию
   g_assign('$DefOperTime', 1.0), % Время исполнения элементарного математического выражения без функций по умолчанию
+  g_assign('$GPUSpawnTime', 35.0), % Время, затрачиваемое GPU-мастер-процессом на ответвление spawn-процесса
+  g_assign('$OMPSpawnTime', 10.0), % Время, затрачиваемое OMP-мастер-процессом на ответвление openmp-spawn-процесса
+  g_assign('$GPUSyncTime', 15.0), % Время, затрачиваемое слиянием ответвленных GPU-процессов (без ожидания)
+  g_assign('$OMPSyncTime', 5.0), % Время, затрачиваемое слиянием ответвленных OMP-процессов (без ожидания)
   clk_processing,
+  !,
+  (
+   (predicate_property(cilk_auto_omp_gpu_for,'dynamic'), cilk_auto_omp_gpu_for)->
+     once(gpu_processing);
+     true
+  ),
   !,
   atom_processing,
   !,
-  clk_recreate_program('_atomic_cilk.cpp').
+  clk_recreate_program('_atomic_cilk_gpu_omp.cpp').
 
 @goal:-
   main_debug.

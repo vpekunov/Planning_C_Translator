@@ -1392,7 +1392,7 @@ Var ConsultFile, OutFile: TextFile;
     Goals, Expanded: TStringList;
     _Consts: TStringList;
     ByPass: Boolean;
-    I,F,G,K,H,Q: Integer;
+    I,F,G,G1,K,H,Q: Integer;
     Rslt: Real;
     Flag: Boolean;
 begin
@@ -1456,6 +1456,17 @@ begin
                          Flag := L.Check(RightBracket)
                     End;
                 LineDelimiter := #$07;
+                G1 := LCounter;
+                S := L.AnlzLine;
+                S1 := Trim(L.GetBalancedListItem(True, [SemiColon], @GetLineFromLines));
+                L.AnlzLine := S;
+                For F := G1 To LCounter Do
+                    Begin
+                      S := Trim(Lines.Strings[F-1]);
+                      If (Length(S) > 0) And (S[1] = '%') Then
+                         Lines.Strings[F-1] := ''
+                    End;
+                LCounter := G1;
                 S1 := Trim(L.GetBalancedListItem(True, [SemiColon], @GetLineFromLines));
                 LineDelimiter := '';
                 If Length(S1) > 1 Then

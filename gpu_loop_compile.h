@@ -1384,6 +1384,12 @@
    analyze_expr(L,INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES),
    !.
 
+@prepare_ops('clsGPUPreproc',GID,[arg([],[],[],[],[],[],[],[L])]):-
+   db_content('args',GID,[[_,Opnd]]),
+   !,
+   parse_expr(Opnd,L),
+   !.
+
 @prepare_ops('clsGPUAlternation',GID,[arg(INS,OUTS,NEWS,FUNS,PROCS,REFS,LAZIES,[L])]):-
    db_content('args',GID,[[_,Opnd]]),
    !,
