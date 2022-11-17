@@ -5,7 +5,8 @@
 #include "atomic_cilk_gpu_omp_compile.h"
 
 #pragma auto for
-#pragma auto omp_gpu for
+#pragma auto omp for
+#pragma auto gpu for
 #pragma auto parallelize
 
 #pragma auto pure(malloc,fabs,free,sizeof,omp_get_wtime)

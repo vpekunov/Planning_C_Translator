@@ -221,7 +221,8 @@
 @goal:-brackets_off.
 
 % #pragma auto for -- включает Cilk-автораспараллеливание циклов
-% #pragma auto omp_gpu for -- включает GPU/OpenMP-автораспараллеливание циклов
+% #pragma auto omp for -- включает OpenMP-автораспараллеливание циклов
+% #pragma auto gpu for -- включает GPU-автораспараллеливание циклов
 % #pragma auto pure(fun1,fun2,...) -- обозначает функции без сторонних эффектов по отношению к текущей итерации цикла for
 % #pragma auto split(auto|(var1[N1],var2[N1][N2],var3,...)) [omp-params] -- помечает цикл как потенциально параллелизуемый расщеплением
 % split_private type var-decl -- помечает переменную как локальную при распараллеливании циклов. “акие переменные попадают в private-пометки,
@@ -2186,7 +2187,8 @@
    retractall(cilk_auto_for),
    asserta(par_for('')), retractall(par_for(_)),
    asserta(par_for_time('','')), retractall(par_for_time(_,_)),
-   asserta(cilk_auto_omp_gpu_for),retractall(cilk_auto_omp_gpu_for),
+   asserta(cilk_auto_omp_for),retractall(cilk_auto_omp_for),
+   asserta(cilk_auto_gpu_for),retractall(cilk_auto_gpu_for),
    retractall(cilk_for_time(_,_)),
    asserta(cilk_retime), retractall(cilk_retime),
    asserta(cilk_reanalyze), retractall(cilk_reanalyze),
@@ -2233,19 +2235,37 @@
    ),
    !,
    (
-    (db_content('prog',GID2,[['preproc']]),db_content('args',GID2,[[body,S2]]),clk_parse_expr(S2,['#',id('pragma'),id('auto'),id('omp_gpu'),id('for')]))->
+    (db_content('prog',GID2,[['preproc']]),db_content('args',GID2,[[body,S2]]),clk_parse_expr(S2,['#',id('pragma'),id('auto'),id('omp'),id('for')]))->
      (
       !,
       (
-       (predicate_property(cilk_auto_omp_gpu_for,'dynamic'), cilk_auto_omp_gpu_for)->
+       (predicate_property(cilk_auto_omp_for,'dynamic'), cilk_auto_omp_for)->
          true;
-         asserta(cilk_auto_omp_gpu_for)
+         asserta(cilk_auto_omp_for)
       ),
       once(global_trace(GTRW)),
       append(LEFTRW,[gid(_,GID2)|RIGHTRW],GTRW),
       append(LEFTRW,RIGHTRW,GTR2W),
       once(retractall(global_trace(_))),
       once(asserta(global_trace(GTR2W)))
+     );
+     true
+   ),
+   !,
+   (
+    (db_content('prog',GID3,[['preproc']]),db_content('args',GID3,[[body,S3]]),clk_parse_expr(S3,['#',id('pragma'),id('auto'),id('gpu'),id('for')]))->
+     (
+      !,
+      (
+       (predicate_property(cilk_auto_gpu_for,'dynamic'), cilk_auto_gpu_for)->
+         true;
+         asserta(cilk_auto_gpu_for)
+      ),
+      once(global_trace(GTRG)),
+      append(LEFTRG,[gid(_,GID3)|RIGHTRG],GTRG),
+      append(LEFTRG,RIGHTRG,GTR2G),
+      once(retractall(global_trace(_))),
+      once(asserta(global_trace(GTR2G)))
      );
      true
    ),
@@ -8361,15 +8381,19 @@
        (
         TSEQ is 8*T,
         (
-          (g_read('$GPUSpawnTime',TSPG), g_read('$GPUSyncTime',TSYG), TPARGPU is TSPG + 2*T + TSYG)
+          (predicate_property(cilk_auto_gpu_for,'dynamic'), cilk_auto_gpu_for)->
+            (g_read('$GPUSpawnTime',TSPG), g_read('$GPUSyncTime',TSYG), TPARGPU is TSPG + 2*T + TSYG);
+            TPARGPU is 400000.0
         ),
         (
-          (g_read('$OMPSpawnTime',TSPO), g_read('$OMPSyncTime',TSYO), TPAROMP is TSPO + 2*T + TSYO)
+          (predicate_property(cilk_auto_omp_for,'dynamic'), cilk_auto_omp_for)->
+            (g_read('$OMPSpawnTime',TSPO), g_read('$OMPSyncTime',TSYO), TPAROMP is TSPO + 2*T + TSYO);
+            TPAROMP is 400000.0
         )
        );
        ( TPARGPU is 400000.0, TPAROMP is 400000.0, TSEQ is 0.0)
    ),
-   once(( TPARGPU < TPARCILK; TPAROMP < TPARCILK )),
+   once(( (TPARGPU < TPARCILK); (TPAROMP < TPARCILK) )),
    once(( TPARGPU < TSEQ; TPAROMP < TSEQ )),
    member(init(_,_,_,_,_,_,_,[[id(Counter),'='|_]]),Exprs),
    (
@@ -8396,11 +8420,15 @@
    once(gpu_block_has_no_derefs(LGIDs)),
    once(gpu_get_fblock_deps(LGIDs)),
    once(gpu_for_content(Counter,LGIDs)),
-   ( (predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_), TPARGPU < TPAROMP)->
+   ( (predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_), cilk_auto_gpu_for, TPARGPU < TPAROMP, TPARGPU < TSEQ)->
        (once(gpu_mark_fblock_deps(LGIDs)), asserta(gpu_for(GID)), retractall(cilk_for(GID)),
         retractall(par_for(GID)), asserta(par_for(GID)), retractall(par_for_time(GID,_)), asserta(par_for_time(GID, TPARGPU)));
-       (asserta(omp_for(GID)), retractall(cilk_for(GID)),
-        retractall(par_for(GID)), asserta(par_for(GID)), retractall(par_for_time(GID,_)), asserta(par_for_time(GID, TPAROMP))
+       (
+        (predicate_property(omp_for_interface(_,_),'dynamic'), omp_for_interface(GID,_), cilk_auto_omp_for, TPAROMP < TSEQ)->
+         (asserta(omp_for(GID)), retractall(cilk_for(GID)),
+          retractall(par_for(GID)), asserta(par_for(GID)), retractall(par_for_time(GID,_)), asserta(par_for_time(GID, TPAROMP))
+         );
+         true
        )
    ),
    !.
@@ -9419,7 +9447,10 @@
   clk_processing,
   !,
   (
-   (predicate_property(cilk_auto_omp_gpu_for,'dynamic'), cilk_auto_omp_gpu_for)->
+   (
+    (predicate_property(cilk_auto_omp_for,'dynamic'), cilk_auto_omp_for);
+    (predicate_property(cilk_auto_gpu_for,'dynamic'), cilk_auto_gpu_for)
+   )->
      once(gpu_processing);
      true
   ),
