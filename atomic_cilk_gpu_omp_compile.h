@@ -39,7 +39,7 @@
   @begin
     (\s|\\t)*
     (struct|union)->{TYPE}(\\n|\s|\\t)+
-    (((.{1,2048}?)->{EXPR}\;)?=>{Predicates.BAL($,';')})
+    ((((\w+)?\s*\{.{1,2048}?)->{EXPR}\})?=>{Predicates.BAL($,'}')}\s*\w+\s*\;)
     (\s|\\t)*
   @end
 };
@@ -162,7 +162,8 @@
   ((^)|\\n)(\s|\\t)*
   @begin
     (\s|\\t)*
-    (\#([^\\]*\\\\\\n)*[^\\]*(\\n|($))
+    (\#
+       ((include\s*\<[^\>]+\>\s*)|([^\\]*\\\\\\n)*[^\\]*)(\\n|($))
     )->{BODY}
     (\s|\\t)*
   @end
@@ -665,6 +666,12 @@
 
 @clk_rbypass_idxs(L,L,[],[],[],[]):-!.
 
+@clk_rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(','*',id(V),')'],L).
+
+@clk_rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(',id(V),')'],L).
+
 @clk_rbypass_var(L,V,R,INS,OUTS,FUNS,Lazies):-
    clk_rbypass_idxs(L,R0,INS0,OUTS0,FUNS0,LZ0),
    append(Left,[id(VV)],R0),
@@ -709,6 +716,23 @@
 @clk_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
    append(Left,[A,'='|Right],L),
    member(A,['+','-','*','/','|','&','^','%']),
+   !,
+   clk_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   clk_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   clk_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   clk_union(OUTST1,OUTST2,OUTST3), clk_union(OUTST3,Outs0,OUTST),
+   clk_union(Ins1,Ins2,Ins3), clk_union(Ins3,Ins0,Ins),
+   clk_union(Funs1,Funs2,Funs3), clk_union(Funs3,Funs0,Funs),
+   clk_union(Laz1,Laz2,Laz3), clk_union(Laz3,Laz0,Lazs),
+   !.
+
+@clk_get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
+   append(Left,['='|Right],L),
+   last(Left,A),
+   \+ member(A,['=','!','<','>']),
+   \+ =(Right,['='|_]),
    !,
    clk_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
    !,
@@ -766,23 +790,6 @@
    !,
    clk_get_assgns(Left,OUTST1,Ins1,Funs1,Laz1),
    clk_get_assgns(Right0,OUTST2,Ins2,Funs2,Laz2),
-   !,
-   clk_union(OUTST1,OUTST2,OUTST3), clk_union(OUTST3,Outs0,OUTST),
-   clk_union(Ins1,Ins2,Ins3), clk_union(Ins3,Ins0,Ins),
-   clk_union(Funs1,Funs2,Funs3), clk_union(Funs3,Funs0,Funs),
-   clk_union(Laz1,Laz2,Laz3), clk_union(Laz3,Laz0,Lazs),
-   !.
-
-@clk_get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
-   append(Left,['='|Right],L),
-   last(Left,A),
-   \+ member(A,['=','!','<','>']),
-   \+ =(Right,['='|_]),
-   !,
-   clk_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
-   !,
-   clk_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
-   clk_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
    !,
    clk_union(OUTST1,OUTST2,OUTST3), clk_union(OUTST3,Outs0,OUTST),
    clk_union(Ins1,Ins2,Ins3), clk_union(Ins3,Ins0,Ins),
@@ -3328,6 +3335,9 @@
   predicate_property(cilk_fprocs(_,_,_),'dynamic'),
   cilk_fprocs(_,_,GIDs),
   member(GID,GIDs),
+  cilk_op('clsOper',GID,_,[],[arg(_,_,_,_,[proc(Name,Prms)],_,_,_)]),
+  length(Prms, NPrms),
+  cilk_fdependent(Name,NPrms,f),
   asserta(cilk_spawn(GID)),
   fail.
 
@@ -3775,6 +3785,12 @@
 
 @atom_rbypass_idxs(L,L,[],[],[],[]):-!.
 
+@atom_rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(','*',id(V),')'],L).
+
+@atom_rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(',id(V),')'],L).
+
 @atom_rbypass_var(L,V,R,INS,OUTS,FUNS,Lazies):-
    atom_rbypass_idxs(L,R0,INS0,OUTS0,FUNS0,LZ0),
    append(Left,[id(VV)],R0),
@@ -3819,6 +3835,23 @@
 @atom_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
    append(Left,[A,'='|Right],L),
    member(A,['+','-','*','/','|','&','^','%']),
+   !,
+   atom_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   atom_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   atom_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   atom_union(OUTST1,OUTST2,OUTST3), atom_union(OUTST3,Outs0,OUTST),
+   atom_union(Ins1,Ins2,Ins3), atom_union(Ins3,Ins0,Ins),
+   atom_union(Funs1,Funs2,Funs3), atom_union(Funs3,Funs0,Funs),
+   atom_union(Laz1,Laz2,Laz3), atom_union(Laz3,Laz0,Lazs),
+   !.
+
+@atom_get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
+   append(Left,['='|Right],L),
+   last(Left,A),
+   \+ member(A,['=','!','<','>']),
+   \+ =(Right,['='|_]),
    !,
    atom_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
    !,
@@ -3876,23 +3909,6 @@
    !,
    atom_get_assgns(Left,OUTST1,Ins1,Funs1,Laz1),
    atom_get_assgns(Right0,OUTST2,Ins2,Funs2,Laz2),
-   !,
-   atom_union(OUTST1,OUTST2,OUTST3), atom_union(OUTST3,Outs0,OUTST),
-   atom_union(Ins1,Ins2,Ins3), atom_union(Ins3,Ins0,Ins),
-   atom_union(Funs1,Funs2,Funs3), atom_union(Funs3,Funs0,Funs),
-   atom_union(Laz1,Laz2,Laz3), atom_union(Laz3,Laz0,Lazs),
-   !.
-
-@atom_get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
-   append(Left,['='|Right],L),
-   last(Left,A),
-   \+ member(A,['=','!','<','>']),
-   \+ =(Right,['='|_]),
-   !,
-   atom_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
-   !,
-   atom_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
-   atom_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
    !,
    atom_union(OUTST1,OUTST2,OUTST3), atom_union(OUTST3,Outs0,OUTST),
    atom_union(Ins1,Ins2,Ins3), atom_union(Ins3,Ins0,Ins),
@@ -7025,6 +7041,12 @@
 
 @gpu_rbypass_idxs(L,L,[],[],[],[]):-!.
 
+@gpu_rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(','*',id(V),')'],L).
+
+@gpu_rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(',id(V),')'],L).
+
 @gpu_rbypass_var(L,V,R,INS,OUTS,FUNS,Lazies):-
    gpu_rbypass_idxs(L,R0,INS0,OUTS0,FUNS0,LZ0),
    append(Left,[id(VV)],R0),
@@ -7069,6 +7091,23 @@
 @gpu_get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
    append(Left,[A,'='|Right],L),
    member(A,['+','-','*','/','|','&','^','%']),
+   !,
+   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
+   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
+   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
+   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
+   !.
+
+@gpu_get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
+   append(Left,['='|Right],L),
+   last(Left,A),
+   \+ member(A,['=','!','<','>']),
+   \+ =(Right,['='|_]),
    !,
    gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
    !,
@@ -7126,23 +7165,6 @@
    !,
    gpu_get_assgns(Left,OUTST1,Ins1,Funs1,Laz1),
    gpu_get_assgns(Right0,OUTST2,Ins2,Funs2,Laz2),
-   !,
-   gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
-   gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),
-   gpu_union(Funs1,Funs2,Funs3), gpu_union(Funs3,Funs0,Funs),
-   gpu_union(Laz1,Laz2,Laz3), gpu_union(Laz3,Laz0,Lazs),
-   !.
-
-@gpu_get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
-   append(Left,['='|Right],L),
-   last(Left,A),
-   \+ member(A,['=','!','<','>']),
-   \+ =(Right,['='|_]),
-   !,
-   gpu_rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
-   !,
-   gpu_get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
-   gpu_get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
    !,
    gpu_union(OUTST1,OUTST2,OUTST3), gpu_union(OUTST3,Outs0,OUTST),
    gpu_union(Ins1,Ins2,Ins3), gpu_union(Ins3,Ins0,Ins),

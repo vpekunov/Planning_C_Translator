@@ -26,7 +26,7 @@
     <RunParams>
       <local>
         <FormatVersion Value="1"/>
-        <CommandLineParams Value="-nosourcelines reent_gpu_auto_parallelize.cpp reent1.cpp"/>
+        <CommandLineParams Value="-nosourcelines reent_auto_parallelize.cpp reent1.cpp"/>
         <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T 'Lazarus Run Output' -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
       </local>
     </RunParams>
@@ -34,9 +34,8 @@
       <Unit0>
         <Filename Value="Reenterable.lpr"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="627"/>
+        <TopLine Value="626"/>
         <CursorPos X="22" Y="558"/>
         <UsageCount Value="201"/>
         <Bookmarks Count="1">
@@ -50,8 +49,8 @@
         <UnitName Value="Lexique"/>
         <EditorIndex Value="12"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="315"/>
-        <CursorPos X="6" Y="317"/>
+        <TopLine Value="278"/>
+        <CursorPos Y="281"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit1>
@@ -89,7 +88,7 @@
         <EditorIndex Value="10"/>
         <WindowIndex Value="1"/>
         <CursorPos X="15"/>
-        <UsageCount Value="187"/>
+        <UsageCount Value="188"/>
         <Loaded Value="True"/>
       </Unit5>
       <Unit6>
@@ -100,7 +99,7 @@
         <WindowIndex Value="1"/>
         <TopLine Value="365"/>
         <CursorPos X="18" Y="374"/>
-        <UsageCount Value="187"/>
+        <UsageCount Value="188"/>
         <Loaded Value="True"/>
       </Unit6>
       <Unit7>
@@ -117,17 +116,18 @@
         <WindowIndex Value="1"/>
         <TopLine Value="689"/>
         <CursorPos X="45" Y="703"/>
-        <UsageCount Value="187"/>
+        <UsageCount Value="188"/>
         <Loaded Value="True"/>
       </Unit8>
       <Unit9>
         <Filename Value="PREPROC.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Preproc"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="5"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="472"/>
-        <CursorPos X="39" Y="486"/>
+        <TopLine Value="1451"/>
+        <CursorPos X="32" Y="1469"/>
         <UsageCount Value="200"/>
         <Bookmarks Count="1">
           <Item0 X="37" Y="1188"/>
@@ -158,7 +158,7 @@
         <WindowIndex Value="1"/>
         <TopLine Value="51"/>
         <CursorPos X="31" Y="133"/>
-        <UsageCount Value="187"/>
+        <UsageCount Value="188"/>
         <Loaded Value="True"/>
       </Unit12>
       <Unit13>
@@ -168,7 +168,7 @@
         <EditorIndex Value="1"/>
         <WindowIndex Value="1"/>
         <CursorPos X="29" Y="17"/>
-        <UsageCount Value="187"/>
+        <UsageCount Value="188"/>
         <Loaded Value="True"/>
       </Unit13>
       <Unit14>
@@ -232,126 +232,126 @@
         <UsageCount Value="5"/>
       </Unit20>
     </Units>
-    <JumpHistory Count="30" HistoryIndex="29">
+    <JumpHistory Count="30" HistoryIndex="28">
       <Position1>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="4660" TopLine="4652"/>
-      </Position1>
-      <Position2>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="4672" TopLine="4664"/>
-      </Position2>
-      <Position3>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="4660" TopLine="4652"/>
-      </Position3>
-      <Position4>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="4807" TopLine="4799"/>
-      </Position4>
-      <Position5>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="6" Column="42"/>
-      </Position5>
-      <Position6>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="1827" TopLine="1823"/>
-      </Position6>
-      <Position7>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="1828" TopLine="1823"/>
-      </Position7>
-      <Position8>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="3231" TopLine="3222"/>
-      </Position8>
-      <Position9>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2953" TopLine="2945"/>
-      </Position9>
-      <Position10>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2970" TopLine="2962"/>
-      </Position10>
-      <Position11>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="6341" TopLine="6333"/>
-      </Position11>
-      <Position12>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="1828" TopLine="1819"/>
-      </Position12>
-      <Position13>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="3231" TopLine="3222"/>
-      </Position13>
-      <Position14>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2966" TopLine="2951"/>
-      </Position14>
-      <Position15>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2858" Column="13" TopLine="2850"/>
-      </Position15>
-      <Position16>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="1827" TopLine="1819"/>
-      </Position16>
-      <Position17>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="3234" TopLine="3225"/>
-      </Position17>
-      <Position18>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2953" TopLine="2945"/>
-      </Position18>
-      <Position19>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2954" TopLine="2945"/>
-      </Position19>
-      <Position20>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2955" TopLine="2945"/>
-      </Position20>
-      <Position21>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2973" TopLine="2965"/>
-      </Position21>
-      <Position22>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="7" Column="89"/>
-      </Position22>
-      <Position23>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="150" Column="24" TopLine="119"/>
-      </Position23>
-      <Position24>
+      </Position1>
+      <Position2>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="2201" Column="58" TopLine="2170"/>
-      </Position24>
-      <Position25>
+      </Position2>
+      <Position3>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="2202" Column="56" TopLine="2171"/>
-      </Position25>
-      <Position26>
+      </Position3>
+      <Position4>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="2295" Column="58" TopLine="2264"/>
-      </Position26>
-      <Position27>
+      </Position4>
+      <Position5>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="2296" Column="56" TopLine="2265"/>
-      </Position27>
-      <Position28>
+      </Position5>
+      <Position6>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="28" Column="55" TopLine="23"/>
-      </Position28>
-      <Position29>
+      </Position6>
+      <Position7>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="363" Column="73" TopLine="332"/>
-      </Position29>
-      <Position30>
+      </Position7>
+      <Position8>
         <Filename Value="Reenterable.lpr"/>
         <Caret Line="4" Column="120"/>
+      </Position8>
+      <Position9>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="364" Column="32" TopLine="361"/>
+      </Position9>
+      <Position10>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="380" Column="44" TopLine="379"/>
+      </Position10>
+      <Position11>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="391" Column="50" TopLine="386"/>
+      </Position11>
+      <Position12>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="400" Column="15" TopLine="395"/>
+      </Position12>
+      <Position13>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="538" Column="30" TopLine="534"/>
+      </Position13>
+      <Position14>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="547" Column="17" TopLine="543"/>
+      </Position14>
+      <Position15>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Column="38"/>
+      </Position15>
+      <Position16>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="80" Column="36" TopLine="76"/>
+      </Position16>
+      <Position17>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="81" Column="36" TopLine="77"/>
+      </Position17>
+      <Position18>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="281" Column="20" TopLine="277"/>
+      </Position18>
+      <Position19>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1519" TopLine="1502"/>
+      </Position19>
+      <Position20>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="281" Column="20" TopLine="277"/>
+      </Position20>
+      <Position21>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="282" TopLine="277"/>
+      </Position21>
+      <Position22>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="381" TopLine="368"/>
+      </Position22>
+      <Position23>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="383" TopLine="368"/>
+      </Position23>
+      <Position24>
+        <Filename Value="LEXIQUE.PAS"/>
+        <Caret Line="384" TopLine="368"/>
+      </Position24>
+      <Position25>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1376" Column="12" TopLine="1375"/>
+      </Position25>
+      <Position26>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1485" Column="19" TopLine="1465"/>
+      </Position26>
+      <Position27>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1477" TopLine="1465"/>
+      </Position27>
+      <Position28>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1478" TopLine="1465"/>
+      </Position28>
+      <Position29>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1479" TopLine="1462"/>
+      </Position29>
+      <Position30>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="220" Column="5" TopLine="143"/>
       </Position30>
     </JumpHistory>
   </ProjectOptions>

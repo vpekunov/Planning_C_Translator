@@ -4,6 +4,9 @@
 #include <math.h>
 #include <omp.h>
 
+#pragma auto pure(sqrt)
+#pragma auto pure(exp,sin)
+
 #define PI 3.14159265358
 
 #define NX 100

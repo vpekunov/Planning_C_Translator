@@ -39,7 +39,7 @@
   @begin
     (\s|\\t)*
     (struct|union)->{TYPE}(\\n|\s|\\t)+
-    (((.{1,2048}?)->{EXPR}\;)?=>{Predicates.BAL($,';')})
+    ((((\w+)?\s*\{.{1,2048}?)->{EXPR}\})?=>{Predicates.BAL($,'}')}\s*\w+\s*\;)
     (\s|\\t)*
   @end
 };
@@ -162,7 +162,8 @@
   ((^)|\\n)(\s|\\t)*
   @begin
     (\s|\\t)*
-    (\#([^\\]*\\\\\\n)*[^\\]*(\\n|($))
+    (\#
+       ((include\s*\<[^\>]+\>\s*)|([^\\]*\\\\\\n)*[^\\]*)(\\n|($))
     )->{BODY}
     (\s|\\t)*
   @end
@@ -660,6 +661,12 @@
 
 @rbypass_idxs(L,L,[],[],[],[]):-!.
 
+@rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(','*',id(V),')'],L).
+
+@rbypass_var(L,V,R,[],[],[],[]):-
+   append(R,['(',id(V),')'],L).
+
 @rbypass_var(L,V,R,INS,OUTS,FUNS,Lazies):-
    rbypass_idxs(L,R0,INS0,OUTS0,FUNS0,LZ0),
    append(Left,[id(VV)],R0),
@@ -704,6 +711,23 @@
 @get_assgns(L,[V|OUTST],[V|Ins],Funs,Lazs):-
    append(Left,[A,'='|Right],L),
    member(A,['+','-','*','/','|','&','^','%']),
+   !,
+   rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
+   !,
+   get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
+   get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
+   !,
+   union(OUTST1,OUTST2,OUTST3), union(OUTST3,Outs0,OUTST),
+   union(Ins1,Ins2,Ins3), union(Ins3,Ins0,Ins),
+   union(Funs1,Funs2,Funs3), union(Funs3,Funs0,Funs),
+   union(Laz1,Laz2,Laz3), union(Laz3,Laz0,Lazs),
+   !.
+
+@get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
+   append(Left,['='|Right],L),
+   last(Left,A),
+   \+ member(A,['=','!','<','>']),
+   \+ =(Right,['='|_]),
    !,
    rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
    !,
@@ -761,23 +785,6 @@
    !,
    get_assgns(Left,OUTST1,Ins1,Funs1,Laz1),
    get_assgns(Right0,OUTST2,Ins2,Funs2,Laz2),
-   !,
-   union(OUTST1,OUTST2,OUTST3), union(OUTST3,Outs0,OUTST),
-   union(Ins1,Ins2,Ins3), union(Ins3,Ins0,Ins),
-   union(Funs1,Funs2,Funs3), union(Funs3,Funs0,Funs),
-   union(Laz1,Laz2,Laz3), union(Laz3,Laz0,Lazs),
-   !.
-
-@get_assgns(L,[V|OUTST],Ins,Funs,Lazs):-
-   append(Left,['='|Right],L),
-   last(Left,A),
-   \+ member(A,['=','!','<','>']),
-   \+ =(Right,['='|_]),
-   !,
-   rbypass_var(Left,V,Left0,Ins0,Outs0,Funs0,Laz0),
-   !,
-   get_assgns(Left0,OUTST1,Ins1,Funs1,Laz1),
-   get_assgns(Right,OUTST2,Ins2,Funs2,Laz2),
    !,
    union(OUTST1,OUTST2,OUTST3), union(OUTST3,Outs0,OUTST),
    union(Ins1,Ins2,Ins3), union(Ins3,Ins0,Ins),
