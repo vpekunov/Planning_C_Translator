@@ -2725,13 +2725,24 @@
 
 % Полный if-else, IGIDs = [IfGID,EGID]. Краткий if -- обрабатывается обычным образом, IGIDs = [IfGID]
 @traverse_fun([CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Used0, Used, NEWS0, NEWS, Time):-
-   gpu_op('clsGPUIf',CurGID,_,[IfGID,EGID],Ops),
+   gpu_op('clsGPUIf',CurGID,_,LGIDS,Ops),
+   (
+     =(LGIDS, [IfGID,EGID])->
+      true;
+      ( =(LGIDS, [IfGID]), =(EGID, '') )
+   ),
    !,
    getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime),
    !,
    union(Ins, Outs, Used2), !,
    traverse_fun([IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used30,News,NEWS30,T20),
-   traverse_fun([EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used31,News,NEWS31,T21),
+   (
+    =(EGID, '')->
+      (
+       =(Used31, Used2), =(NEWS31, News), =(T21, T20)
+      );
+      traverse_fun([EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Used2,Used31,News,NEWS31,T21)
+   ),
    union(Used30,Used31,Used3X), union(Used0, Used3X, Used3XX),
    union(NEWS30, NEWS31, NEWS3X), subtract(Used3X, NEWS3X, Used3E), !,
    not_used(Used3E),

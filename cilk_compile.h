@@ -2366,6 +2366,24 @@
    ),
    !.
 
+@is_pure_call(_,[]).
+
+@is_pure_call(_,[expr]).
+
+@is_pure_call(Functor,[H|T]):-
+   =..(H, [Functor, Name, Args]),
+   length(Args, NPrms),
+   once(( (predicate_property(cilk_fpure(_),'dynamic'),cilk_fpure(Name));
+          (predicate_property(cilk_fdependent(_,_,_),'dynamic'),cilk_fdependent(Name,NPrms,f))
+   )),
+   is_pure_call(Functor, T).
+
+@is_pure([]).
+
+@is_pure([arg(_,_,_,FUNS,PROCS,_,_,_)]):-
+   is_pure_call(func,FUNS),
+   is_pure_call(proc,PROCS).
+
 % Альтернативы из switch {}
 @traverse_alters([CurGID|GIDs], [TopGID|StackGIDs], [switch(TopGID,Pass)|StackConstrs], StackConstrs, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time, NAlt):-
    cilk_op('clsCilkAlternation',CurGID,_,[],_),
@@ -2414,7 +2432,7 @@
       );(
        intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2), intersect(LVars,InRefs,Decision3),
        (
-        (=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
+        ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(TP,0.0)
         );(
           (
@@ -2557,7 +2575,7 @@
       );(
        intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2), intersect(LVars,InRefs,Decision3),
        (
-        (=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
+        ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           (
@@ -2639,7 +2657,7 @@
       );(
        intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2), intersect(LVars,InRefs,Decision3),
        (
-        (=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
+        ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           (
@@ -2751,7 +2769,12 @@
 
 % Полный if-else, IGIDs = [IfGID,EGID]. Краткий if -- обрабатывается обычным образом, IGIDs = [IfGID]
 @traverse_fun(SyncGID,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   cilk_op('clsCilkIf',CurGID,_,[IfGID,EGID],Ops),
+   cilk_op('clsCilkIf',CurGID,_,LGIDS,Ops),
+   (
+     =(LGIDS, [IfGID,EGID])->
+      true;
+      ( =(LGIDS, [IfGID]), =(EGID, '') )
+   ),
    !,
    (=(SyncGID,CurGID);true), % Если SyncGID не связан, то получает значение CurGID, иначе значение SyncGID сохраняется
    !,
@@ -2763,7 +2786,7 @@
       );(
        intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
        (
-        (=(Decision1,[]),=(Decision2,[]))->(
+        ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           put_cilk_sync(SyncGID),
@@ -2776,7 +2799,13 @@
    unique(Laz0,Laz1), unique(Ref0,Ref1),
    !,
    traverse_fun(_,[IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz20,Ref1,Ref20,OSP1,OSP20,T20),
-   traverse_fun(_,[EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz21,Ref1,Ref21,OSP1,OSP21,T21),
+   (
+    =(EGID, '')->
+      (
+       =(Laz21, Laz1), =(Ref21, Ref1), =(OSP21, OSP1), =(T21, T20)
+      );
+      traverse_fun(_,[EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz21,Ref1,Ref21,OSP1,OSP21,T21)
+   ),
    append(Laz20,Laz21,Laz22), unique(Laz22,Laz2), !,
    append(Ref20,Ref21,Ref22), unique(Ref22,Ref2), !,
    append(OSP20,OSP21,OSP22),
@@ -2798,7 +2827,7 @@
       );(
        intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
        (
-        (=(Decision1,[]),=(Decision2,[]))->(
+        ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           put_cilk_sync(SyncGID),
@@ -2830,7 +2859,7 @@
       );(
        intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
        (
-        (=(Decision1,[]),=(Decision2,[]))->(
+        ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           put_cilk_sync(SyncGID),
@@ -2873,7 +2902,7 @@
       );(
        intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
        (
-        (=(Decision1,[]),=(Decision2,[]))->(
+        ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           put_cilk_sync(SyncGID),
@@ -2905,7 +2934,22 @@
       (=(SyncGID,CurGID);true), % Если SyncGID не связан, то получает значение CurGID, иначе значение SyncGID сохраняется
       !,
       getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,Refs,Lazs,BaseTime),
-      inc_spawns(ISpawns,ISP,BaseTime),
+      (
+       (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID))->(
+          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISpawns,OSP1,0.0,T1)
+         );(
+          intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
+          (
+           ((once(is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
+             =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISpawns), =(T1,0.0)
+           );(
+             put_cilk_sync(SyncGID),
+             =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISpawns,OSP1,0.0,T1)
+           )
+          )
+         )
+      ),
+      inc_spawns(OSP1,ISP,BaseTime),
       (
        (predicate_property(cilk_spawn(_),'dynamic'), cilk_spawn(CurGID))->
           (
@@ -2919,31 +2963,14 @@
               (getTime([proc(Fun,Prms)],TSP1), g_read('$DefOperTime',TOp0), TSP is TSP1-TOp0);
               =(TSP,0.0)
            ),
-           =(ISP1,ISP)
+           inc_spawns(ISP,ISP1,TSP)
           )
-      ),
-      (
-       (predicate_property(cilk_sync(_),'dynamic'), cilk_sync(SyncGID),
-        ((predicate_property(cilk_spawn(_),'dynamic'),=(SyncGID,CurGID))->(\+ cilk_spawn(SyncGID));true)
-       )->(
-          =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP1,OSP1,0.0,T1)
-         );(
-          intersect(InLazies,Ins,Decision1), intersect(InRefs,Outs,Decision2),
-          (
-           (=(Decision1,[]),=(Decision2,[]))->(
-             =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP1), =(T1,0.0)
-           );(
-             put_cilk_sync(SyncGID),
-             =(NextLazies,[]), =(NextRefs,[]), stop_spawns(ISP1,OSP1,0.0,T1)
-           )
-          )
-         )
       ),
       addLocals(Vars,News,Vars1),
       append(NextLazies,Lazs,Laz0), append(NextRefs,Refs,Ref0),
       unique(Laz0,Laz1), unique(Ref0,Ref1),
       !,
-      traverse_fun(_,IGIDs,[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,T2),
+      traverse_fun(_,IGIDs,[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],Laz1,Laz2,Ref1,Ref2,ISP1,OSP2,T2),
       traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars1,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T3),
       Time is TSP+T1+BaseTime+T2+T3,
       !

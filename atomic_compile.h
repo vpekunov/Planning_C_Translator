@@ -2845,16 +2845,27 @@
 
 % Полный if-else, IGIDs = [IfGID,EGID]. Краткий if -- обрабатывается обычным образом, IGIDs = [IfGID]
 @traverse_fun(Mode, [op(CurGID,OTime,Ins2,Outs2,Allow)|Splitted3], [CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Time):-
-   atomic_op('clsAtomicIf',CurGID,_,[IfGID,EGID],Ops),
+   atomic_op('clsAtomicIf',CurGID,_,LGIDS,Ops),
+   (
+     =(LGIDS, [IfGID,EGID])->
+      true;
+      ( =(LGIDS, [IfGID]), =(EGID, '') )
+   ),
    !,
    check_split(CurGID,K),
    getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime,Allow1),
    !,
    traverse_fun(t, Splitted1,[IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T20),
-   traverse_fun(t, Splitted2,[EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T21),
-   !,
    collecting(Splitted1, Ins, Outs, Ins1, Outs1, Allow2),
-   collecting(Splitted2, Ins1, Outs1, Ins2, Outs2, Allow3),
+   (
+    =(EGID, '')->
+      (
+       =(Ins2, Ins1), =(Outs2, Outs1), =(Allow3, Allow1), =(T21, T20)
+      );
+      ( traverse_fun(t, Splitted2,[EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T21),
+        collecting(Splitted2, Ins1, Outs1, Ins2, Outs2, Allow3)
+      )
+   ),
    !,
    (
      OTime is BaseTime+0.5*(T20+T21)
