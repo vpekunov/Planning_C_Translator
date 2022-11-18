@@ -14,6 +14,13 @@
 //       автоматический дл€ простого конвейера или по plan_topology_quit() дл€ топологии.
 //   p - параллельный ли режим.
 
+{ 18.11.2022 Release V0.94beta7 (Planning C)                                   }
+{ + Ќа базе сканирующих макросов и дедуктивных макромодулей построено          }
+{    композитное расширение:                                                   }
+{   * јвтоматический распараллеливатель с применением Cilk, сверхоптимистичных }
+{     вычислений и GPU/OpenMP (atomic_cilk_gpu_omp_compile.h).                 }
+{ - ѕоправлено множество старинных ошибок во всех распараллеливател€х.         }
+
 { 11.11.2022 Release V0.94beta6 (Planning C)                                   }
 { + Ќа базе сканирующих макросов и дедуктивных макромодулей построено          }
 {    композитное расширение:                                                   }
@@ -1348,7 +1355,7 @@ Var Inp, Out: TextFile;
 begin
      If ParamCount=0 Then
         Begin
-          WriteLn('Planning C (R) Translator V0.94beta6');
+          WriteLn('Planning C (R) Translator V0.94beta7');
           WriteLn('free for any purposes. Original author: V.V.Pekunov, 2008-2017, 2019-2022');
           WriteLn('Usage: Reenterable.exe [-nosourcelines] [-extensionsonly] [-followdefines] [-Dmacro[=val]] <inputfile.cpp> [outputfile]');
           WriteLn('   -nosourcelines    Removes references to source line numbers, therefore');
