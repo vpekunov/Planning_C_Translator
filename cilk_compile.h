@@ -2187,7 +2187,7 @@
    retractall(cilk_spawn_time(_,_)),
    retractall(cilk_sync(_)),
    retractall(cilk_for(_)),
-   retractall(cilk_break(_)),
+   retractall(cilk_break(_,_,_,_,_,_)),
    retractall(cilk_continue(_)),
    retractall(params(_)),
    retractall(counter(_)),
@@ -2399,7 +2399,7 @@
         !
        )
    ),
-   retractall(cilk_break(_)),
+   retractall(cilk_break(_,_,TopGID,_,_,_)),
    (
     (append(_,[NextGID1|Rest1],GIDs),cilk_op('clsCilkAlternation',NextGID1,_,[],_))->(
        !,
@@ -2479,17 +2479,24 @@
    ),
    retractall(cilk_continue(_)),
    (
-    (predicate_property(cilk_break(_),'dynamic'), cilk_break(_))->(
-       retractall(cilk_break(_)),
-       =(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T1,0.0)
-      );(
-       =(Pass,1)->
-         ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
-          cilk_op('clsCilkWhile',TopGID,_,[IGID1],_),
-          traverse_fun(_,[IGID1],[TopGID|StackGIDs],[while(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLazies,Ref1,OutRefs,OSP1,OSpawns,T1)
-         );
-         (=(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns, OSP1), =(T1,0.0))
-      )
+     ((predicate_property(cilk_break(_,_,_,_,_,_),'dynamic'), cilk_break(FLAG,_,TopGID,LazB,RefsB,SPB))->
+       retractall(cilk_break(_,_,TopGID,_,_,_));
+       (=(FLAG,end), =(LazB,[]), =(RefsB,[]), =(SPB,[]))
+     ),
+     (
+       (
+        (=(FLAG,end),=(Pass,1))->
+          ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
+           cilk_op('clsCilkWhile',TopGID,_,[IGID1],_),
+           traverse_fun(_,[IGID1],[TopGID|StackGIDs],[while(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLaziesX,Ref1,OutRefsX,OSP1,OSpawnsX,T1)
+          );
+          (=(OutLaziesX,Laz1), =(OutRefsX,Ref1), =(OSpawnsX, OSP1), =(T1,0.0))
+       ),
+       (
+        append(OutLaziesX,LazB,LazR), append(OutRefsX,RefsB,RefR), append(OSpawnsX,SPB,OSpawns),
+        unique(LazR,OutLazies), unique(RefR,OutRefs)
+       )
+     )
    ),
    (
     (=(CONT,1))->(
@@ -2505,8 +2512,12 @@
    cilk_op('clsCilkOper',CurGID,_,[],_),
    db_content('args',CurGID,[['op','break']]),
    !,
-   asserta(cilk_break(CurGID)),
    =..(Top,[_,TopGID,_]),
+   (
+    (predicate_property(cilk_break(_,_,_,_,_,_),'dynamic'), cilk_break(_,_,TopGID,LazB,RefsB,SPB))->
+      true;
+      ( asserta(cilk_break(break,CurGID,TopGID,[],[],[])), =(LazB, []), =(RefsB, []), =(SPB, []) )
+   ),
    !, % Цикл выхода из конструкций верхнего уровня
      asserta(lz(InLazies)), asserta(rf(InRefs)), asserta(vr(Vars)), asserta(sp(ISpawns)), asserta(tm(0.0)),
      append(_,[CurTopGID|Rest],StackGIDs),
@@ -2518,6 +2529,12 @@
      asserta(lz(LZ1)), asserta(rf(RF1)), asserta(vr(VAR1)), asserta(sp(SP1)), asserta(tm(T1)),
      =(TopGID,CurTopGID), % Проверка -- условие окончания цикла
    !,
+   (
+    retractall(cilk_break(_,_,TopGID,_,_,_)),
+    append(InLazies,LazB,LazR), append(InRefs,RefsB,RefR), append(ISpawns,SPB,SPX),
+    unique(LazR,LazX), unique(RefR,RefX)
+   ),
+   asserta(cilk_break(end,CurGID,TopGID,LazX,RefX,SPX)),
    =(OutLazies,LZ1), =(OutRefs,RF1), =(OSpawns,SP1), =(Time,T1),
    retractall(lz(_)), retractall(rf(_)), retractall(vr(_)), retractall(sp(_)), retractall(tm(_)),
    !.
@@ -2622,17 +2639,24 @@
    ),
    retractall(cilk_continue(_)),
    (
-    (predicate_property(cilk_break(_),'dynamic'), cilk_break(_))->(
-       retractall(cilk_break(_)),
-       =(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0)
-      );(
-       =(Pass,1)->
-         ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
-          cilk_op('clsCilkDo',TopGID,LastGID,[IGID1],_),
-          traverse_fun(_,[IGID1],[TopGID|StackGIDs],[do(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLazies,Ref1,OutRefs,OSP1,OSpawns,T2)
-         );
-         (=(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0))
-      )
+     ((predicate_property(cilk_break(_,_,_,_,_,_),'dynamic'), cilk_break(FLAG,_,TopGID,LazB,RefsB,SPB))->
+       retractall(cilk_break(_,_,TopGID,_,_,_));
+       (=(FLAG,end), =(LazB,[]), =(RefsB,[]), =(SPB,[]))
+     ),
+     (
+       (
+        (=(FLAG,end),=(Pass,1))->
+          ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
+           cilk_op('clsCilkDo',TopGID,LastGID,[IGID1],_),
+           traverse_fun(_,[IGID1],[TopGID|StackGIDs],[do(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLaziesX,Ref1,OutRefsX,OSP1,OSpawnsX,T2)
+          );
+          (=(OutLaziesX,Laz1), =(OutRefsX,Ref1), =(OSpawnsX, OSP1), =(T2,0.0))
+       ),
+       (
+        append(OutLaziesX,LazB,LazR), append(OutRefsX,RefsB,RefR), append(OSpawnsX,SPB,OSpawns),
+        unique(LazR,OutLazies), unique(RefR,OutRefs)
+       )
+     )
    ),
    (
     (=(CONT,1))->(
@@ -2704,18 +2728,25 @@
    ),
    retractall(cilk_continue(_)),
    (
-    (predicate_property(cilk_break(_),'dynamic'), cilk_break(_))->(
-       retractall(cilk_break(_)),
-       =(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0)
-      );(
-       =(Pass,1)->
-         ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
-          cilk_op('clsCilkFor',TopGID,_,[IGID1],_),
-          traverse_fun(_,[IGID1],[TopGID|StackGIDs],[for(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLazies,Ref1,OutRefs,OSP1,OSpawns,T2),
-          put_for_time(TopGID,T2)
-         );
-         (=(OutLazies,Laz1), =(OutRefs,Ref1), =(OSpawns,OSP1), =(T2,0.0))
-      )
+     ((predicate_property(cilk_break(_,_,_,_,_,_),'dynamic'), cilk_break(FLAG,_,TopGID,LazB,RefsB,SPB))->
+       retractall(cilk_break(_,_,TopGID,_,_,_));
+       (=(FLAG,end), =(LazB,[]), =(RefsB,[]), =(SPB,[]))
+     ),
+     (
+       (
+        (=(FLAG,end),=(Pass,1))->
+          ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
+           cilk_op('clsCilkFor',TopGID,_,[IGID1],_),
+           traverse_fun(_,[IGID1],[TopGID|StackGIDs],[for(TopGID,2)|StackConstrs],_,[LVars|Vars],Laz1,OutLaziesX,Ref1,OutRefsX,OSP1,OSpawnsX,T2),
+           put_for_time(TopGID,T2)
+          );
+          (=(OutLaziesX,Laz1), =(OutRefsX,Ref1), =(OSpawnsX, OSP1), =(T2,0.0))
+       ),
+       (
+        append(OutLaziesX,LazB,LazR), append(OutRefsX,RefsB,RefR), append(OSpawnsX,SPB,OSpawns),
+        unique(LazR,OutLazies), unique(RefR,OutRefs)
+       )
+     )
    ),
    (
     (=(CONT,1))->(
@@ -2841,7 +2872,11 @@
    !,
    traverse_fun(_,[IGID],[CurGID,TopGID|StackGIDs],[while(CurGID,1)|StackConstrs],_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,T2),
    !,
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T3),
+   append(Laz1,Laz2,Laz22), unique(Laz22,Laz3), !,
+   append(Ref1,Ref2,Ref22), unique(Ref22,Ref3), !,
+   append(OSP1,OSP2,OSP3),
+   !,
+   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz3,OutLazies,Ref3,OutRefs,OSP3,OSpawns,T3),
    Time is T1+BaseTime+T2+T3,
    !.
 
@@ -2873,7 +2908,11 @@
    !,
    traverse_fun(_,[IGID],[CurGID,TopGID|StackGIDs],[for(CurGID,1)|StackConstrs],_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,T2),
    !,
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T3),
+   append(Laz1,Laz2,Laz22), unique(Laz22,Laz3), !,
+   append(Ref1,Ref2,Ref22), unique(Ref22,Ref3), !,
+   append(OSP1,OSP2,OSP3),
+   !,
+   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz3,OutLazies,Ref3,OutRefs,OSP3,OSpawns,T3),
    Time is T1+BaseTime+T2+T3,
    !.
 
@@ -2916,7 +2955,11 @@
    !,
    traverse_alters(IGIDs,[CurGID,TopGID|StackGIDs],[switch(CurGID,1)|StackConstrs],_,[News|Vars],Laz1,Laz2,Ref1,Ref2,OSP1,OSP2,TNN,NAlt),
    !,
-   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz2,OutLazies,Ref2,OutRefs,OSP2,OSpawns,T2),
+   append(Laz1,Laz2,Laz22), unique(Laz22,Laz3), !,
+   append(Ref1,Ref2,Ref22), unique(Ref22,Ref3), !,
+   append(OSP1,OSP2,OSP3),
+   !,
+   traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz3,OutLazies,Ref3,OutRefs,OSP3,OSpawns,T2),
    (
     =(NAlt,0)->
       Time is T1+BaseTime+T2;
@@ -2925,7 +2968,7 @@
    !.
 
 @traverse_fun(SyncGID,[CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time):-
-   (predicate_property(cilk_break(_),'dynamic'), cilk_break(BreakGID))->(
+   (predicate_property(cilk_break(_,_,_,_,_,_),'dynamic'), cilk_break(break,BreakGID,_,_,_,_))->(
       traverse_fun(BreakGID,[], [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,InLazies,OutLazies,InRefs,OutRefs,ISpawns,OSpawns,Time),
       !
    );(
@@ -2977,7 +3020,7 @@
    ).
 
 @create_syncs(Fun,GID,NPrms):-
-   retractall(cilk_break(_)),
+   retractall(cilk_break(_,_,_,_,_,_)),
    retractall(cilk_continue(_)),
    cilk_globals(GLOB),
    glob_prefixate(GLOB,G1),
