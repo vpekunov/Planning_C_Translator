@@ -423,6 +423,7 @@
   number_atom(NGID, GID),
   asserta(db_content('prog', NGID, [[TYPE]])),
   clk_analyze_args(NGID, TYPE, ARGS),
+  atom_analyze_args(NGID, TYPE, ARGS),
   fail.
 
 @clk_read_db:-
@@ -3553,7 +3554,7 @@
      =(LK, LM)
   )),
   append(LK, [ARGSV, RETV, NAMEV], LL),
-  asserta(db_content('args', GID, LL)).
+  asserta(db_content('argsa', GID, LL)).
 
 @atom_number_sym(C):-
   member(C, ['0','1','2','3','4','5','6','7','8','9']),
@@ -4485,7 +4486,7 @@
 @atom_prepare_atomic_functions:-
    global_trace(TR),
    db_content('prog',GID,[[func]]),
-   db_content('args',GID,Params),
+   db_content('argsa',GID,Params),
    once(append(_,[gid('clsFunction',GID),gid('clsBegin',_)|_],TR)),
    member([name,Name],Params),
    atom_get_params_length(Params,N),

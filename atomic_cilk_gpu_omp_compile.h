@@ -425,6 +425,8 @@
   number_atom(NGID, GID),
   asserta(db_content('prog', NGID, [[TYPE]])),
   clk_analyze_args(NGID, TYPE, ARGS),
+  atom_analyze_args(NGID, TYPE, ARGS),
+  gpu_analyze_args(NGID, TYPE, ARGS),
   fail.
 
 @clk_read_db:-
@@ -3637,7 +3639,7 @@
      =(LK, LM)
   )),
   append(LK, [ARGSV, RETV, NAMEV], LL),
-  asserta(db_content('args', GID, LL)).
+  asserta(db_content('argsa', GID, LL)).
 
 @atom_number_sym(C):-
   member(C, ['0','1','2','3','4','5','6','7','8','9']),
@@ -4569,14 +4571,14 @@
 @atom_prepare_atomic_functions:-
    global_trace(TR),
    db_content('prog',GID,[[func]]),
-   db_content('args',GID,Params),
+   db_content('argsa',GID,Params),
    once(append(_,[gid('clsFunction',GID),gid('clsBegin',_)|_],TR)),
    member([name,Name],Params),
    atom_get_params_length(Params,N),
    \+ =(N,infinity),
    N1 is N-3, % -args, -ret, -name
    asserta(atomic_function(Name,GID,N1)),
-   call(atom_prepare_atomic_function(Name,N1,Params)),write(Params),
+   call(atom_prepare_atomic_function(Name,N1,Params)),
    fail.
 
 @atom_prepare_atomic_functions:-!.
@@ -6894,7 +6896,7 @@
      =(LK, LM)
   )),
   append(LK, [ARGSV, RETV, NAMEV], LL),
-  asserta(db_content('args', GID, LL)).
+  asserta(db_content('argsg', GID, LL)).
 
 @gpu_read_db:-
   prog(_, GID, TYPE, ARGS),
@@ -7836,7 +7838,7 @@
 @gpu_prepare_gpu_functions:-
    global_trace(TR),
    db_content('prog',GID,[[func]]),
-   db_content('args',GID,Params),
+   db_content('argsg',GID,Params),
    once(append(_,[gid('clsFunction',GID),gid('clsBegin',_)|_],TR)),
    member([name,Name],Params),
    gpu_get_params_length(Params,N),
