@@ -2494,7 +2494,7 @@
         (=(FLAG,end),=(Pass,1))->
           ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
            cilk_op('clsWhile',TopGID,_,[IGID1],_),
-           append(Laz1,LazC,LazW), append(Ref1,RefC,RefW), append(OSP1,SPC,SPW),
+           append(Laz1,LazC,LazW), append(Ref1,RefsC,RefW), append(OSP1,SPC,SPW),
            clk_unique(LazW,LazW1), clk_unique(RefW,RefW1),
            clk_traverse_fun(_,[IGID1],[TopGID|StackGIDs],[while(TopGID,2)|StackConstrs],_,[LVars|Vars],LazW1,OutLaziesX,RefW1,OutRefsX,SPW,OSpawnsX,T1)
           );
@@ -2668,7 +2668,7 @@
         (=(FLAG,end),=(Pass,1))->
           ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
            cilk_op('clsDo',TopGID,LastGID,[IGID1],_),
-           append(Laz1,LazC,LazW), append(Ref1,RefC,RefW), append(OSP1,SPC,SPW),
+           append(Laz1,LazC,LazW), append(Ref1,RefsC,RefW), append(OSP1,SPC,SPW),
            clk_unique(LazW,LazW1), clk_unique(RefW,RefW1),
            clk_traverse_fun(_,[IGID1],[TopGID|StackGIDs],[do(TopGID,2)|StackConstrs],_,[LVars|Vars],LazW1,OutLaziesX,RefW1,OutRefsX,SPW,OSpawnsX,T2)
           );
@@ -2760,7 +2760,7 @@
         (=(FLAG,end),=(Pass,1))->
           ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
            cilk_op('clsFor',TopGID,_,[IGID1],_),
-           append(Laz1,LazC,LazW), append(Ref1,RefC,RefW), append(OSP1,SPC,SPW),
+           append(Laz1,LazC,LazW), append(Ref1,RefsC,RefW), append(OSP1,SPC,SPW),
            clk_unique(LazW,LazW1), clk_unique(RefW,RefW1),
            clk_traverse_fun(_,[IGID1],[TopGID|StackGIDs],[for(TopGID,2)|StackConstrs],_,[LVars|Vars],LazW1,OutLaziesX,RefW1,OutRefsX,SPW,OSpawnsX,T2),
            clk_put_for_time(TopGID,T2)
@@ -3524,15 +3524,9 @@
 
 @atom_analyze_args(_, _, '').
 
-@atom_analyze_args(GID, _, [[Name, Val]]):-
-  asserta(db_content('args', GID, [[Name, Val]])).
+@atom_analyze_args(_, _, [[_, _]]).
 
-@atom_analyze_args(GID, 'for', [['init',INITF], ['init',INITN], ['cond',COND], ['chng',CHNGF], ['chng',CHNGN]]):-
-  once(atom_make_arg('init', INITF, INITN, L1)),
-  once(atom_make_arg('chng', CHNGF, CHNGN, L2)),
-  append(L1, [['cond',COND]], L3),
-  append(L3, L2, L4),
-  asserta(db_content('args', GID, L4)).
+@atom_analyze_args(_, 'for', _).
 
 @atom_analyze_args(GID, 'func', [['arg',REF1], ['type',TYPE1], ['arg',NM1], ['idxs',IDXS1], ['arg',REFN], ['type',TYPEN], ['arg',NMN], ['idxs',IDXSN], ['arg',THREEP], ARGSV, RETV, NAMEV]):-
   once(atom_into_paired_list_f('arg', REF1, REF1L)),
@@ -5548,10 +5542,37 @@
    ),
    !.
 
+@atom_contains_break_continue(GID):-
+   atomic_op('clsOper',GID,_,_,_),
+   db_content('args',GID,[['op',OP]]),
+   once((=(OP,'break');=(OP,'continue'))),
+   !.
+
+@atom_contains_break_continue(GID):-
+   atomic_op('clsBegin',GID,_,IGIDs,_),
+   member(IGID, IGIDs),
+   atom_contains_break_continue(IGID),
+   !.
+
+@atom_contains_break_continue(GID):-
+   atomic_op('clsIf',GID,-1,[OPID0],_),
+   atom_contains_break_continue(OPID0),
+   !.
+
+@atom_contains_break_continue(GID):-
+   atomic_op('clsIf',GID,_,[OPID0,OPID1],_),
+   once(( atom_contains_break_continue(OPID0); atom_contains_break_continue(OPID1) )),
+   !.
+
 @atom_try_split(_,_,[],_,_,_):-
    !, fail.
 
 @atom_try_split(_,_,[_],_,_,_):-
+   !, fail.
+
+@atom_try_split(_,_,Body,_,_,_):-
+   member(op(CurGID,_,_,_,_),Body),
+   atom_contains_break_continue(CurGID),
    !, fail.
 
 @atom_try_split(LoopGID,Canals,[H|T],GID,Time,CDecls):-

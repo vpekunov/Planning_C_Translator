@@ -2451,10 +2451,37 @@
    ),
    !.
 
+@contains_break_continue(GID):-
+   atomic_op('clsAtomicOper',GID,_,_,_),
+   db_content('args',GID,[['op',OP]]),
+   once((=(OP,'break');=(OP,'continue'))),
+   !.
+
+@contains_break_continue(GID):-
+   atomic_op('clsAtomicBegin',GID,_,IGIDs,_),
+   member(IGID, IGIDs),
+   contains_break_continue(IGID),
+   !.
+
+@contains_break_continue(GID):-
+   atomic_op('clsAtomicIf',GID,-1,[OPID0],_),
+   contains_break_continue(OPID0),
+   !.
+
+@contains_break_continue(GID):-
+   atomic_op('clsAtomicIf',GID,_,[OPID0,OPID1],_),
+   once(( contains_break_continue(OPID0); contains_break_continue(OPID1) )),
+   !.
+
 @try_split(_,_,[],_,_,_):-
    !, fail.
 
 @try_split(_,_,[_],_,_,_):-
+   !, fail.
+
+@try_split(_,_,Body,_,_,_):-
+   member(op(CurGID,_,_,_,_),Body),
+   contains_break_continue(CurGID),
    !, fail.
 
 @try_split(LoopGID,Canals,[H|T],GID,Time,CDecls):-

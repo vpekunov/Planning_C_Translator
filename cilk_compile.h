@@ -2489,7 +2489,7 @@
         (=(FLAG,end),=(Pass,1))->
           ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
            cilk_op('clsCilkWhile',TopGID,_,[IGID1],_),
-           append(Laz1,LazC,LazW), append(Ref1,RefC,RefW), append(OSP1,SPC,SPW),
+           append(Laz1,LazC,LazW), append(Ref1,RefsC,RefW), append(OSP1,SPC,SPW),
            unique(LazW,LazW1), unique(RefW,RefW1),
            traverse_fun(_,[IGID1],[TopGID|StackGIDs],[while(TopGID,2)|StackConstrs],_,[LVars|Vars],LazW1,OutLaziesX,RefW1,OutRefsX,SPW,OSpawnsX,T1)
           );
@@ -2663,7 +2663,7 @@
         (=(FLAG,end),=(Pass,1))->
           ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
            cilk_op('clsCilkDo',TopGID,LastGID,[IGID1],_),
-           append(Laz1,LazC,LazW), append(Ref1,RefC,RefW), append(OSP1,SPC,SPW),
+           append(Laz1,LazC,LazW), append(Ref1,RefsC,RefW), append(OSP1,SPC,SPW),
            unique(LazW,LazW1), unique(RefW,RefW1),
            traverse_fun(_,[IGID1],[TopGID|StackGIDs],[do(TopGID,2)|StackConstrs],_,[LVars|Vars],LazW1,OutLaziesX,RefW1,OutRefsX,SPW,OSpawnsX,T2)
           );
@@ -2755,7 +2755,7 @@
         (=(FLAG,end),=(Pass,1))->
           ( % IGID внутреннего оператора мог измениться выше (при преобразовании одиночного оператора в {})
            cilk_op('clsCilkFor',TopGID,_,[IGID1],_),
-           append(Laz1,LazC,LazW), append(Ref1,RefC,RefW), append(OSP1,SPC,SPW),
+           append(Laz1,LazC,LazW), append(Ref1,RefsC,RefW), append(OSP1,SPC,SPW),
            unique(LazW,LazW1), unique(RefW,RefW1),
            traverse_fun(_,[IGID1],[TopGID|StackGIDs],[for(TopGID,2)|StackConstrs],_,[LVars|Vars],LazW1,OutLaziesX,RefW1,OutRefsX,SPW,OSpawnsX,T2),
            put_for_time(TopGID,T2)

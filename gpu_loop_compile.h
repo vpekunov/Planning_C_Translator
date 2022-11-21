@@ -2003,22 +2003,36 @@
    !,
    check_outs_by_idxs(Outs,Ins,FIdxs).
 
+@contains_break_continue(GID):-
+   gpu_op('clsGPUOper',GID,_,_,_),
+   db_content('args',GID,[['op',OP]]),
+   once((=(OP,'break');=(OP,'continue'))),
+   !.
+
+@contains_break_continue(GID):-
+   gpu_op('clsGPUBegin',GID,_,IGIDs,_),
+   member(IGID, IGIDs),
+   contains_break_continue(IGID),
+   !.
+
+@contains_break_continue(GID):-
+   gpu_op('clsGPUIf',GID,-1,[OPID0],_),
+   contains_break_continue(OPID0),
+   !.
+
+@contains_break_continue(GID):-
+   gpu_op('clsGPUIf',GID,_,[OPID0,OPID1],_),
+   once(( contains_break_continue(OPID0); contains_break_continue(OPID1) )),
+   !.
+
+@seq_contains_break_continue(GIDs):-
+   member(IGID, GIDs),
+   contains_break_continue(IGID),
+   !.
+
 % Анализ возможности распараллелить for
 @analyze_for(GID):-
    gpu_op('clsGPUFor',GID,_,LGIDs,Exprs),
-   (
-    (predicate_property(gpu_for_time(_,_),'dynamic'),gpu_for_time(GID,T))->
-       (
-        (predicate_property(gpu_for(_),'dynamic'),gpu_for(GID))->
-          (g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY), TPAR is TSP + 2*T + TSY, TSEQ is 8*T, TPAR < TSEQ);
-          (
-           (predicate_property(omp_for(_),'dynamic'),omp_for(GID))->
-             (g_read('$OMPSpawnTime',TSP), g_read('$OMPSyncTime',TSY), TPAR is TSP + 2*T + TSY, TSEQ is 8*T, TPAR < TSEQ);
-             true
-          )
-       );
-       true
-   ),
    member(init(_,_,_,_,_,_,_,[[id(Counter),'='|_]]),Exprs),
    (
     member(cond(_,[],_,_,_,_,_,[[id(Counter),'<','='|_]]),Exprs);
@@ -2044,9 +2058,29 @@
    once(block_has_no_derefs(LGIDs)),
    once(get_fblock_deps(LGIDs)),
    once(for_content(Counter,LGIDs)),
-   ( (predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_))->
-       (once(mark_fblock_deps(LGIDs)), asserta(gpu_for(GID)));
-       asserta(omp_for(GID))
+   (
+    (predicate_property(gpu_for_time(_,_),'dynamic'),gpu_for_time(GID,T))->
+       (
+        TSEQ is 8*T,
+        (
+         (\+ seq_contains_break_continue(LGIDs), predicate_property(gpu_for_interface(_,_),'dynamic'), gpu_for_interface(GID,_))->
+           (g_read('$SpawnTime',TSP), g_read('$SyncTime',TSY), TPARGPU is TSP + 2*T + TSY);
+           TPARGPU is 400000.0
+        ),
+        (
+         (predicate_property(omp_for_interface(_,_),'dynamic'), omp_for_interface(GID,_))->
+           (g_read('$OMPSpawnTime',OTSP), g_read('$OMPSyncTime',OTSY), TPAROMP is OTSP + 2*T + OTSY);
+           TPAROMP is 400000.0
+        ),
+        retractall(gpu_for(GID)),
+        retractall(omp_for(GID)),
+        (TPARGPU < TSEQ; TPAROMP < TSEQ),
+        ( (TPARGPU < TPAROMP)->
+            (once(mark_fblock_deps(LGIDs)), asserta(gpu_for(GID)));
+            asserta(omp_for(GID))
+        )
+       );
+       true
    ),
    !.
 
@@ -2780,7 +2814,8 @@
    (
     once(check_no_multidim_or_glob(Used3E)),
     once(add_modifiers(Used3E,Used3F)),
-    ( once(find_pivot(Used3E,_))-> asserta(gpu_for_interface(CurGID,Used3F));asserta(omp_for_interface(CurGID,Used3F)) );
+    asserta(omp_for_interface(CurGID,Used3F)),
+    ( once(find_pivot(Used3E,_))-> asserta(gpu_for_interface(CurGID,Used3F));true );
     true
    ),
    !,
