@@ -1015,7 +1015,7 @@ Var L, L1:TAnalyser;
     ID, Params, NP, Dir: String;
     Idx: Real;
     nItems, MaxItems: Integer;
-    Reverse: Boolean;
+    _Reverse: Boolean;
     ChainItems: TStringList;
     Links: TLinks;
     PassedNodes, VisitedNodes: Array Of Boolean;
@@ -1040,12 +1040,12 @@ Begin
         If Dir = idplan_parallel_chain Then
            Begin
              MaxItems := MaxInt;
-             Reverse := False
+             _Reverse := False
            End
         Else If Dir = idplan_parallel_reverse Then
            Begin
              MaxItems := 2;
-             Reverse := True
+             _Reverse := True
            End
         Else
            Begin
@@ -1115,7 +1115,7 @@ Begin
                     SetLength(Links, nLinks+10);
                  Links[nLinks].First := Prev;
                  Links[nLinks].Last := G;
-                 Links[nLinks].Rev := Reverse;
+                 Links[nLinks].Rev := _Reverse;
                  Inc(nLinks)
                End;
             Prev := G;
