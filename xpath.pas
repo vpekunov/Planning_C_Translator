@@ -137,7 +137,7 @@ type
 
 { XPath expression parse tree }
 
-  TXPathNodeNameTester = function(Const NodeName, NodeTestString: String): Boolean;
+  TXPathNodeNameTester = function(Const NodeName, NodeTestString: String): Boolean; cdecl;
 
   TXPathExprNode = class
   protected
@@ -333,6 +333,8 @@ type
     function AsBoolean: Boolean; virtual; abstract;
     function AsNumber: Extended; virtual; abstract;
     function AsText: DOMString; virtual; abstract;
+    function Export: DOMString; virtual; abstract;
+    class function Import(Const From: WideString): TXPathVariable;
   end;
 
   { TXPathNodeSetVariable }
@@ -351,6 +353,7 @@ type
     function AsBoolean: Boolean; override;
     function AsNumber: Extended; override;
     property Value: TNodeSet read FValue;
+    function Export: DOMString; override;
   end;
 
   { TXPathBooleanVariable }
@@ -366,6 +369,7 @@ type
     function AsNumber: Extended; override;
     function AsText: DOMString; override;
     property Value: Boolean read FValue;
+    function Export: DOMString; override;
   end;
 
   { TXPathNumberVariable }
@@ -381,6 +385,7 @@ type
     function AsNumber: Extended; override;
     function AsText: DOMString; override;
     property Value: Extended read FValue;
+    function Export: DOMString; override;
   end;
 
   { TXPathStringVariable }
@@ -396,6 +401,7 @@ type
     function AsNumber: Extended; override;
     function AsText: DOMString; override;
     property Value: DOMString read FValue;
+    function Export: DOMString; override;
   end;
 
   TXPathNSResolver = class
@@ -578,6 +584,8 @@ type
     procedure RemoveVariable(Index: Integer);
     procedure RemoveVariable(const AName: String);
     procedure AcceptLocalWordsRels;
+    procedure Export(outS: PWideChar);
+    procedure Import(inS: PWideChar);
     property FunctionCount: Integer read GetFunctionCount;
     property VariableCount: Integer read GetVariableCount;
     property Functions[Index: Integer]: PFunctionInfo read GetFunction;
@@ -626,6 +634,8 @@ uses {$IF (NOT DEFINED(UNIX)) AND (NOT DEFINED(LINUX))}Windows, {$ELSE}CThreads,
 
 {$i xpathkw.inc}
 
+Const BoolVals:Array[Boolean] Of PChar = ('False','True');
+
 Var Cache: TObjStrList;
     CS: TRTLCriticalSection;
 
@@ -645,6 +655,26 @@ const
   FunctionKeywords = [xkLast..xkRound];
 
 { Helper functions }
+
+function EscapeCRLF(Const Txt: String): String;
+Begin
+  With TStringList.Create Do
+    Begin
+      Text := Txt;
+      Result := CommaText;
+      Free
+    End
+End;
+
+function UnEscapeCRLF(Const Txt: String): String;
+Begin
+  With TStringList.Create Do
+    Begin
+      CommaText := Txt;
+      Result := Text;
+      Free
+    End
+End;
 
 function NodeToText(Node: TDOMNode): DOMString;
 var
@@ -1883,6 +1913,39 @@ begin
   Result := nil;
 end;
 
+class function TXPathVariable.Import(const From: WideString): TXPathVariable;
+
+Var F, P: Integer;
+    V: TNodeSet;
+    Tp: WideString;
+begin
+  P := Pos(':', From);
+  If P = 0 Then
+     raise Exception.Create(From + ' : can''t import variable!');
+  Tp := Copy(From, 1, P-1);
+  If Tp = 'NODESET' Then
+     With TStringList.Create Do
+       Begin
+         CommaText := Copy(From, P+1, 32768);
+         V := TNodeSet.Create;
+         For F := 0 To Count-1 Do
+             V.Add(IntegerToTObject(StrToInt(Strings[F])));
+         Result := TXPathNodeSetVariable.Create(V);
+         Free
+       end
+  Else If Tp = 'BOOLEAN' Then
+     If Copy(From, P+1, 8192) = 'true' Then
+        Result := TXPathBooleanVariable.Create(True)
+     Else
+        Result := TXPathBooleanVariable.Create(False)
+  Else If Tp = 'NUMBER' Then
+     Result := TXPathNumberVariable.Create(StrToFloat(Copy(From, P+1, 8192)))
+  Else If Tp = 'STRING' Then
+     Result := TXPathStringVariable.Create(Copy(From, P+1, 8192))
+  Else
+    raise Exception.Create(From + ' : Unknown Type : can''t import variable!')
+end;
+
 procedure TXPathVariable.Error(const Msg: String; const Args: array of const);
 begin
   raise Exception.CreateFmt(Msg, Args) at get_caller_addr(get_frame), get_caller_frame(get_frame);
@@ -1957,7 +2020,21 @@ begin
   Result := StrToNumber(AsText);
 end;
 
-constructor TXPathBooleanVariable.Create(AValue: Boolean; Const bound: Boolean = True);
+function TXPathNodeSetVariable.Export: DOMString;
+
+Var F: Integer;
+begin
+  Result := 'NODESET:';
+  With TStringList.Create Do
+    Begin
+      For F := 0 To FValue.Count-1 Do
+          Add(IntToStr(TObjectToInteger(TObject(FValue[F]))));
+      Result := Result + CommaText;
+      Free
+    end;
+end;
+
+constructor TXPathBooleanVariable.Create(AValue: Boolean; const bound: Boolean);
 begin
   inherited Create;
   FValue := AValue;
@@ -1995,8 +2072,13 @@ begin
     Result := 'false';  // Do not localize!
 end;
 
+function TXPathBooleanVariable.Export: DOMString;
+begin
+  Result := 'BOOLEAN:' + AsText
+end;
 
-constructor TXPathNumberVariable.Create(AValue: Extended; Const bound: Boolean = True);
+
+constructor TXPathNumberVariable.Create(AValue: Extended; const bound: Boolean);
 begin
   inherited Create;
   FValue := AValue;
@@ -2097,8 +2179,14 @@ begin
   end;
 end;
 
+function TXPathNumberVariable.Export: DOMString;
+begin
+  Result := 'NUMBER:' + FloatToStr(FValue)
+end;
 
-constructor TXPathStringVariable.Create(const AValue: DOMString; Const bound: Boolean = True);
+
+constructor TXPathStringVariable.Create(const AValue: DOMString;
+  const bound: Boolean);
 begin
   inherited Create;
   FValue := AValue;
@@ -2128,6 +2216,11 @@ end;
 function TXPathStringVariable.AsText: DOMString;
 begin
   Result := FValue;
+end;
+
+function TXPathStringVariable.Export: DOMString;
+begin
+  Result := 'STRING:' + FValue;
 end;
 
 
@@ -3052,6 +3145,8 @@ var
   F: Integer;
 begin
   // !!!: Prevent the addition of duplicate functions
+  If Assigned(FunctionsByName[AName]) Then
+     Exit;
   New(NewFunctionInfo);
   NewFunctionInfo^.Name := AName;
   NewFunctionInfo^.Fn := AFunction;
@@ -3076,6 +3171,8 @@ begin
                    S := Args[F];
                 If S[1] = '$' Then
                    NewFunctionInfo^.ArgNames[F] := Copy(S, 2, 1024)
+                Else
+                   NewFunctionInfo^.ArgNames[F] := S
               End;
          End
      End
@@ -3093,6 +3190,8 @@ var
   NewVariableInfo: PVariableInfo;
 begin
   // !!!: Prevent the addition of duplicate variables
+  If Assigned(VariablesByName[AName]) Then
+     Exit;
   New(NewVariableInfo);
   NewVariableInfo^.Name := AName;
   NewVariableInfo^.Variable := AVariable;
@@ -3147,6 +3246,146 @@ begin
   LocalWords.Clear;
   CollectedRels.AddStrings(LocalRels);
   LocalRels.Clear
+end;
+
+procedure TXPathEnvironment.Export(outS: PWideChar);
+
+Var F, G: Integer;
+begin
+  With TStringList.Create Do
+    Begin
+      Add(IntToStr(FFunctions.Count));
+      For F := 0 To FFunctions.Count-1 Do
+          Begin
+            Add(PFunctionInfo(FFunctions[F])^.Name);
+            Add(IntToStr(Length(PFunctionInfo(FFunctions[F])^.ArgNames)));
+            For G := 0 To Length(PFunctionInfo(FFunctions[F])^.ArgNames)-1 Do
+                Add(PFunctionInfo(FFunctions[F])^.ArgNames[G]);
+            Add(IntToStr(Length(PFunctionInfo(FFunctions[F])^.ArgRefs)));
+            For G := 0 To Length(PFunctionInfo(FFunctions[F])^.ArgRefs)-1 Do
+                Add(BoolVals[PFunctionInfo(FFunctions[F])^.ArgRefs[G]]);
+            Add(EscapeCRLF(PFunctionInfo(FFunctions[F])^.Body));
+            Add(BoolVals[PFunctionInfo(FFunctions[F])^.EvalArgs])
+          End;
+      Add(IntToStr(FVariables.Count));
+      For F := 0 To FVariables.Count-1 Do
+          Begin
+            Add(PVariableInfo(FVariables[F])^.Name);
+            Add(BoolVals[PVariableInfo(FVariables[F])^.Local]);
+            Add(PVariableInfo(FVariables[F])^.Variable.Export());
+          End;
+      Add(IntToStr(FCollectedWords.Count));
+      AddStrings(FCollectedWords);
+      Add(IntToStr(FLocalWords.Count));
+      AddStrings(FLocalWords);
+      Add(IntToStr(FCollectedRels.Count));
+      AddStrings(FCollectedRels);
+      Add(IntToStr(FLocalRels.Count));
+      AddStrings(FLocalRels);
+      StrPCopy(outS, WideString(Text));
+      Free
+    End
+end;
+
+procedure TXPathEnvironment.Import(inS: PWideChar);
+
+Var F, G, K: Integer;
+    Name: String;
+    ArgNames: Array Of String;
+    ArgRefs: Array Of Boolean;
+    Body: String;
+    Local: Boolean;
+    EvalArgs: Boolean;
+begin
+  With TStringList.Create Do
+    Begin
+      Text := WideString(inS);
+      F := 0;
+      G := StrToInt(Strings[F]); Inc(F);
+      While G > 0 Do
+          Begin
+            Name := Strings[F]; Inc(F);
+            SetLength(ArgNames, StrToInt(Strings[F])); Inc(F);
+            For K := 0 To Length(ArgNames)-1 Do
+                Begin
+                  ArgNames[K] := Strings[F]; Inc(F)
+                End;
+            SetLength(ArgRefs, StrToInt(Strings[F])); Inc(F);
+            For K := 0 To Length(ArgRefs)-1 Do
+                Begin
+                  If Strings[F] = BoolVals[True] Then
+                     ArgRefs[K] := True
+                  Else If Strings[F] = BoolVals[False] Then
+                     ArgRefs[K] := False
+                  Else
+                     raise Exception.Create('ArgRefs : ? ' + Strings[F]);
+                  Inc(F)
+                End;
+            Body := UnEscapeCRLF(Strings[F]); Inc(F);
+            If Strings[F] = BoolVals[True] Then
+               EvalArgs := True
+            Else If Strings[F] = BoolVals[False] Then
+               EvalArgs := False
+            Else
+               raise Exception.Create('EvalArgs : ? ' + Strings[F]);
+            Inc(F);
+            For K := 0 To Length(ArgNames)-1 Do
+                If ArgRefs[K] Then
+                   ArgNames[K] := '&' + ArgNames[K];
+            AddFunction(Name, Nil, EvalArgs, ArgNames, Body);
+            Dec(G)
+          End;
+      G := StrToInt(Strings[F]); Inc(F);
+      While G > 0 Do
+          Begin
+            Name := Strings[F]; Inc(F);
+            If Strings[F] = BoolVals[True] Then
+               Local := True
+            Else If Strings[F] = BoolVals[False] Then
+               Local := False
+            Else
+               raise Exception.Create('Local : ? ' + Strings[F]);
+            Inc(F);
+            If Not Assigned(VariablesByName[Name]) Then
+               AddVariable(Name, TXPathVariable.Import(Strings[F]), Local)
+            Else
+               Begin
+                 VariablesByName[Name].Free;
+                 VariablesByName[Name] := TXPathVariable.Import(Strings[F])
+               end;
+            Inc(F);
+            Dec(G)
+          End;
+      G := StrToInt(Strings[F]); Inc(F);
+      FCollectedWords.Clear;
+      While G > 0 Do
+        Begin
+          FCollectedWords.Add(Strings[F]); Inc(F);
+          Dec(G)
+        end;
+      G := StrToInt(Strings[F]); Inc(F);
+      FLocalWords.Clear;
+      While G > 0 Do
+        Begin
+          FLocalWords.Add(Strings[F]); Inc(F);
+          Dec(G)
+        end;
+      G := StrToInt(Strings[F]); Inc(F);
+      FCollectedRels.Clear;
+      While G > 0 Do
+        Begin
+          FCollectedRels.Add(Strings[F]); Inc(F);
+          Dec(G)
+        end;
+      G := StrToInt(Strings[F]); Inc(F);
+      FLocalRels.Clear;
+      While G > 0 Do
+        Begin
+          FLocalRels.Add(Strings[F]); Inc(F);
+          Dec(G)
+        end;
+      Free
+    End
 end;
 
 function TXPathEnvironment.GetFunctionCount: Integer;
