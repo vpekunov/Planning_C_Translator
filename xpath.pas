@@ -137,7 +137,7 @@ type
 
 { XPath expression parse tree }
 
-  TXPathNodeNameTester = function(Const NodeName, NodeTestString: String): Boolean; cdecl;
+  TXPathNodeNameTester = function(Const NodeName, NodeTestString: PChar): Boolean; cdecl;
 
   TXPathExprNode = class
   protected
@@ -334,7 +334,7 @@ type
     function AsNumber: Extended; virtual; abstract;
     function AsText: DOMString; virtual; abstract;
     function Export: DOMString; virtual; abstract;
-    class function Import(Const From: WideString): TXPathVariable;
+    class function Import(Const From: String): TXPathVariable;
   end;
 
   { TXPathNodeSetVariable }
@@ -584,8 +584,8 @@ type
     procedure RemoveVariable(Index: Integer);
     procedure RemoveVariable(const AName: String);
     procedure AcceptLocalWordsRels;
-    procedure Export(outS: PWideChar);
-    procedure Import(inS: PWideChar);
+    procedure Export(outS: PChar);
+    procedure Import(inS: PChar);
     property FunctionCount: Integer read GetFunctionCount;
     property VariableCount: Integer read GetVariableCount;
     property Functions[Index: Integer]: PFunctionInfo read GetFunction;
@@ -1479,7 +1479,7 @@ var
             exit;
         end
         else if Node.NodeName <> NodeTestString then
-           If Not (Assigned(NodeNameTester) And NodeNameTester(Node.NodeName, NodeTestString)) Then
+           If Not (Assigned(NodeNameTester) And NodeNameTester(PChar(String(Node.NodeName)), PChar(String(NodeTestString)))) Then
               exit;
       ntTextNode:
         if not Node.InheritsFrom(TDOMText) then
@@ -1913,11 +1913,11 @@ begin
   Result := nil;
 end;
 
-class function TXPathVariable.Import(const From: WideString): TXPathVariable;
+class function TXPathVariable.Import(const From: String): TXPathVariable;
 
 Var F, P: Integer;
     V: TNodeSet;
-    Tp: WideString;
+    Tp: String;
 begin
   P := Pos(':', From);
   If P = 0 Then
@@ -3248,7 +3248,7 @@ begin
   LocalRels.Clear
 end;
 
-procedure TXPathEnvironment.Export(outS: PWideChar);
+procedure TXPathEnvironment.Export(outS: PChar);
 
 Var F, G: Integer;
 begin
@@ -3282,12 +3282,12 @@ begin
       AddStrings(FCollectedRels);
       Add(IntToStr(FLocalRels.Count));
       AddStrings(FLocalRels);
-      StrPCopy(outS, WideString(Text));
+      StrPCopy(outS, String(Text));
       Free
     End
 end;
 
-procedure TXPathEnvironment.Import(inS: PWideChar);
+procedure TXPathEnvironment.Import(inS: PChar);
 
 Var F, G, K: Integer;
     Name: String;
@@ -3299,7 +3299,7 @@ Var F, G, K: Integer;
 begin
   With TStringList.Create Do
     Begin
-      Text := WideString(inS);
+      Text := String(inS);
       F := 0;
       G := StrToInt(Strings[F]); Inc(F);
       While G > 0 Do

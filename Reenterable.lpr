@@ -711,12 +711,19 @@ Var S1,S2,S3,PtrID,ID: String;
     Tp, Nm: String;
     F: Integer;
 Begin
+     S2:=S;
      L.AnlzLine:=S;
      S1:=L.GetBalancedListItem(True,[SemiColon],@GetLineFromLines);
      S:=L.AnlzLine;
      L.AnlzLine:=S1;
      L.DelSpaces;
      S1:=L.GetBefore(False,[Space,Tabulation]);
+     If (Pos(LeftFBracket, L.AnlzLine) = 0) And Not IsMarkup Then
+        Begin
+          TagID := L.GetIdent(False) + ' ' + L.GetIdent(False);
+          S := S2;
+          Exit('')
+        End;
      TagID:=L.GetBefore(True,[Space,Tabulation,LeftFBracket]);
      If L.IsNext(LeftFBracket) Then
         Begin
