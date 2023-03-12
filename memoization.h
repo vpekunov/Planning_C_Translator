@@ -1,6 +1,8 @@
 #ifndef __MEMOIZATION_H__
 #define __MEMOIZATION_H__
 
+#pragma syntax nocheck
+
 #scan(memoFun)
 
 #include <vector>
@@ -364,7 +366,7 @@ public:
 #endif
 
 namespace solve {
-   /* LU - разложение  с выбором максимального элемента по диагонали */
+   /* LU - СЂР°Р·Р»РѕР¶РµРЅРёРµ  СЃ РІС‹Р±РѕСЂРѕРј РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РїРѕ РґРёР°РіРѕРЅР°Р»Рё */
    bool _GetLU(int NN, int * iRow, long double * A, long double * LU)
    {
     int i,j,k;
@@ -415,7 +417,7 @@ namespace solve {
     return true;
    }
 
-   /* Метод LU - разложения */
+   /* РњРµС‚РѕРґ LU - СЂР°Р·Р»РѕР¶РµРЅРёСЏ */
    bool _SolveLU(int NN, int * iRow, long double * LU, long double * Y, long double * X)
    {
     int i,j,k;
@@ -449,8 +451,8 @@ namespace solve {
 
 }
 
-// Расчет параметров функции Y = f(X1,X2) = g+a*X1+b*X2+c*X1*X2+d*X1^2+e*X2^2. Метод наименьших квадратов
-// Вычисляет также YY -- значения выходов, вычисленные по f(X1,X2). Возвращает вектор (g, a, b, c, d, e)
+// Р Р°СЃС‡РµС‚ РїР°СЂР°РјРµС‚СЂРѕРІ С„СѓРЅРєС†РёРё Y = f(X1,X2) = g+a*X1+b*X2+c*X1*X2+d*X1^2+e*X2^2. РњРµС‚РѕРґ РЅР°РёРјРµРЅСЊС€РёС… РєРІР°РґСЂР°С‚РѕРІ
+// Р’С‹С‡РёСЃР»СЏРµС‚ С‚Р°РєР¶Рµ YY -- Р·РЅР°С‡РµРЅРёСЏ РІС‹С…РѕРґРѕРІ, РІС‹С‡РёСЃР»РµРЅРЅС‹Рµ РїРѕ f(X1,X2). Р’РѕР·РІСЂР°С‰Р°РµС‚ РІРµРєС‚РѕСЂ (g, a, b, c, d, e)
 long double * MNK_of_X1X2(const std::vector<double> X1, const std::vector<double> X2,
                      const std::vector<double> Y, double &err,
                      std::vector<double> & YY) {
@@ -514,7 +516,7 @@ long double * MNK_of_X1X2(const std::vector<double> X1, const std::vector<double
  return XX;
 }
 
-// Вычисление коэффициента корреляции векторов X и Y. Попутно считает среднеквадратичные отклонения SX, SY
+// Р’С‹С‡РёСЃР»РµРЅРёРµ РєРѕСЌС„С„РёС†РёРµРЅС‚Р° РєРѕСЂСЂРµР»СЏС†РёРё РІРµРєС‚РѕСЂРѕРІ X Рё Y. РџРѕРїСѓС‚РЅРѕ СЃС‡РёС‚Р°РµС‚ СЃСЂРµРґРЅРµРєРІР°РґСЂР°С‚РёС‡РЅС‹Рµ РѕС‚РєР»РѕРЅРµРЅРёСЏ SX, SY
 double correlation(const std::vector<double> X, const std::vector<double> Y, double & SX, double & SY) {
   double corr = 0.0;
   double avrX = 0.0;
@@ -617,11 +619,11 @@ typedef struct {
   MGUA_X1X2 * ref;
 } variantMGUA;
 
-// Поиск интерполятора с помощью МГУА. XX[Z][N] -- объекты, N -- кол-во, Z -- число координат.
-// YY[N] -- отклики. _X[Z] -- входы.
+// РџРѕРёСЃРє РёРЅС‚РµСЂРїРѕР»СЏС‚РѕСЂР° СЃ РїРѕРјРѕС‰СЊСЋ РњР“РЈРђ. XX[Z][N] -- РѕР±СЉРµРєС‚С‹, N -- РєРѕР»-РІРѕ, Z -- С‡РёСЃР»Рѕ РєРѕРѕСЂРґРёРЅР°С‚.
+// YY[N] -- РѕС‚РєР»РёРєРё. _X[Z] -- РІС…РѕРґС‹.
 TModelMGUA::TModelMGUA(double EPS,
                        double * _X,
-					   const std::vector<std::vector<double>> & XX,
+					   const std::vector< std::vector<double> > & XX,
 					   const std::vector<double> & YY,
 					   double &err) {
   STRUCT = NULL;
@@ -675,7 +677,7 @@ TModelMGUA::TModelMGUA(double EPS,
 					VV[j] = XX[V1][j];
 			var.YY = VV;
 			var.ref = reinterpret_cast<MGUA_X1X2 *>(V1);
-			MGUA[100.0-itc->first] = var; // Чтобы переменные с большей корреляцией с выходами попали в начало популяции.
+			MGUA[100.0-itc->first] = var; // Р§С‚РѕР±С‹ РїРµСЂРµРјРµРЅРЅС‹Рµ СЃ Р±РѕР»СЊС€РµР№ РєРѕСЂСЂРµР»СЏС†РёРµР№ СЃ РІС‹С…РѕРґР°РјРё РїРѕРїР°Р»Рё РІ РЅР°С‡Р°Р»Рѕ РїРѕРїСѓР»СЏС†РёРё.
 		}
 		while (MGUA.size()>1) {
 			std::map<double,variantMGUA>::iterator i0,i1;
@@ -683,12 +685,12 @@ TModelMGUA::TModelMGUA(double EPS,
 			variantMGUA var;
 			for (i0 = MGUA.begin(); i0!=MGUA.end(); i0++)
 				for (i1 = i0, i1++; i1!=MGUA.end(); i1++) {
-					if (reinterpret_cast<long long>(i0->second.ref) < Z) // В MGUA -- фиктивный первый слой (входные переменные)
+					if (reinterpret_cast<long long>(i0->second.ref) < Z) // Р’ MGUA -- С„РёРєС‚РёРІРЅС‹Р№ РїРµСЂРІС‹Р№ СЃР»РѕР№ (РІС…РѕРґРЅС‹Рµ РїРµСЂРµРјРµРЅРЅС‹Рµ)
 						var.ref = new MGUA_X1X2(MNK_of_X1X2(i0->second.YY,i1->second.YY,YY,err,var.YY),
 						                    _X+reinterpret_cast<long long>(i0->second.ref),_X+reinterpret_cast<long long>(i1->second.ref),
 											mins[reinterpret_cast<long long>(i0->second.ref)],maxs[reinterpret_cast<long long>(i0->second.ref)],
 											mins[reinterpret_cast<long long>(i1->second.ref)],maxs[reinterpret_cast<long long>(i1->second.ref)]);
-					else // В MGUA -- настоящий слой
+					else // Р’ MGUA -- РЅР°СЃС‚РѕСЏС‰РёР№ СЃР»РѕР№
 						var.ref = new MGUA_X1X2(MNK_of_X1X2(i0->second.YY,i1->second.YY,YY,err,var.YY),i0->second.ref,i1->second.ref);
 					if (err<1E300) _MGUA[err] = var;
 					else delete var.ref;
@@ -779,8 +781,8 @@ public:
 	int Z = NX;
 	int K = NY;
 
-	// _XX[Z][N] -- объекты, N -- кол-во, Z -- число координат.
-	// _YY[N] -- отклики. _X[Z] -- входы.
+	// _XX[Z][N] -- РѕР±СЉРµРєС‚С‹, N -- РєРѕР»-РІРѕ, Z -- С‡РёСЃР»Рѕ РєРѕРѕСЂРґРёРЅР°С‚.
+	// _YY[N] -- РѕС‚РєР»РёРєРё. _X[Z] -- РІС…РѕРґС‹.
 	vector< vector<double> > _XX(Z);
 	vector<double> _YY(N);
 
@@ -1606,5 +1608,7 @@ public:
    write('}'), nl,
    write(RETTYPE), write(' '), write('memo_'), write(ID), write('('), write(ARGS), write(') ').
 };
+
+#pragma syntax check
 
 #endif

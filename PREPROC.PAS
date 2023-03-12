@@ -24,8 +24,9 @@ Const NewFileName: String = '';
 procedure PreprocStage1(ApplyConds: Boolean;
                         Defines: TStringList;
                         Var IsClustered, IsVectorized: Boolean;
-                        Var Restrictions: TRestrictions);
-procedure PreprocStage1a(Var Restrictions: TRestrictions);
+                        Var Restrictions: TRestrictions;
+                        PreChecks: Boolean);
+procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks: Boolean);
 procedure PreprocStage2(Var Restrictions: TRestrictions);
 
 Type PatternModes = (pmNone, pmScan, pmParse);
@@ -252,7 +253,8 @@ End;
 procedure PreprocStage1(ApplyConds: Boolean;
                         Defines: TStringList;
                         Var IsClustered, IsVectorized: Boolean;
-                        Var Restrictions: TRestrictions);
+                        Var Restrictions: TRestrictions;
+                        PreChecks: Boolean);
 
 Var L: TAnalyser; Eval: TEvaluator;
     S, S1, S2: String;
@@ -265,6 +267,7 @@ Var L: TAnalyser; Eval: TEvaluator;
     FF: TextFile;
     FS: String;
     CommentFlag: Boolean;
+    NotEmpty: Boolean;
     LN: TLine;
     Rslt: Real;
     UseLine: Boolean;
@@ -283,6 +286,9 @@ begin
   SetLength(DefStack, 0);
 
   ModeGPU := gpuNone;
+
+  if (PreChecks) Then
+     VerifyProgram(True, False);
 
   LCounter:=1;
   // First preprocessing stage
@@ -432,6 +438,7 @@ begin
            If Flag And (S = idDefine) Then
               Begin
                 ID := L.GetIdent(False);
+                NotEmpty := Length(L.AnlzLine) > 0;
                 HasParams := (Length(L.AnlzLine) > 0) And (L.AnlzLine[1] = LeftBracket);
                 S1 := '';
                 S := Trim(L.AnlzLine);
@@ -466,7 +473,10 @@ begin
                            For F := 0 To Defines.Count-1 Do
                                S1 := Substitute(S1, '', '', Defines.Strings[F], PString(Defines.Objects[F])^);
                            If Length(S1) = 0 Then
-                              S1 := '1';
+                              If NotEmpty Then
+                                 S1 := ' '
+                              Else
+                                  S1 := '1';
 
                            If HasParams Then
                               S2 := '#define ' + ID + S1
@@ -780,7 +790,7 @@ Begin
      End 
 End;
 
-procedure PreprocStage1a(Var Restrictions: TRestrictions);
+procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks: Boolean);
 
 Type SmallINtArray = Array Of SmallInt;
 
@@ -1014,6 +1024,9 @@ begin
   L:=TAnalyser.Create(IdentSet,[Space,Tabulation], True);
 
   Patterns := TStringList.Create;
+
+  if (PreChecks) Then
+     VerifyProgram(True, True);
 
   LCounter:=1;
   // PreSecond preprocessing phase
@@ -1427,7 +1440,7 @@ begin
                 G := LCounter;
                 L.GetIdent(True);
                 L.Check(LeftBracket);
-                S := L.GetBalancedListItem(True,[RightBracket]); // Prefix
+                S2 := L.GetBalancedListItem(True,[RightBracket]); // Prefix
                 ID := L.GetIdent(False);
                 F := _IndexOf(Modules, ID);
                 If F >= 0 Then
@@ -1481,7 +1494,7 @@ begin
                              Halt(-1)
                            End
                       End;
-                Module := TModule.Create(ModParams, S, Trim(S1));
+                Module := TModule.Create(ModParams, S2, Trim(S1));
                 For F := G To LCounter Do
                     TLine(Lines.Objects[F-1]).Restricted := True;
                 Modules.AddObject(ID, Module);
@@ -1615,7 +1628,11 @@ begin
                           S := '';
                           Repeat
                             S := S + L.GetBalancedListItem(True, [Point]);
-                            If L.Empty Or L.IsNext(#$07) Then
+                            If L.Empty Or L.IsNext(#$07) Or
+                               Not (L.IsNextSet(NumberSet) Or
+                                     ((Length(S) >= 1) And (S[Length(S)] = '=') And L.IsNext(Point)) Or
+                                     ((Length(S) >= 2) And (Copy(S, Length(S)-1, 2) = '=.'))
+                                   ) Then
                                Break;
                             S := S + Point
                           Until L.Error Or L.Empty;

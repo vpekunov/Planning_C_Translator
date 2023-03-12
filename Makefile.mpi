@@ -1,0 +1,29 @@
+.SUFFIXES:
+
+SRC_DIR := ./Examples/MPI2REENT.dir
+LDFLAGS := -lm -lpthread
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++11
+
+SRCS=$(wildcard $(SRC_DIR)/*.cpp)
+
+CCS=$(SRCS:.cpp=.cc)
+
+MPIS==$(SRCS:.cpp=.mpi)
+
+EXES=$(SRCS:.cpp=)
+
+all: $(EXES)
+
+%: %.cc
+	g++ $(CPPFLAGS) -o $@ -I../ $< $(LDFLAGS)
+
+%.cc: %.mpi
+	./Reenterable -strict-pre-checks -strict-plc-checks $< $@
+
+%.mpi: %.cpp
+	./mpi2reent `head -n 1 $< | cut -c 3-5` $< $@
+
+clean:
+	rm -rf $(CCS)
+	rm -rf $(MPIS)
+	rm -rf $(EXES)

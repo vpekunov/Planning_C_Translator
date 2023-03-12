@@ -4,7 +4,7 @@
 #include <omp.h>
 #include "transacted.h"
 
-const int n = 10000; // Размер массива
+const int n = 10000; // Р Р°Р·РјРµСЂ РјР°СЃСЃРёРІР°
 
 class Qsort {
 protected:
@@ -31,15 +31,15 @@ public:
   Runner(int nthreads) : TQueuedObj<Qsort>(nthreads) { }
 
   void step(int left, int right, int * pleft_i, int * pright_i) {
-	*pleft_i = left, *pright_i = right; // Счетчики слева и справа
+	*pleft_i = left, *pright_i = right; // РЎС‡РµС‚С‡РёРєРё СЃР»РµРІР° Рё СЃРїСЂР°РІР°
 	int avr = (*M)[(left + right)/2];
-	if (left == right) return; // Массив из одного элемента не сортируется
-	// Переставляем элементы относительно avr
+	if (left == right) return; // РњР°СЃСЃРёРІ РёР· РѕРґРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РЅРµ СЃРѕСЂС‚РёСЂСѓРµС‚СЃСЏ
+	// РџРµСЂРµСЃС‚Р°РІР»СЏРµРј СЌР»РµРјРµРЅС‚С‹ РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ avr
 	while (*pleft_i <= *pright_i) {
-		while ((*M)[*pleft_i] < avr) (*pleft_i)++; // Ищем слева больший или равный элемент
-		while ((*M)[*pright_i] > avr) (*pright_i)--; // Ищем справа меньший или равный элемент
-		if (*pleft_i <= *pright_i) { // Если нашли такие элементы
-			// то меняем их местами
+		while ((*M)[*pleft_i] < avr) (*pleft_i)++; // РС‰РµРј СЃР»РµРІР° Р±РѕР»СЊС€РёР№ РёР»Рё СЂР°РІРЅС‹Р№ СЌР»РµРјРµРЅС‚
+		while ((*M)[*pright_i] > avr) (*pright_i)--; // РС‰РµРј СЃРїСЂР°РІР° РјРµРЅСЊС€РёР№ РёР»Рё СЂР°РІРЅС‹Р№ СЌР»РµРјРµРЅС‚
+		if (*pleft_i <= *pright_i) { // Р•СЃР»Рё РЅР°С€Р»Рё С‚Р°РєРёРµ СЌР»РµРјРµРЅС‚С‹
+			// С‚Рѕ РјРµРЅСЏРµРј РёС… РјРµСЃС‚Р°РјРё
 			if ((*M)[*pleft_i] > (*M)[*pright_i]) {
 				int a = (*M)[*pleft_i];
 				(*M)[*pleft_i] = (*M)[*pright_i];
@@ -70,15 +70,15 @@ public:
 };
 
 int main() {
-	int * M; // Массив
-	int i; // Счетчик
-	// Выделяем память
+	int * M; // РњР°СЃСЃРёРІ
+	int i; // РЎС‡РµС‚С‡РёРє
+	// Р’С‹РґРµР»СЏРµРј РїР°РјСЏС‚СЊ
 	M = (int *) malloc(n*sizeof(int));
 	srand((unsigned int) time(NULL));
-	// Заполняем массив
+	// Р—Р°РїРѕР»РЅСЏРµРј РјР°СЃСЃРёРІ
 	for (i = 0; i < n; i++)
 		M[i] = rand();
-	// Сортируем массив по неубыванию
+	// РЎРѕСЂС‚РёСЂСѓРµРј РјР°СЃСЃРёРІ РїРѕ РЅРµСѓР±С‹РІР°РЅРёСЋ
 	set_jobs_mode(true);
 	double t0 = omp_get_wtime();
 	Runner obj(omp_get_num_procs());
@@ -89,9 +89,9 @@ int main() {
 	obj.cilk_sync;
 	obj.get(n, M);
 	printf("Elapsed time = %lf\n", omp_get_wtime() - t0);
-	// Выводим результат
+	// Р’С‹РІРѕРґРёРј СЂРµР·СѓР»СЊС‚Р°С‚
 	printf("\n");
-	// Освобождаем память
+	// РћСЃРІРѕР±РѕР¶РґР°РµРј РїР°РјСЏС‚СЊ
 	free(M);
 	return 0;
 }

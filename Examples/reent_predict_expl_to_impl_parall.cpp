@@ -4,7 +4,7 @@ using namespace std;
 
 #include <omp.h>
 
- /* LU - разложение  с выбором максимального элемента по диагонали */
+ /* LU - СЂР°Р·Р»РѕР¶РµРЅРёРµ  СЃ РІС‹Р±РѕСЂРѕРј РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РїРѕ РґРёР°РіРѕРЅР°Р»Рё */
  bool GetLU(int NN, int * iRow, long double * A, long double * LU)
  {
   int i,j,k;
@@ -50,7 +50,7 @@ using namespace std;
   }
   return true;
  }
- /* Метод LU - разложения */
+ /* РњРµС‚РѕРґ LU - СЂР°Р·Р»РѕР¶РµРЅРёСЏ */
  bool SolveLU(int NN, int * iRow, long double * LU, long double * Y, long double * X)
  {
   int i,j,k;
@@ -77,7 +77,7 @@ using namespace std;
   }
   return true;
  }
- /* Метод Гаусса-Зейделя  с выбором максимального элемента по диагонали */
+ /* РњРµС‚РѕРґ Р“Р°СѓСЃСЃР°-Р—РµР№РґРµР»СЏ  СЃ РІС‹Р±РѕСЂРѕРј РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РїРѕ РґРёР°РіРѕРЅР°Р»Рё */
  bool SolveGaussZeidel(int NN, int * iRow, long double * A, long double * LU, long double * Y, long double * X) {
   int i, j;
   double prev_eps, eps;

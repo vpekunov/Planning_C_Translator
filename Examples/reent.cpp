@@ -1,9 +1,9 @@
 // Reenterable reent.cpp reent1.cpp
 // g++ -o reent reent1.cpp -fopenmp -fgnu-tm -fpermissive -std=c++0x -lm -lpthread -lOpenCL
 
-// Для теста на многоядерной системе, дающего реальное ускорение, необходимо
-// раскомментировать следующую строчку
-// #define __THOROW__
+// Р”Р»СЏ С‚РµСЃС‚Р° РЅР° РјРЅРѕРіРѕСЏРґРµСЂРЅРѕР№ СЃРёСЃС‚РµРјРµ, РґР°СЋС‰РµРіРѕ СЂРµР°Р»СЊРЅРѕРµ СѓСЃРєРѕСЂРµРЅРёРµ, РЅРµРѕР±С…РѕРґРёРјРѕ
+// СЂР°СЃРєРѕРјРјРµРЅС‚РёСЂРѕРІР°С‚СЊ СЃР»РµРґСѓСЋС‰СѓСЋ СЃС‚СЂРѕС‡РєСѓ
+#define __THOROW__
 
 // #define __MPI__
 
@@ -144,7 +144,7 @@ TreeNode * Root;
 _TreeNode * _Root;
 DataItem A[ARR_SIZE];
 
-reenterable Out(TreeNode * Cur, int Level); /* Прототип */
+reenterable Out(TreeNode * Cur, int Level); /* РџСЂРѕС‚РѕС‚РёРї */
 
 int CurLevel = 1;
 reenterable Out(TreeNode * Cur, int Level)
@@ -156,9 +156,9 @@ reenterable Out(TreeNode * Cur, int Level)
     }
  cout<<Cur->Data()<<" ";
  if (Cur->Left)
-    plan_last(Cur->Left,Level+1); /* Планируем вызов (не вызываем) эту процедуру */
+    plan_last(Cur->Left,Level+1); /* РџР»Р°РЅРёСЂСѓРµРј РІС‹Р·РѕРІ (РЅРµ РІС‹Р·С‹РІР°РµРј) СЌС‚Сѓ РїСЂРѕС†РµРґСѓСЂСѓ */
  if (Cur->Right)
-    plan_last(Cur->Right,Level+1); /* То же самое */
+    plan_last(Cur->Right,Level+1); /* РўРѕ Р¶Рµ СЃР°РјРѕРµ */
 }
 
 reenterable static global ParallelOut(TreeNode * Root, TreeNode * R, bool par) {
@@ -339,7 +339,7 @@ chain RevEnumerateStage0(TreeNode * Cur) throw(TreeNode * Cur, int &Number)
 {
  if (Cur->Right) plan_last(Cur->Right);
  if (Cur->Left) plan_last(Cur->Left);
- throw_first(Cur,1); // можно и plan+признак(без перепланирования)
+ throw_first(Cur,1); // РјРѕР¶РЅРѕ Рё plan+РїСЂРёР·РЅР°Рє(Р±РµР· РїРµСЂРµРїР»Р°РЅРёСЂРѕРІР°РЅРёСЏ)
 }
 
 chain RevEnumerateStage1(TreeNode * Cur, int &Number)
@@ -483,12 +483,12 @@ reenterable[ARR_SIZE] void Sum(int Start, int Incr)
  if (Next<ARR_SIZE) plan_first(Next,Incr);
  if (Start==0)
     {
-     /* Проиллюстрируем применение синтаксиса по типу OpenMP */
+     /* РџСЂРѕРёР»Р»СЋСЃС‚СЂРёСЂСѓРµРј РїСЂРёРјРµРЅРµРЅРёРµ СЃРёРЅС‚Р°РєСЃРёСЃР° РїРѕ С‚РёРїСѓ OpenMP */
      #pragma omp plan parallelize
     }
  A[Start]+=A[Start+Incr];
  if (Next>=ARR_SIZE) {
-    #pragma omp plan last /* Чтобы избежать суммирования дважды в одну ячейку */
+    #pragma omp plan last /* Р§С‚РѕР±С‹ РёР·Р±РµР¶Р°С‚СЊ СЃСѓРјРјРёСЂРѕРІР°РЅРёСЏ РґРІР°Р¶РґС‹ РІ РѕРґРЅСѓ СЏС‡РµР№РєСѓ */
     if (Incr<ARR_SIZE/2) plan_last(0,Incr*2);
  }
 }
@@ -748,7 +748,7 @@ DataItem * TreeMinMax(int PerStageNP, DataItem & Min)
  return &Max;
 }
 
-// фильтрация изображения, векторные операции???
+// С„РёР»СЊС‚СЂР°С†РёСЏ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ, РІРµРєС‚РѕСЂРЅС‹Рµ РѕРїРµСЂР°С†РёРё???
 
 #ifdef _OPENMP
 const double tau = 0.1;
@@ -917,9 +917,9 @@ chain Div(double * V1, double * V2)
  V1[N] /= V2[N];
 }
 
-const int NL = 10; /* Размер лабиринта */
-const unsigned char W = 0xFF; /* Стенка */
-/* Лабиринт */
+const int NL = 10; /* Р Р°Р·РјРµСЂ Р»Р°Р±РёСЂРёРЅС‚Р° */
+const unsigned char W = 0xFF; /* РЎС‚РµРЅРєР° */
+/* Р›Р°Р±РёСЂРёРЅС‚ */
 unsigned char Labirint[NL][NL] =
 {
  {W,W,W,W,W,W,W,W,W,W},
@@ -933,53 +933,53 @@ unsigned char Labirint[NL][NL] =
  {W,0,0,0,0,0,0,0,0,W},
  {W,W,W,W,W,W,W,W,W,W},
 };
-/* Приращения для сдвига относительно текущей клетки влево, вверх, вниз, вправо */
+/* РџСЂРёСЂР°С‰РµРЅРёСЏ РґР»СЏ СЃРґРІРёРіР° РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ С‚РµРєСѓС‰РµР№ РєР»РµС‚РєРё РІР»РµРІРѕ, РІРІРµСЂС…, РІРЅРёР·, РІРїСЂР°РІРѕ */
 signed char OffsX[4] = {-1,0,0,+1};
 signed char OffsY[4] = {0,-1,+1,0};
 
-const char FirstX = 8; /* Точка отправления */
+const char FirstX = 8; /* РўРѕС‡РєР° РѕС‚РїСЂР°РІР»РµРЅРёСЏ */
 const char FirstY = 8;
-const char LastX  = 5; /* Точка назначения */
+const char LastX  = 5; /* РўРѕС‡РєР° РЅР°Р·РЅР°С‡РµРЅРёСЏ */
 const char LastY  = 4;
 
 chain[NL*NL] FindLi(unsigned char X, unsigned char Y, int Num) throw(unsigned char X, unsigned char Y)
 {
  char Found = 0;
 
- for (int i=0; !Found && i<4; i++) { /* Просматриваем клетки рядом */
+ for (int i=0; !Found && i<4; i++) { /* РџСЂРѕСЃРјР°С‚СЂРёРІР°РµРј РєР»РµС‚РєРё СЂСЏРґРѕРј */
    unsigned char X1 = X+OffsX[i];
    unsigned char Y1 = Y+OffsY[i];
    if (X1>=0 && X1<NL && Y1>=0 && Y1<NL && Labirint[Y1][X1]==0) {
-      /* Если клетка еще не пронумерована */
-      Labirint[Y1][X1] = Num; /* Нумеруем */
-      if (X1==LastX && Y1==LastY) /* Если последняя */
-         Found = 1; /* Сигнализируем окончание */
-      else /* Если не последняя */
-         plan_last(X1,Y1,Num+1); /* Помещаем в очередь */
+      /* Р•СЃР»Рё РєР»РµС‚РєР° РµС‰Рµ РЅРµ РїСЂРѕРЅСѓРјРµСЂРѕРІР°РЅР° */
+      Labirint[Y1][X1] = Num; /* РќСѓРјРµСЂСѓРµРј */
+      if (X1==LastX && Y1==LastY) /* Р•СЃР»Рё РїРѕСЃР»РµРґРЅСЏСЏ */
+         Found = 1; /* РЎРёРіРЅР°Р»РёР·РёСЂСѓРµРј РѕРєРѕРЅС‡Р°РЅРёРµ */
+      else /* Р•СЃР»Рё РЅРµ РїРѕСЃР»РµРґРЅСЏСЏ */
+         plan_last(X1,Y1,Num+1); /* РџРѕРјРµС‰Р°РµРј РІ РѕС‡РµСЂРµРґСЊ */
    }
  }
 
  if (Found) {
-    clear_plan; /* Очищаем план просмотра клеток */
+    clear_plan; /* РћС‡РёС‰Р°РµРј РїР»Р°РЅ РїСЂРѕСЃРјРѕС‚СЂР° РєР»РµС‚РѕРє */
     X = LastX; Y = LastY;
-    throw_last(X,Y); /* Помещаем в "стек" точку назначения (последнюю) */
-    while (X!=FirstX || Y!=FirstY) { /* Пока не дошли до точки отправления */
-      char PointFound = 0; /* Поиск следующей клетки пути */
+    throw_last(X,Y); /* РџРѕРјРµС‰Р°РµРј РІ "СЃС‚РµРє" С‚РѕС‡РєСѓ РЅР°Р·РЅР°С‡РµРЅРёСЏ (РїРѕСЃР»РµРґРЅСЋСЋ) */
+    while (X!=FirstX || Y!=FirstY) { /* РџРѕРєР° РЅРµ РґРѕС€Р»Рё РґРѕ С‚РѕС‡РєРё РѕС‚РїСЂР°РІР»РµРЅРёСЏ */
+      char PointFound = 0; /* РџРѕРёСЃРє СЃР»РµРґСѓСЋС‰РµР№ РєР»РµС‚РєРё РїСѓС‚Рё */
       for (int i=0; !PointFound && i<4; i++) {
         unsigned char X1 = X+OffsX[i];
-        unsigned char Y1 = Y+OffsY[i]; /* Кандидат на следующую клетку пути */
+        unsigned char Y1 = Y+OffsY[i]; /* РљР°РЅРґРёРґР°С‚ РЅР° СЃР»РµРґСѓСЋС‰СѓСЋ РєР»РµС‚РєСѓ РїСѓС‚Рё */
         if (X1>=0 && X1<NL && Y1>=0 && Y1<NL && Labirint[Y1][X1] &&
             Labirint[Y1][X1]<Labirint[Y][X]) {
-            /* Если клетка не пуста и имеет меньший номер */
-            /* У клеток стенок самые большие номера, в рассмотрение не попадают */
+            /* Р•СЃР»Рё РєР»РµС‚РєР° РЅРµ РїСѓСЃС‚Р° Рё РёРјРµРµС‚ РјРµРЅСЊС€РёР№ РЅРѕРјРµСЂ */
+            /* РЈ РєР»РµС‚РѕРє СЃС‚РµРЅРѕРє СЃР°РјС‹Рµ Р±РѕР»СЊС€РёРµ РЅРѕРјРµСЂР°, РІ СЂР°СЃСЃРјРѕС‚СЂРµРЅРёРµ РЅРµ РїРѕРїР°РґР°СЋС‚ */
            PointFound = 1;
-           throw_first(X1,Y1); /* Добавляем в путь (стек) найденную клетку */
-           X = X1; Y = Y1; /* На следующем шаге будем исходить из этой клетки */
+           throw_first(X1,Y1); /* Р”РѕР±Р°РІР»СЏРµРј РІ РїСѓС‚СЊ (СЃС‚РµРє) РЅР°Р№РґРµРЅРЅСѓСЋ РєР»РµС‚РєСѓ */
+           X = X1; Y = Y1; /* РќР° СЃР»РµРґСѓСЋС‰РµРј С€Р°РіРµ Р±СѓРґРµРј РёСЃС…РѕРґРёС‚СЊ РёР· СЌС‚РѕР№ РєР»РµС‚РєРё */
         }
       }
     }
  } else if (plan_empty)
-    cout<<"NO PATH\n"; /* Не дошли до места назначения */
+    cout<<"NO PATH\n"; /* РќРµ РґРѕС€Р»Рё РґРѕ РјРµСЃС‚Р° РЅР°Р·РЅР°С‡РµРЅРёСЏ */
 }
 
 chain[NL*2] OutLi(unsigned char X, unsigned char Y) {

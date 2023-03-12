@@ -1,8 +1,8 @@
-// ПОГРЕШНОСТИ смотри в папках memoize_mgua, no_memoize_mgua
-// При T = 0.25: NO_MEMOIZE = [122.09 sec, KIN = 115.04 sec], MEMOIZE = [86.93 sec, KIN = 79.65 sec]
-// При T = 0.485: NO_MEMOIZE = [271.91 sec, KIN = 254.867 sec], MEMOIZE = [205.6 sec, KIN = 190.22 sec]
+// РџРћР“Р Р•РЁРќРћРЎРўР СЃРјРѕС‚СЂРё РІ РїР°РїРєР°С… memoize_mgua, no_memoize_mgua
+// РџСЂРё T = 0.25: NO_MEMOIZE = [122.09 sec, KIN = 115.04 sec], MEMOIZE = [86.93 sec, KIN = 79.65 sec]
+// РџСЂРё T = 0.485: NO_MEMOIZE = [271.91 sec, KIN = 254.867 sec], MEMOIZE = [205.6 sec, KIN = 190.22 sec]
 
-// ВНИМАНИЕ: нестационарный ветер!
+// Р’РќРРњРђРќРР•: РЅРµСЃС‚Р°С†РёРѕРЅР°СЂРЅС‹Р№ РІРµС‚РµСЂ!
 
 #define _CRT_SECURE_NO_WARNINGS
 

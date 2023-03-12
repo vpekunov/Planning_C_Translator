@@ -15,7 +15,7 @@
 
 using namespace std;
 
-#ifndef __LINUX__
+#ifdef _MSC_VER
 
 #define THROW_EXCEPTION(msg) throw runtime_error(msg)
 

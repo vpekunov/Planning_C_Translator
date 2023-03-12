@@ -1,6 +1,8 @@
 #ifndef __TRANSACT_H__
 #define __TRANSACT_H__
 
+#pragma syntax nocheck
+
 #define split_tune (get_nprocs())
 
 #include <omp.h>
@@ -156,8 +158,8 @@ enum { __reader__ = -1, __writer__, __another__ };
 
 typedef struct {
 	int __transaction_counter__; // K
-	map<int, LARGE_INTEGER> __transaction_timings__[__max_procs__]; // Меньше нуля!
-	map<int, LARGE_INTEGER> __transaction_retimings__[__max_procs__]; // Меньше нуля!
+	map<int, LARGE_INTEGER> __transaction_timings__[__max_procs__]; // РњРµРЅСЊС€Рµ РЅСѓР»СЏ!
+	map<int, LARGE_INTEGER> __transaction_retimings__[__max_procs__]; // РњРµРЅСЊС€Рµ РЅСѓР»СЏ!
 	vector<int> __transaction_procs__;
 	vector<int> __transaction_misses__;
 } __opt_transaction__;
@@ -241,7 +243,7 @@ public:
      __nthreads = nthreads;
      __tid = get_thread_id();
      sprintf(__this_id, "&&%llX", (unsigned long long) this);
-     // Помещаем в стек свой this-ptr
+     // РџРѕРјРµС‰Р°РµРј РІ СЃС‚РµРє СЃРІРѕР№ this-ptr
      omp_set_lock(&__lock_tobjs__);
      stack<TOBJ_STARTER *> * st = __tobj_this_stack[__tid];
      if (st == NULL)
@@ -249,15 +251,15 @@ public:
      st->push(this);
      omp_unset_lock(&__lock_tobjs__);
    }
-   // Возвращает идентификатор транзакции текущего объекта
+   // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ С‚СЂР°РЅР·Р°РєС†РёРё С‚РµРєСѓС‰РµРіРѕ РѕР±СЉРµРєС‚Р°
    const char * get_transaction_id() {
      return __this_id;
    }
    virtual void sync(bool sync_children = true) = 0;
    virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) = 0;
-   // Не прерывая работу, ставит ее на пересогласование в транзакционном блоке. Если вызван с отличным
-   // от NULL параметром = идентификатором базовой транзакции, то ставит на пересогласование все работы
-   // от текущей до породивших ее в транзакциях более высокого уровня вплоть до базовой транзакции.
+   // РќРµ РїСЂРµСЂС‹РІР°СЏ СЂР°Р±РѕС‚Сѓ, СЃС‚Р°РІРёС‚ РµРµ РЅР° РїРµСЂРµСЃРѕРіР»Р°СЃРѕРІР°РЅРёРµ РІ С‚СЂР°РЅР·Р°РєС†РёРѕРЅРЅРѕРј Р±Р»РѕРєРµ. Р•СЃР»Рё РІС‹Р·РІР°РЅ СЃ РѕС‚Р»РёС‡РЅС‹Рј
+   // РѕС‚ NULL РїР°СЂР°РјРµС‚СЂРѕРј = РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂРѕРј Р±Р°Р·РѕРІРѕР№ С‚СЂР°РЅР·Р°РєС†РёРё, С‚Рѕ СЃС‚Р°РІРёС‚ РЅР° РїРµСЂРµСЃРѕРіР»Р°СЃРѕРІР°РЅРёРµ РІСЃРµ СЂР°Р±РѕС‚С‹
+   // РѕС‚ С‚РµРєСѓС‰РµР№ РґРѕ РїРѕСЂРѕРґРёРІС€РёС… РµРµ РІ С‚СЂР°РЅР·Р°РєС†РёСЏС… Р±РѕР»РµРµ РІС‹СЃРѕРєРѕРіРѕ СѓСЂРѕРІРЅСЏ РІРїР»РѕС‚СЊ РґРѕ Р±Р°Р·РѕРІРѕР№ С‚СЂР°РЅР·Р°РєС†РёРё.
    virtual bool fail_till(const char * __till_id__ = NULL) {
    	__info_transaction__ * till_info;
    	string id;
@@ -286,7 +288,7 @@ public:
    }
    virtual int  num_free() = 0;
    virtual ~TOBJ_STARTER() {
-     // Уничтожаем транзакцию this+ptr -- стираем ее из списка
+     // РЈРЅРёС‡С‚РѕР¶Р°РµРј С‚СЂР°РЅР·Р°РєС†РёСЋ this+ptr -- СЃС‚РёСЂР°РµРј РµРµ РёР· СЃРїРёСЃРєР°
      omp_set_lock(&__lock_atomics__);
      map< string, __info_transaction__ * >::iterator it = __transactions__.find(__this_id);
      if (it != __transactions__.end())
@@ -298,7 +300,7 @@ public:
 class TOBJ_STOPPER {
 public:
    TOBJ_STOPPER(int nthreads) {
-     // Извлекаем из стека свой this-ptr
+     // РР·РІР»РµРєР°РµРј РёР· СЃС‚РµРєР° СЃРІРѕР№ this-ptr
      omp_set_lock(&__lock_tobjs__);
      __tobj_this_stack[get_thread_id()]->pop();
      omp_unset_lock(&__lock_tobjs__);
@@ -402,7 +404,7 @@ bool in_transaction(const char * __id__ = NULL) {
 	return info != NULL && info->__in_transaction__;
 }
 
-// Был ли вызван fail для текущего потока
+// Р‘С‹Р» Р»Рё РІС‹Р·РІР°РЅ fail РґР»СЏ С‚РµРєСѓС‰РµРіРѕ РїРѕС‚РѕРєР°
 bool is_failed() {
 	__info_transaction__ * info;
 	string id;
@@ -414,7 +416,7 @@ bool is_failed() {
 	return info != NULL && info->failed[omp_get_thread_num()];
 }
 
-// Не прерывая работу, ставит ее на пересогласование в транзакционном блоке
+// РќРµ РїСЂРµСЂС‹РІР°СЏ СЂР°Р±РѕС‚Сѓ, СЃС‚Р°РІРёС‚ РµРµ РЅР° РїРµСЂРµСЃРѕРіР»Р°СЃРѕРІР°РЅРёРµ РІ С‚СЂР°РЅР·Р°РєС†РёРѕРЅРЅРѕРј Р±Р»РѕРєРµ
 bool fail() {
 	string id;
 	omp_set_lock(&__lock_atomics__);
@@ -806,7 +808,7 @@ void commit_transaction() {
 		  omp_set_lock(&__lock_atomics__);
 
 		  int nn = info->__stat_transaction__.__transaction_procs__[id];
-		  if (clock_val(info->__stat_transaction__.__transaction_timings__[id][nn]) >= 0) { // Первый счет
+		  if (clock_val(info->__stat_transaction__.__transaction_timings__[id][nn]) >= 0) { // РџРµСЂРІС‹Р№ СЃС‡РµС‚
 			  if (info->working[id]) {
 				  LARGE_INTEGER c1 = { 0 };
 				  QueryPerformanceCounter(&c1);
@@ -819,7 +821,7 @@ void commit_transaction() {
 			  }
 			  clock_val(info->__stat_transaction__.__transaction_timings__[id][nn]) -= clock_val(c);
 		  }
-		  else if (info->__stat_transaction__.__transaction_retimings__[id].find(nn) != info->__stat_transaction__.__transaction_retimings__[id].end() && clock_val(info->__stat_transaction__.__transaction_retimings__[id][nn]) >= 0) { // Пересчет
+		  else if (info->__stat_transaction__.__transaction_retimings__[id].find(nn) != info->__stat_transaction__.__transaction_retimings__[id].end() && clock_val(info->__stat_transaction__.__transaction_retimings__[id][nn]) >= 0) { // РџРµСЂРµСЃС‡РµС‚
 			  if (!info->working[id]) {
 				  clock_val(info->__stat_transaction__.__transaction_retimings__[id][nn]) -= clock_val(c);
 				  info->__stat_transaction__.__transaction_retimings__[id].erase(-1);
@@ -1092,7 +1094,7 @@ template<class Type>
            delete d;
     }
     virtual void startTransaction() {
-       // Все элементы стартуют самостоятельно как потомки TVar
+       // Р’СЃРµ СЌР»РµРјРµРЅС‚С‹ СЃС‚Р°СЂС‚СѓСЋС‚ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ РєР°Рє РїРѕС‚РѕРјРєРё TVar
     }
     Type * copy() {
        Type * res = new Type[Data.size()];
@@ -1112,23 +1114,23 @@ template<class Type>
       return *this;
     }
     virtual void check(signed char * state) {
-       // Все элементы проверяются самостоятельно как потомки TVar
+       // Р’СЃРµ СЌР»РµРјРµРЅС‚С‹ РїСЂРѕРІРµСЂСЏСЋС‚СЃСЏ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ РєР°Рє РїРѕС‚РѕРјРєРё TVar
     }
     virtual void commit(const vector<int> & _winners) {
-       // Все элементы утверждаются самостоятельно как потомки TVar
+       // Р’СЃРµ СЌР»РµРјРµРЅС‚С‹ СѓС‚РІРµСЂР¶РґР°СЋС‚СЃСЏ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ РєР°Рє РїРѕС‚РѕРјРєРё TVar
     }
   };
 
 template <class C>
 class TObj : public TOBJ_STARTER, public C, public TOBJ_STOPPER {
-// Часть методов наследуется от TOBJ_STARTER, см. выше
+// Р§Р°СЃС‚СЊ РјРµС‚РѕРґРѕРІ РЅР°СЃР»РµРґСѓРµС‚СЃСЏ РѕС‚ TOBJ_STARTER, СЃРј. РІС‹С€Рµ
 protected:
-   thread * __thread__; // Дежурный поток
-   volatile unsigned short __joined; // Число занятых потоков блока
+   thread * __thread__; // Р”РµР¶СѓСЂРЅС‹Р№ РїРѕС‚РѕРє
+   volatile unsigned short __joined; // Р§РёСЃР»Рѕ Р·Р°РЅСЏС‚С‹С… РїРѕС‚РѕРєРѕРІ Р±Р»РѕРєР°
    omp_lock_t __join_lock__;
-   volatile bool __stopped; // Флаг, требующий завершения всех работ
+   volatile bool __stopped; // Р¤Р»Р°Рі, С‚СЂРµР±СѓСЋС‰РёР№ Р·Р°РІРµСЂС€РµРЅРёСЏ РІСЃРµС… СЂР°Р±РѕС‚
 
-   // Подкачка работ в блок
+   // РџРѕРґРєР°С‡РєР° СЂР°Р±РѕС‚ РІ Р±Р»РѕРє
    virtual bool pump_jobs(__page_fun &f, __info_transaction__ * &parent_info, int &parent_id) {
 	f = nullptr;
 	parent_info = NULL;
@@ -1136,7 +1138,7 @@ protected:
 	return false;
    }
 private:
-   // Исполняемая процедура дежурного потока
+   // РСЃРїРѕР»РЅСЏРµРјР°СЏ РїСЂРѕС†РµРґСѓСЂР° РґРµР¶СѓСЂРЅРѕРіРѕ РїРѕС‚РѕРєР°
    void worker() {
         do {
 			omp_set_lock(&__lock_atomics__);
@@ -1205,11 +1207,11 @@ private:
            }
         } while (1);
    }
-   // Создает запись о незавершенной работе с предусловиями preconds[npreconds], представляющими собой идентификаторы работ,
-   // которые должны закончиться до текущей работы.
-   // Возвращает идентификатор работы (больше или равен 1) или 0, если работа не создана
-   // Для создания работ с уникальными идентификаторами и корректной работы режима ожидания необходим предварительный
-   // вызов set_jobs_mode(true);
+   // РЎРѕР·РґР°РµС‚ Р·Р°РїРёСЃСЊ Рѕ РЅРµР·Р°РІРµСЂС€РµРЅРЅРѕР№ СЂР°Р±РѕС‚Рµ СЃ РїСЂРµРґСѓСЃР»РѕРІРёСЏРјРё preconds[npreconds], РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰РёРјРё СЃРѕР±РѕР№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂС‹ СЂР°Р±РѕС‚,
+   // РєРѕС‚РѕСЂС‹Рµ РґРѕР»Р¶РЅС‹ Р·Р°РєРѕРЅС‡РёС‚СЊСЃСЏ РґРѕ С‚РµРєСѓС‰РµР№ СЂР°Р±РѕС‚С‹.
+   // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ СЂР°Р±РѕС‚С‹ (Р±РѕР»СЊС€Рµ РёР»Рё СЂР°РІРµРЅ 1) РёР»Рё 0, РµСЃР»Рё СЂР°Р±РѕС‚Р° РЅРµ СЃРѕР·РґР°РЅР°
+   // Р”Р»СЏ СЃРѕР·РґР°РЅРёСЏ СЂР°Р±РѕС‚ СЃ СѓРЅРёРєР°Р»СЊРЅС‹РјРё РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂР°РјРё Рё РєРѕСЂСЂРµРєС‚РЅРѕР№ СЂР°Р±РѕС‚С‹ СЂРµР¶РёРјР° РѕР¶РёРґР°РЅРёСЏ РЅРµРѕР±С…РѕРґРёРј РїСЂРµРґРІР°СЂРёС‚РµР»СЊРЅС‹Р№
+   // РІС‹Р·РѕРІ set_jobs_mode(true);
    int create_job(int npreconds, int * preconds) {
 	int res = 0;
 	omp_set_lock(&__lock_tobjs__);
@@ -1233,14 +1235,14 @@ private:
 	return res;
    }
 public:
-   // Передается число требуемых рабочих потоков. Может равняться единице
+   // РџРµСЂРµРґР°РµС‚СЃСЏ С‡РёСЃР»Рѕ С‚СЂРµР±СѓРµРјС‹С… СЂР°Р±РѕС‡РёС… РїРѕС‚РѕРєРѕРІ. РњРѕР¶РµС‚ СЂР°РІРЅСЏС‚СЊСЃСЏ РµРґРёРЅРёС†Рµ
    TObj<C>(int nthreads) : TOBJ_STARTER(nthreads), C(nthreads), TOBJ_STOPPER(nthreads) {
-     // Создаем дежурный поток и ждем присоединений
+     // РЎРѕР·РґР°РµРј РґРµР¶СѓСЂРЅС‹Р№ РїРѕС‚РѕРє Рё Р¶РґРµРј РїСЂРёСЃРѕРµРґРёРЅРµРЅРёР№
      omp_init_lock(&__join_lock__);
 	 __thread__ = NULL;
      reinit();
    }
-   // Реинициализация
+   // Р РµРёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ
    virtual void reinit(bool sync_children = true) {
 	   sync(sync_children);
 	   __joined = 0;
@@ -1284,7 +1286,7 @@ public:
         return f;
      }
    }
-   // Помещает работу на выполнение и возвращает true. Если блок занят, то возвращает false
+   // РџРѕРјРµС‰Р°РµС‚ СЂР°Р±РѕС‚Сѓ РЅР° РІС‹РїРѕР»РЅРµРЅРёРµ Рё РІРѕР·РІСЂР°С‰Р°РµС‚ true. Р•СЃР»Рё Р±Р»РѕРє Р·Р°РЅСЏС‚, С‚Рѕ РІРѕР·РІСЂР°С‰Р°РµС‚ false
    virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) {
      if (set_join_lock) omp_set_lock(&this->__join_lock__);
      if (__joined >= __nthreads) {
@@ -1301,7 +1303,7 @@ public:
      omp_unset_lock(&__join_lock__);
      return true;
    }
-   // Ожидает полного завершения работ (своих, и, если sync_children, всех дочерних TObj-объектов)
+   // РћР¶РёРґР°РµС‚ РїРѕР»РЅРѕРіРѕ Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚ (СЃРІРѕРёС…, Рё, РµСЃР»Рё sync_children, РІСЃРµС… РґРѕС‡РµСЂРЅРёС… TObj-РѕР±СЉРµРєС‚РѕРІ)
    virtual void sync(bool sync_children = true) {
 	 if (__thread__ == NULL) return;
      if (sync_children) {
@@ -1323,10 +1325,10 @@ public:
 	 omp_set_lock(&__join_lock__);
 	 __stopped = true;
 	 omp_unset_lock(&__join_lock__);
-	 // Уничтожаем дежурный поток
+	 // РЈРЅРёС‡С‚РѕР¶Р°РµРј РґРµР¶СѓСЂРЅС‹Р№ РїРѕС‚РѕРє
      if (__thread__->joinable()) __thread__->join();
    }
-   // Возвращает число свободных потоков блока
+   // Р’РѕР·РІСЂР°С‰Р°РµС‚ С‡РёСЃР»Рѕ СЃРІРѕР±РѕРґРЅС‹С… РїРѕС‚РѕРєРѕРІ Р±Р»РѕРєР°
    virtual int  num_free() {
      omp_set_lock(&__join_lock__);
      int res = __joined >= __nthreads ? 0 : (__nthreads - __joined);
@@ -1334,7 +1336,7 @@ public:
      return res;
    }
    virtual ~TObj<C>() {
-     // Вызываем sync()
+     // Р’С‹Р·С‹РІР°РµРј sync()
      sync();
      delete __thread__;
      omp_destroy_lock(&__join_lock__);
@@ -1351,7 +1353,7 @@ protected:
    } queue_item;
    queue<queue_item> Q;
 
-   // Подкачка работ в блок
+   // РџРѕРґРєР°С‡РєР° СЂР°Р±РѕС‚ РІ Р±Р»РѕРє
    virtual bool pump_jobs(__page_fun &f, __info_transaction__ * &parent_info, int &parent_id) {
 	if (Q.empty()) return TObj<C>::pump_jobs(f, parent_info, parent_id);
 	else {
@@ -1365,17 +1367,17 @@ protected:
    }
 
 public:
-   // Передается число требуемых рабочих потоков. Может равняться единице
+   // РџРµСЂРµРґР°РµС‚СЃСЏ С‡РёСЃР»Рѕ С‚СЂРµР±СѓРµРјС‹С… СЂР°Р±РѕС‡РёС… РїРѕС‚РѕРєРѕРІ. РњРѕР¶РµС‚ СЂР°РІРЅСЏС‚СЊСЃСЏ РµРґРёРЅРёС†Рµ
    TQueuedObj<C>(int nthreads) : TObj<C>(nthreads) {
    }
-   // Реинициализация. Если блок работал, то сначала следует вызвать sync(), и только затем reinit()
+   // Р РµРёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ. Р•СЃР»Рё Р±Р»РѕРє СЂР°Р±РѕС‚Р°Р», С‚Рѕ СЃРЅР°С‡Р°Р»Р° СЃР»РµРґСѓРµС‚ РІС‹Р·РІР°С‚СЊ sync(), Рё С‚РѕР»СЊРєРѕ Р·Р°С‚РµРј reinit()
    virtual void reinit(bool sync_children = true) {
      TObj<C>::reinit(sync_children);
      omp_set_lock(&this->__join_lock__);
      Q = queue<queue_item>();
      omp_unset_lock(&this->__join_lock__);
    }
-   // Помещает работу в очередь или запускает, если есть свободный поток. Всегда возвращает true
+   // РџРѕРјРµС‰Р°РµС‚ СЂР°Р±РѕС‚Сѓ РІ РѕС‡РµСЂРµРґСЊ РёР»Рё Р·Р°РїСѓСЃРєР°РµС‚, РµСЃР»Рё РµСЃС‚СЊ СЃРІРѕР±РѕРґРЅС‹Р№ РїРѕС‚РѕРє. Р’СЃРµРіРґР° РІРѕР·РІСЂР°С‰Р°РµС‚ true
    virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) {
      if (set_join_lock) omp_set_lock(&this->__join_lock__);
 	 if (Q.size() == 0) {
@@ -1396,5 +1398,7 @@ public:
      return true;
    }
 };
+
+#pragma syntax check
 
 #endif

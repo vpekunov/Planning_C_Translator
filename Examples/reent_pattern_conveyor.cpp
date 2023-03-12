@@ -14,7 +14,7 @@ class Conveyor;
 chain conveyor(Conveyor<int> * Chief, int A);
 
 template<class... Args>
-class Conveyor<Args...> {
+class Conveyor {
   private:
     int n;
     ConveyoredFunction<Args...> ** Fs;
@@ -68,7 +68,7 @@ class Conveyor<Args...> {
 };
 
 template<class... Args>
-class ConveyoredFunction<Args...> {
+class ConveyoredFunction {
   protected:
     const Conveyor<Args...> * owner;
     std::function<void(Args...)> send;

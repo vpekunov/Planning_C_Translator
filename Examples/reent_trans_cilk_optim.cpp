@@ -31,7 +31,7 @@ public:
 	}
 
 	void process(double * x, bool * L) {
-		// Решаем задачу оптимизации
+		// Р РµС€Р°РµРј Р·Р°РґР°С‡Сѓ РѕРїС‚РёРјРёР·Р°С†РёРё
 		TQueuedObj<Variant> * variants = NULL;
 		double f, f0;
 		do {

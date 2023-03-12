@@ -1,6 +1,8 @@
 #ifndef MPI_INCLUDED
 #define MPI_INCLUDED
 
+#pragma syntax nocheck
+
 #include <omp.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -2604,5 +2606,7 @@ int MPI_Finalize(void) {
   }   
   return MPI_SUCCESS;
 }
+
+#pragma syntax check
 
 #endif

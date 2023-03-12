@@ -17,6 +17,7 @@ Const idReenterable          = 'REENTERABLE';
       idPragma               = 'PRAGMA';
       idDefine               = 'DEFINE';
       idUndef                = 'UNDEF';
+      idSyntax               = 'SYNTAX';
       idPreprocPasses        = 'PREPROC_PASSES';
       iddef_pattern          = 'DEF_PATTERN';
       idparse                = 'PARSE';

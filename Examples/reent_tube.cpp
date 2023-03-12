@@ -25,7 +25,7 @@ chain A(bool init, input_proc Src, int N, int K) throw(bool init, input_proc Src
 }
 
 
-/* На векторе + ленивые переменные. */
+/* РќР° РІРµРєС‚РѕСЂРµ + Р»РµРЅРёРІС‹Рµ РїРµСЂРµРјРµРЅРЅС‹Рµ. */
 funnel(out, int) ** ToRight;
 funnel(in, int) ** FromRight;
 funnel(out, int) ** ToLeft;
@@ -48,7 +48,7 @@ chain A1(int N) {
      cout<<K<<endl;  
 }
 
-#def_module(plan_topology) tube(N) { /* Топология "труба". Например, A[N]+A'[N] */
+#def_module(plan_topology) tube(N) { /* РўРѕРїРѕР»РѕРіРёСЏ "С‚СЂСѓР±Р°". РќР°РїСЂРёРјРµСЂ, A[N]+A'[N] */
   /*
   plan_parallel_chain(A[1:N](true,NULL,N,0)->);
   plan_parallel_chain(A[1:N](true,NULL,N,0)<-);

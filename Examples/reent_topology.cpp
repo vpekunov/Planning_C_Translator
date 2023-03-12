@@ -30,7 +30,7 @@ chain C(bool init, bool _stop, int N) throw(bool init, int N) {
 }
 
 int main() {
-  plan_topology { /* A*B*C+C*B èëè (A+C)*B+B*C */ /* Âèäèìî, âñåì ıë-òàì âñåõ êîíâåéåğîâ áóäóò ğàçğåøåíû èíèöèàëèçàöèîííûå ıòàïû */
+  plan_topology { /* A*B*C+C*B Ğ¸Ğ»Ğ¸ (A+C)*B+B*C */ /* Ğ’Ğ¸Ğ´Ğ¸Ğ¼Ğ¾, Ğ²ÑĞµĞ¼ ÑĞ»-Ñ‚Ğ°Ğ¼ Ğ²ÑĞµÑ… ĞºĞ¾Ğ½Ğ²ĞµĞ¹ĞµÑ€Ğ¾Ğ² Ğ±ÑƒĞ´ÑƒÑ‚ Ñ€Ğ°Ğ·Ñ€ĞµÑˆĞµĞ½Ñ‹ Ğ¸Ğ½Ğ¸Ñ†Ğ¸Ğ°Ğ»Ğ¸Ğ·Ğ°Ñ†Ğ¸Ğ¾Ğ½Ğ½Ñ‹Ğµ ÑÑ‚Ğ°Ğ¿Ñ‹ */
     plan_parallel_chain(A(true)->B(true,0)->C(true,false,0));
     plan_parallel_reverse(C(true,false,0)->B(true,0));
   }/3;

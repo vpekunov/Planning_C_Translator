@@ -392,7 +392,7 @@
   !.
 @make_nodes_indexes([], L, L):-!.
 
-// Расставляем индексы у членов вида id(Id,plural), заменяя plural уникальным атомом-числом.
+// Р Р°СЃСЃС‚Р°РІР»СЏРµРј РёРЅРґРµРєСЃС‹ Сѓ С‡Р»РµРЅРѕРІ РІРёРґР° id(Id,plural), Р·Р°РјРµРЅСЏСЏ plural СѓРЅРёРєР°Р»СЊРЅС‹Рј Р°С‚РѕРјРѕРј-С‡РёСЃР»РѕРј.
 @make_indexes(L1, L2):-
   create_nodes_ids(L1, IDs),
   make_nodes_indexes(IDs, L1, L2),
@@ -409,8 +409,8 @@
   !.
 @make_nprocs_item([], []):-!.
 
-// Убираем деление на константу-число процессоров из выражения, внеся ее в id(Id,Number,NProcs) третьим членом
-// Если член не делится на константу, то третьим членом вносится '0'. Членов id(Id,Number) более не будет.
+// РЈР±РёСЂР°РµРј РґРµР»РµРЅРёРµ РЅР° РєРѕРЅСЃС‚Р°РЅС‚Сѓ-С‡РёСЃР»Рѕ РїСЂРѕС†РµСЃСЃРѕСЂРѕРІ РёР· РІС‹СЂР°Р¶РµРЅРёСЏ, РІРЅРµСЃСЏ РµРµ РІ id(Id,Number,NProcs) С‚СЂРµС‚СЊРёРј С‡Р»РµРЅРѕРј
+// Р•СЃР»Рё С‡Р»РµРЅ РЅРµ РґРµР»РёС‚СЃСЏ РЅР° РєРѕРЅСЃС‚Р°РЅС‚Сѓ, С‚Рѕ С‚СЂРµС‚СЊРёРј С‡Р»РµРЅРѕРј РІРЅРѕСЃРёС‚СЃСЏ '0'. Р§Р»РµРЅРѕРІ id(Id,Number) Р±РѕР»РµРµ РЅРµ Р±СѓРґРµС‚.
 @make_nprocs([H|T], [H1|T1]):-
   make_nprocs_item(H, H1),
   make_nprocs(T, T1),
@@ -423,7 +423,7 @@
 @get_links_item([_], []):-!.
 @get_links_item([], []):-!.
 
-// Преобразуем выражение из [[id(Id,Number,NProcs),...]] в [[link(Id1,Number1,NProcs1,Id2,Number2,NProcs2),...]]
+// РџСЂРµРѕР±СЂР°Р·СѓРµРј РІС‹СЂР°Р¶РµРЅРёРµ РёР· [[id(Id,Number,NProcs),...]] РІ [[link(Id1,Number1,NProcs1,Id2,Number2,NProcs2),...]]
 @get_links([H|T], L):-
   get_links_item(H, L1),
   get_links(T, L2),
@@ -440,8 +440,8 @@
   !.
 @unique([], []):-!.
 
-// cycled(L1, Id, Number, Id1, Number1). Проверка по списку прямых связей L1, есть ли путь из (Id1,Number1) в (Id,Number)
-// Так мы проверяем, существует ли цикл, начинающийся в (Id,Number).
+// cycled(L1, Id, Number, Id1, Number1). РџСЂРѕРІРµСЂРєР° РїРѕ СЃРїРёСЃРєСѓ РїСЂСЏРјС‹С… СЃРІСЏР·РµР№ L1, РµСЃС‚СЊ Р»Рё РїСѓС‚СЊ РёР· (Id1,Number1) РІ (Id,Number)
+// РўР°Рє РјС‹ РїСЂРѕРІРµСЂСЏРµРј, СЃСѓС‰РµСЃС‚РІСѓРµС‚ Р»Рё С†РёРєР», РЅР°С‡РёРЅР°СЋС‰РёР№СЃСЏ РІ (Id,Number).
 @cycled(_, Id, Number, Id, Number):-!.
 @cycled(DirLinks, Id1, Number1, Id2, Number2):-
   append(DLLeft,[link(Id2, Number2, _, Idn, Numbern, _)|DLRight],DirLinks),
@@ -450,7 +450,7 @@
   !.
 @cycled(_, _, _, _, _):-!, fail.
 
-// classify(L1, L2, LD, LR). Классифицируем связи из L2 на прямые LD и обратные LR. L1 - список оставшихся прямых связей
+// classify(L1, L2, LD, LR). РљР»Р°СЃСЃРёС„РёС†РёСЂСѓРµРј СЃРІСЏР·Рё РёР· L2 РЅР° РїСЂСЏРјС‹Рµ LD Рё РѕР±СЂР°С‚РЅС‹Рµ LR. L1 - СЃРїРёСЃРѕРє РѕСЃС‚Р°РІС€РёС…СЃСЏ РїСЂСЏРјС‹С… СЃРІСЏР·РµР№
 @classify(DirLinks, [link(Id1,Number1,NProcs1,Id2,Number2,NProcs2)|T], LD, [link(Id1,Number1,NProcs1,Id2,Number2,NProcs2)|TR]):-
   cycled(DirLinks, Id1, Number1, Id2, Number2),
   append(DLLeft,[link(Id1,Number1,NProcs1,Id2,Number2,NProcs2)|DLRight],DirLinks),

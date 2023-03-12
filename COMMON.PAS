@@ -2,6 +2,8 @@ Unit Common;
 
 Interface
 
+{$CODEPAGE UTF8}
+
 {$IFDEF FPC}
 {$MODE ObjFPC}
 {$ENDIF}
@@ -12,6 +14,18 @@ Uses Classes, Lexique;
 Const gpuNone = 0;
       gpuOnly = 1;
       gpuBoth = 2;
+
+Const lexer_preproc =
+      {$IF NOT DEFINED(UNIX) AND NOT DEFINED(LINUX)}'run_lexer_preproc.bat'
+      {$ELSE}'./run_lexer_preproc.sh'
+      {$ENDIF}
+      ;
+      lexer_plc =
+      {$IF NOT DEFINED(UNIX) AND NOT DEFINED(LINUX)}'run_lexer_plc.bat'
+      {$ELSE}'./run_lexer_plc.sh'
+      {$ENDIF}
+      ;
+      temp_code = '_.code';
 
 Type
 
@@ -27,6 +41,7 @@ Type
         Function    IsMacroResult: Boolean;
         Function    GetOriginalLine: String;
         Function    GetDescription: String;
+        Function    GetRef(Var LNum: Integer): String;
         Function    GetLineNumbers: String;
         Destructor  Destroy; Override;
      End;
@@ -68,7 +83,8 @@ Function GetLineFromLines(Var S:String):Boolean;
 Function _TrimRight(Const S: String): String;
 
 Procedure GetFBlock(L: TAnalyser; Dividers: TermSet; Var List: TStringList);
-Function Substitute(S: String; Const Prefix, Postfix: String; Const ID, Subst: String; Const Handler: SubstituteHandle = Nil): String;
+Function Substitute(S: String; Const Prefix, Postfix: String; Const ID, Subst: String;
+                       Const Handler: SubstituteHandle = Nil; Const UseTriagQuotes: Boolean = False): String;
 
 Function _IndexOf(L: TStringList; Const What: String): Integer;
 
@@ -82,6 +98,8 @@ function DecodeStr(Const S:String):String;
 
 procedure MakeErrorCommon(Const Msg: String);
 procedure MakeInfoCommon(Const Msg: String);
+
+procedure VerifyProgram(PreprocessingMode, Obligatoire: Boolean);
 
 function RunExtCommand(Const App,Prm,OutFName: String):String;
 
@@ -143,6 +161,31 @@ begin
                     TStringList(Files.Objects[FileIdx[F]]).Text + ']'
 end;
 
+function TLine.GetRef(Var LNum: Integer): String;
+
+function Normalize(Const S: String): String;
+Begin
+   Result := S;
+   If Length(S) > 0 Then
+      If S[Length(S)] = BackSlash Then
+         If Length(S) > 1 Then
+            If S[Length(S)-1] = BackSlash Then
+               Exit
+            Else
+               System.Delete(Result, Length(S), 1)
+         Else
+            System.Delete(Result, Length(S), 1)
+end;
+
+Var F: Integer;
+begin
+   Result := Normalize(Copy(Files.Strings[FileIdx[High(FileIdx)]],2,255));
+   LNum := LineNum[High(FileIdx)];
+   For F := High(FileIdx)-1 DownTo Low(FileIdx) Do
+       Result := Result + '(' + IntToStr(LineNum[F])+')['+Normalize(Copy(Files.Strings[FileIdx[F]],2,255))+']';
+   Result := StringReplace(Result, '"', '''', [rfReplaceAll]);
+end;
+
 function TLine.GetLineNumbers: String;
 
 Var S: String;
@@ -153,7 +196,7 @@ begin
      Begin
        S := StringReplace(Copy(Files.Strings[FileIdx[F]],2,255),'"','*',[rfReplaceAll]);
        If (Length(S) > 0) And (S[Length(S)] = '\') Then
-          S := S + ' ';
+          System.Delete(S, Length(S), 1);
        Result := Result + '#line '+IntToStr(LineNum[F])+' "'+S+'"' + CRLF
      End
 end;
@@ -362,7 +405,8 @@ Begin
   LST.Free
 End;
 
-Function Substitute(S: String; Const Prefix, Postfix: String; Const ID, Subst: String; Const Handler: SubstituteHandle = Nil): String;
+Function Substitute(S: String; Const Prefix, Postfix: String; Const ID, Subst: String;
+            Const Handler: SubstituteHandle = Nil; Const UseTriagQuotes: Boolean = False): String;
 
 Const qtNone   = 0;
       qtSingle = 1;
@@ -407,12 +451,12 @@ Begin
                 Else If _Quote = qtNone Then
                    _Quote:=qtDouble
               End
-           Else If S[F] = Less Then
+           Else If UseTriagQuotes And (S[F] = Less) Then
               Begin
                 If _Quote = qtNone Then
                    _Quote:=qtTriag
               End
-           Else If S[F] = Greater Then
+           Else If UseTriagQuotes And (S[F] = Greater) Then
               Begin
                 If _Quote = qtTriag Then
                    _Quote:=qtNone
@@ -477,6 +521,46 @@ begin
           end
      Else
         Result:=''
+end;
+
+procedure VerifyProgram(PreprocessingMode, Obligatoire: Boolean);
+
+Var Checker: String;
+    LN: Integer; FS: String;
+    Result: String;
+    G: Integer;
+begin
+     If PreprocessingMode Then
+        Checker := lexer_preproc
+     Else
+        Checker := lexer_plc;
+     If FileExists(Checker) Then
+        Begin
+          With TStringList.Create Do
+            Begin
+              For G := 0 To Lines.Count-1 Do
+                  If Not TLine(Lines.Objects[G]).Restricted Then
+                     Begin
+                       FS := TLine(Lines.Objects[G]).GetRef(LN);
+                       Add('#line ' + IntToStr(LN) + ' "' + FS + '"');
+                       Add(Lines[G])
+                     End;
+              SaveToFile(temp_code);
+              Free
+            End;
+          Result := _TrimRight(RunExtCommand(Checker, temp_code + ' _.result', '_.result'));
+          If Length(Result) > 0 Then
+             If Obligatoire Then
+                Begin
+                  MakeErrorCommon(Trim(Result));
+                  Halt(1000)
+                End
+             Else
+                MakeInfoCommon('+++ Errors treated as warnings +++' + CRLF +
+                    Trim(Result) + CRLF + '++++++++++++++++++++++++++++++++++')
+        end
+     Else
+        MakeErrorCommon('Lexer "' + Checker + '" not found!')
 end;
 
 Function CRC(Const S: String): LongInt;

@@ -48,7 +48,7 @@ int __cluster_id__ = 0;
  #ifndef __max
  #define __max(a,b) ((a)>(b) ? (a) : (b))
  #endif
- /* LU - разложение  с выбором максимального элемента по диагонали */
+ /* LU - СЂР°Р·Р»РѕР¶РµРЅРёРµ  СЃ РІС‹Р±РѕСЂРѕРј РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РїРѕ РґРёР°РіРѕРЅР°Р»Рё */
  bool _GetLU(int NN, int * iRow, long double * A, long double * LU)
  {
   int i,j,k;
@@ -94,7 +94,7 @@ int __cluster_id__ = 0;
   }
   return true;
  }
- /* Метод LU - разложения */
+ /* РњРµС‚РѕРґ LU - СЂР°Р·Р»РѕР¶РµРЅРёСЏ */
  bool _SolveLU(int NN, int * iRow, long double * LU, long double * Y, long double * X)
  {
   int i,j,k;
@@ -121,7 +121,7 @@ int __cluster_id__ = 0;
   }
   return true;
  }
- /* Метод Гаусса-Зейделя  с выбором максимального элемента по диагонали */
+ /* РњРµС‚РѕРґ Р“Р°СѓСЃСЃР°-Р—РµР№РґРµР»СЏ  СЃ РІС‹Р±РѕСЂРѕРј РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РїРѕ РґРёР°РіРѕРЅР°Р»Рё */
  bool _SolveGaussZeidel(int NN, int * iRow, long double * A, long double * LU, long double * Y, long double * X) {
   int np = omp_get_num_procs();
   double prev_eps, eps;

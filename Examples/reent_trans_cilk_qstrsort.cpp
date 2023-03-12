@@ -1,4 +1,4 @@
-// Пример, способный дать выигрыш по времени при параллельной работе
+// РџСЂРёРјРµСЂ, СЃРїРѕСЃРѕР±РЅС‹Р№ РґР°С‚СЊ РІС‹РёРіСЂС‹С€ РїРѕ РІСЂРµРјРµРЅРё РїСЂРё РїР°СЂР°Р»Р»РµР»СЊРЅРѕР№ СЂР°Р±РѕС‚Рµ
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,12 +10,12 @@
 
 using namespace std;
 
-const int n = 1024; // Размер массива
-const int max_length = 400; // Максимальная длина строки
-const int min_chunk_size = n/4; // Минимальный размер распараллеливаемого чанка
+const int n = 1024; // Р Р°Р·РјРµСЂ РјР°СЃСЃРёРІР°
+const int max_length = 400; // РњР°РєСЃРёРјР°Р»СЊРЅР°СЏ РґР»РёРЅР° СЃС‚СЂРѕРєРё
+const int min_chunk_size = n/4; // РњРёРЅРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·РјРµСЂ СЂР°СЃРїР°СЂР°Р»Р»РµР»РёРІР°РµРјРѕРіРѕ С‡Р°РЅРєР°
 
-string from; // Опорная строка для вычисления метрики Левенштейна
-int chunk_size = n; // Максимальный размер нераспараллеливаемого чанка
+string from; // РћРїРѕСЂРЅР°СЏ СЃС‚СЂРѕРєР° РґР»СЏ РІС‹С‡РёСЃР»РµРЅРёСЏ РјРµС‚СЂРёРєРё Р›РµРІРµРЅС€С‚РµР№РЅР°
+int chunk_size = n; // РњР°РєСЃРёРјР°Р»СЊРЅС‹Р№ СЂР°Р·РјРµСЂ РЅРµСЂР°СЃРїР°СЂР°Р»Р»РµР»РёРІР°РµРјРѕРіРѕ С‡Р°РЅРєР°
 
 int Levenstein(const string & string1, const string & string2) {
 	int diff;
@@ -60,15 +60,15 @@ public:
   Runner(int nthreads) : TQueuedObj<Qsort>(nthreads) { }
 
   void step(int left, int right, int * pleft_i, int * pright_i) {
-	*pleft_i = left, *pright_i = right; // Счетчики слева и справа
+	*pleft_i = left, *pright_i = right; // РЎС‡РµС‚С‡РёРєРё СЃР»РµРІР° Рё СЃРїСЂР°РІР°
 	int avr = Levenstein(from, (*M)[(left + right)/2]);
-	if (left == right) return; // Массив из одного элемента не сортируется
-	// Переставляем элементы относительно avr
+	if (left == right) return; // РњР°СЃСЃРёРІ РёР· РѕРґРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РЅРµ СЃРѕСЂС‚РёСЂСѓРµС‚СЃСЏ
+	// РџРµСЂРµСЃС‚Р°РІР»СЏРµРј СЌР»РµРјРµРЅС‚С‹ РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ avr
 	while (*pleft_i <= *pright_i) {
-		while (Levenstein(from,(*M)[*pleft_i]) < avr) (*pleft_i)++; // Ищем слева больший или равный элемент
-		while (Levenstein(from,(*M)[*pright_i]) > avr) (*pright_i)--; // Ищем справа меньший или равный элемент
-		if (*pleft_i <= *pright_i) { // Если нашли такие элементы
-			// то меняем их местами
+		while (Levenstein(from,(*M)[*pleft_i]) < avr) (*pleft_i)++; // РС‰РµРј СЃР»РµРІР° Р±РѕР»СЊС€РёР№ РёР»Рё СЂР°РІРЅС‹Р№ СЌР»РµРјРµРЅС‚
+		while (Levenstein(from,(*M)[*pright_i]) > avr) (*pright_i)--; // РС‰РµРј СЃРїСЂР°РІР° РјРµРЅСЊС€РёР№ РёР»Рё СЂР°РІРЅС‹Р№ СЌР»РµРјРµРЅС‚
+		if (*pleft_i <= *pright_i) { // Р•СЃР»Рё РЅР°С€Р»Рё С‚Р°РєРёРµ СЌР»РµРјРµРЅС‚С‹
+			// С‚Рѕ РјРµРЅСЏРµРј РёС… РјРµСЃС‚Р°РјРё
 			if (Levenstein(from,(*M)[*pleft_i]) > Levenstein(from,(*M)[*pright_i])) {
 				string a = (*M)[*pleft_i];
 				(*M)[*pleft_i] = (*M)[*pright_i];
@@ -107,24 +107,26 @@ string randomstr() {
 	return result;
 }
 
-int main() {
-	string * M; // Массив
-	int i; // Счетчик
-	// Выделяем память
+int main(int argc, char ** argv) {
+	string * M; // РњР°СЃСЃРёРІ
+	int i; // РЎС‡РµС‚С‡РёРє
+	int np = 4;
+	if (argc > 1) sscanf(argv[1], "%i", &np);
+	// Р’С‹РґРµР»СЏРµРј РїР°РјСЏС‚СЊ
 	M = new string[n];
 	srand((unsigned int) time(NULL));
-	// Заполняем опорный элемент
+	// Р—Р°РїРѕР»РЅСЏРµРј РѕРїРѕСЂРЅС‹Р№ СЌР»РµРјРµРЅС‚
 	from = randomstr();
 	printf("Parallelize (0/1)?");
 	scanf("%i", &i);
 	chunk_size = i ? min_chunk_size : n;
-	// Заполняем массив
+	// Р—Р°РїРѕР»РЅСЏРµРј РјР°СЃСЃРёРІ
 	for (i = 0; i < n; i++)
 		M[i] = randomstr();
-	// Сортируем массив по неубыванию
+	// РЎРѕСЂС‚РёСЂСѓРµРј РјР°СЃСЃРёРІ РїРѕ РЅРµСѓР±С‹РІР°РЅРёСЋ
 	set_jobs_mode(true);
 	double t0 = omp_get_wtime();
-	Runner obj(omp_get_num_procs());
+	Runner obj(np);
 	obj.put(n, M);
 	int l = 0;
 	int r = n-1;
@@ -132,9 +134,9 @@ int main() {
 	obj.cilk_sync;
 	obj.get(n, M);
 	printf("Elapsed time = %lf\n", omp_get_wtime() - t0);
-	// Выводим результат
+	// Р’С‹РІРѕРґРёРј СЂРµР·СѓР»СЊС‚Р°С‚
 	printf("\n");
-	// Освобождаем память
+	// РћСЃРІРѕР±РѕР¶РґР°РµРј РїР°РјСЏС‚СЊ
 	delete[] M;
 	return 0;
 }

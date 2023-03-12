@@ -3,6 +3,8 @@
 
 #pragma plan vectorized
 
+#pragma syntax nocheck
+
 #include <algorithm>
 #include <functional>
 #include <vector>
@@ -1087,5 +1089,7 @@ void trace_balancing(
 		}
 	}
 };
+
+#pragma syntax check
 
 #endif

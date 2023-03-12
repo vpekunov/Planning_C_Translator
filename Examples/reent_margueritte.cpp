@@ -32,9 +32,9 @@ chain A(bool init, input_proc Src, int N, int K, int last) {
   }
 }
 
-#def_module(plan_topology) margo(N) { /* Ромашка */
+#def_module(plan_topology) margo(N) { /* Р РѕРјР°С€РєР° */
    @sum_i_1_N(NN, Result) :- Result is round((NN*NN+NN)/2).
-   /* Соединения с центральным узлом */
+   /* РЎРѕРµРґРёРЅРµРЅРёСЏ СЃ С†РµРЅС‚СЂР°Р»СЊРЅС‹Рј СѓР·Р»РѕРј */
    @make_central(0):-!.
    @make_central(I) :-
      I1 is I-1,
