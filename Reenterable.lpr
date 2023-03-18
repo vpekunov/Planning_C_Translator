@@ -333,7 +333,7 @@ uses
   Consts   in 'CONSTS.PAS',
   Topo     in 'TOPO.PAS',
   Common   in 'COMMON.PAS',
-  Macroses in 'MACROSES.PAS',
+  Macros   in 'MACROS.PAS',
   Prolog   in 'PROLOG.PAS',
   Preproc  in 'PREPROC.PAS';
 
@@ -2484,11 +2484,11 @@ begin
 
                                  If ChainMode Then
                                     begin
-                                      WriteThrowMacroses(Out,ID,_ThrParamNames);
+                                      WriteThrowMacros(Out,ID,_ThrParamNames);
                                       If Not IsDeclaration Then FunctionThrowParams := ThrParamNames
                                     end;
                                  If Not IsDeclaration Then
-                                    WritePlanMacroses(Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
+                                    WritePlanMacros(Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
                                  If Length(S2)<>0 Then
                                     WriteLn(Out,S2);
                                  WriteLn(Out,'#ifdef _OPENMP');
@@ -3100,10 +3100,10 @@ begin
                                End
                             Else If Not IsDeclaration Then
                                Begin
-                                 WritePlanMacroses(Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
+                                 WritePlanMacros(Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
                                  If ChainMode Then
                                     begin
-                                      WriteThrowMacroses(Out,ID,_ThrParamNames);
+                                      WriteThrowMacros(Out,ID,_ThrParamNames);
                                       FunctionThrowParams := ThrParamNames
                                     end;
                                  WriteLn(Out,'#ifdef _OPENMP');
@@ -3122,7 +3122,7 @@ begin
                        If (Length(SoftFunctionText) > 0) And Not ReadFunction Then
                           begin
                             WriteLn(Out);
-                            WriteAtomicMacroses(Out, FunctionParamNames, FunctionThrowParams);
+                            WriteAtomicMacros(Out, FunctionParamNames, FunctionThrowParams);
                             S := '';  // current word
                             S1 := ''; // final text
                             S2 := ''; // previous word
@@ -3192,7 +3192,7 @@ begin
                        If (Length(FunctionText) > 0) And Not ReadFunction Then
                           begin
                             WriteLn(Out);
-                            WriteAtomicMacroses(Out, FunctionParamNames, FunctionThrowParams);
+                            WriteAtomicMacros(Out, FunctionParamNames, FunctionThrowParams);
                             FunctionParamNames := '';
                             FunctionThrowParams := '';
                             S := '';  // current word

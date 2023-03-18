@@ -1,4 +1,4 @@
-Unit Macroses;
+Unit Macros;
 
 Interface
 
@@ -9,13 +9,13 @@ Interface
 
 Uses SysUtils, Classes, Common, Consts;
 
-Procedure WritePlanMacroses(Var Out:TextFile; Const ID, ParamNames:String; LocGlob, Names: TStringList; Const Ldecl: String);
-Procedure WriteAtomicMacroses(Var Out:TextFile; ParamNames:String; ThrParamNames:String);
-Procedure WriteThrowMacroses(Var Out:TextFile; Const ID,ParamNames:String);
+Procedure WritePlanMacros(Var Out:TextFile; Const ID, ParamNames:String; LocGlob, Names: TStringList; Const Ldecl: String);
+Procedure WriteAtomicMacros(Var Out:TextFile; ParamNames:String; ThrParamNames:String);
+Procedure WriteThrowMacros(Var Out:TextFile; Const ID,ParamNames:String);
 
 Implementation
 
-Procedure WritePlanMacroses(Var Out:TextFile; Const ID, ParamNames:String; LocGlob, Names: TStringList; Const Ldecl: String);
+Procedure WritePlanMacros(Var Out:TextFile; Const ID, ParamNames:String; LocGlob, Names: TStringList; Const Ldecl: String);
 
 Var SI, OI, MI, IG, NP: String;
     Fun: String;
@@ -164,7 +164,7 @@ Begin
   WriteLn(Out,'#endif');
 End;
 
-Procedure WriteAtomicMacroses(Var Out:TextFile; ParamNames:String; ThrParamNames:String);
+Procedure WriteAtomicMacros(Var Out:TextFile; ParamNames:String; ThrParamNames:String);
 Begin
   WriteLn(Out,'#undef _plan_first');
   WriteLn(Out,'#undef _plan_last');
@@ -231,7 +231,7 @@ Begin
   WriteLn(Out,'   while(0)')
 End;
 
-Procedure WriteThrowMacroses(Var Out:TextFile; Const ID,ParamNames:String);
+Procedure WriteThrowMacros(Var Out:TextFile; Const ID,ParamNames:String);
 Begin
   WriteLn(Out,'#undef throw_first');
   WriteLn(Out,'#undef throw_last');
