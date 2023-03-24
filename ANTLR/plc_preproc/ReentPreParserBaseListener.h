@@ -70,6 +70,39 @@ public:
   virtual void enterXpath_fun_params(ReentPreParser::Xpath_fun_paramsContext * /*ctx*/) override { }
   virtual void exitXpath_fun_params(ReentPreParser::Xpath_fun_paramsContext * /*ctx*/) override { }
 
+  virtual void enterDef_xpath(ReentPreParser::Def_xpathContext * /*ctx*/) override { }
+  virtual void exitDef_xpath(ReentPreParser::Def_xpathContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_param(ReentPreParser::Def_xpath_paramContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_param(ReentPreParser::Def_xpath_paramContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_expression(ReentPreParser::Def_xpath_expressionContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_expression(ReentPreParser::Def_xpath_expressionContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_and_expression(ReentPreParser::Def_xpath_and_expressionContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_and_expression(ReentPreParser::Def_xpath_and_expressionContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_rel_expression(ReentPreParser::Def_xpath_rel_expressionContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_rel_expression(ReentPreParser::Def_xpath_rel_expressionContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_mul_expression(ReentPreParser::Def_xpath_mul_expressionContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_mul_expression(ReentPreParser::Def_xpath_mul_expressionContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_plus_expression(ReentPreParser::Def_xpath_plus_expressionContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_plus_expression(ReentPreParser::Def_xpath_plus_expressionContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_unary_expression(ReentPreParser::Def_xpath_unary_expressionContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_unary_expression(ReentPreParser::Def_xpath_unary_expressionContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_query(ReentPreParser::Def_xpath_queryContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_query(ReentPreParser::Def_xpath_queryContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_predicate(ReentPreParser::Def_xpath_predicateContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_predicate(ReentPreParser::Def_xpath_predicateContext * /*ctx*/) override { }
+
+  virtual void enterDef_xpath_fun_params(ReentPreParser::Def_xpath_fun_paramsContext * /*ctx*/) override { }
+  virtual void exitDef_xpath_fun_params(ReentPreParser::Def_xpath_fun_paramsContext * /*ctx*/) override { }
+
   virtual void enterRegexps(ReentPreParser::RegexpsContext * /*ctx*/) override { }
   virtual void exitRegexps(ReentPreParser::RegexpsContext * /*ctx*/) override { }
 
@@ -114,6 +147,9 @@ public:
 
   virtual void enterDefModule(ReentPreParser::DefModuleContext * /*ctx*/) override { }
   virtual void exitDefModule(ReentPreParser::DefModuleContext * /*ctx*/) override { }
+
+  virtual void enterDefModuleDescriptors(ReentPreParser::DefModuleDescriptorsContext * /*ctx*/) override { }
+  virtual void exitDefModuleDescriptors(ReentPreParser::DefModuleDescriptorsContext * /*ctx*/) override { }
 
   virtual void enterDefModuleDescriptor(ReentPreParser::DefModuleDescriptorContext * /*ctx*/) override { }
   virtual void exitDefModuleDescriptor(ReentPreParser::DefModuleDescriptorContext * /*ctx*/) override { }
@@ -273,9 +309,6 @@ public:
 
   virtual void enterCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext * /*ctx*/) override { }
   virtual void exitCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext * /*ctx*/) override { }
-
-  virtual void enterCpp_code_continues(ReentPreParser::Cpp_code_continuesContext * /*ctx*/) override { }
-  virtual void exitCpp_code_continues(ReentPreParser::Cpp_code_continuesContext * /*ctx*/) override { }
 
   virtual void enterOtherLine(ReentPreParser::OtherLineContext * /*ctx*/) override { }
   virtual void exitOtherLine(ReentPreParser::OtherLineContext * /*ctx*/) override { }

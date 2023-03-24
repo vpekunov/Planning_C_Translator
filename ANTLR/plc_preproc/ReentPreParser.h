@@ -25,26 +25,26 @@ public:
     FloatingLiteral = 5, StringLiteral = 6, EmptyAtom = 7, BooleanLiteral = 8, 
     PointerLiteral = 9, UserDefinedLiteral = 10, DefModule = 11, DefMemoization = 12, 
     DoNotCheck = 13, DefOtherPragma = 14, PreprocPasses = 15, AddScan = 16, 
-    Scan = 17, AddParse = 18, Parse = 19, DefPattern = 20, Line = 21, MultiLineMacro = 22, 
-    Directive = 23, AtValue = 24, Conditions = 25, Controlled = 26, Div_ = 27, 
-    False_ = 28, Feed_forward = 29, GetText = 30, Goal = 31, Lin_extrapolator = 32, 
-    Mgua = 33, Mod_ = 34, Nullptr = 35, Regexp_analyze = 36, Regexp_begin = 37, 
-    Regexp_end = 38, Regexp_parallel = 39, Regexp_sequential = 40, Rem = 41, 
-    True_ = 42, Plc_regexp_var = 43, Plc_regexp_equal = 44, Plc_regexp_not_equal = 45, 
-    Plc_regexp_query = 46, LeftParen = 47, RightParen = 48, LeftBracket = 49, 
-    RightBracket = 50, LeftBrace = 51, RightBrace = 52, AssignGreater = 53, 
-    DivDiv = 54, Pound = 55, And_ = 56, Or_ = 57, At = 58, Is = 59, Is_ = 60, 
-    Prolog_not = 61, Prolog_not_equal = 62, Slash = 63, ConstructAtom = 64, 
-    Regexp_ref = 65, Underscore = 66, Plus = 67, Minus = 68, Star = 69, 
-    Div = 70, Mod = 71, Caret = 72, And = 73, Or = 74, Tilde = 75, Not = 76, 
-    Assign = 77, Less = 78, Greater = 79, Equal = 80, NotEqual = 81, LessEqual = 82, 
-    GreaterEqual = 83, AndAnd = 84, OrOr = 85, Comma = 86, Arrow = 87, Question = 88, 
-    Colon = 89, Doublecolon = 90, Semi = 91, Dot = 92, DotStar = 93, Ellipsis = 94, 
-    Identifier = 95, DecimalLiteral = 96, OctalLiteral = 97, HexadecimalLiteral = 98, 
-    BinaryLiteral = 99, Integersuffix = 100, UserDefinedIntegerLiteral = 101, 
-    UserDefinedFloatingLiteral = 102, UserDefinedStringLiteral = 103, UserDefinedCharacterLiteral = 104, 
-    Whitespace = 105, Newline = 106, BlockComment = 107, LineComment = 108, 
-    PrologComment = 109
+    Scan = 17, AddParse = 18, Parse = 19, DefPattern = 20, DefXPath = 21, 
+    Line = 22, MultiLineMacro = 23, Directive = 24, AtValue = 25, Conditions = 26, 
+    Controlled = 27, Div_ = 28, False_ = 29, Feed_forward = 30, GetText = 31, 
+    Goal = 32, Lin_extrapolator = 33, Mgua = 34, Mod_ = 35, Nullptr = 36, 
+    Regexp_analyze = 37, Regexp_begin = 38, Regexp_end = 39, Regexp_parallel = 40, 
+    Regexp_sequential = 41, Rem = 42, True_ = 43, Plc_regexp_var = 44, Plc_regexp_equal = 45, 
+    Plc_regexp_not_equal = 46, Plc_regexp_query = 47, LeftParen = 48, RightParen = 49, 
+    LeftBracket = 50, RightBracket = 51, LeftBrace = 52, RightBrace = 53, 
+    AssignGreater = 54, DivDiv = 55, Pound = 56, And_ = 57, Or_ = 58, At = 59, 
+    Is = 60, Is_ = 61, Prolog_not = 62, Prolog_not_equal = 63, Slash = 64, 
+    ConstructAtom = 65, Regexp_ref = 66, Underscore = 67, Plus = 68, Minus = 69, 
+    Star = 70, Div = 71, Mod = 72, Caret = 73, And = 74, Or = 75, Tilde = 76, 
+    Not = 77, Assign = 78, Less = 79, Greater = 80, Equal = 81, NotEqual = 82, 
+    LessEqual = 83, GreaterEqual = 84, AndAnd = 85, OrOr = 86, Comma = 87, 
+    Arrow = 88, Question = 89, Colon = 90, Doublecolon = 91, Semi = 92, 
+    Dot = 93, DotStar = 94, Ellipsis = 95, Identifier = 96, DecimalLiteral = 97, 
+    OctalLiteral = 98, HexadecimalLiteral = 99, BinaryLiteral = 100, Integersuffix = 101, 
+    UserDefinedIntegerLiteral = 102, UserDefinedFloatingLiteral = 103, UserDefinedStringLiteral = 104, 
+    UserDefinedCharacterLiteral = 105, Whitespace = 106, Newline = 107, 
+    BlockComment = 108, LineComment = 109, PrologComment = 110
   };
 
   enum {
@@ -52,29 +52,34 @@ public:
     RulePut_fact = 4, RuleDef_pattern_param = 5, RuleSimple_xpath_expression = 6, 
     RuleXpath_and_expression = 7, RuleXpath_rel_expression = 8, RuleXpath_mul_expression = 9, 
     RuleXpath_plus_expression = 10, RuleXpath_unary_expression = 11, RuleXpath_query = 12, 
-    RuleXpath_predicate = 13, RuleXpath_fun_params = 14, RuleRegexps = 15, 
-    RuleRegexp_lines = 16, RuleRegexp_body = 17, RulePlc_regexp_logical = 18, 
-    RulePlc_regexp_var = 19, RulePlc_regexp_equal = 20, RulePlc_regexp_not_equal = 21, 
-    RulePlc_regexp_query = 22, RuleRegexp_or_sequence = 23, RuleRegexp_and_sequence = 24, 
-    RuleRegexp_unary = 25, RuleRegexp_pred = 26, RuleRegexp_pred_arg = 27, 
-    RuleRegexp_pred_parallel = 28, RuleDefModule = 29, RuleDefModuleDescriptor = 30, 
-    RuleDefMemoization = 31, RulePreprocPasses = 32, RuleAddScan = 33, RuleScan = 34, 
-    RuleAddParse = 35, RuleParse = 36, RuleScanners_list = 37, RuleMemoMapItem = 38, 
-    RuleMemoMapType = 39, RuleCpp_balanced_expression = 40, RuleMemoizationStyle = 41, 
-    RuleMgua = 42, RuleNnet = 43, RuleExtrapolator = 44, RuleNnet_layer_specifier = 45, 
-    RuleNnet_layer_type = 46, RuleControlPredicate = 47, RuleAutomated_control = 48, 
-    RuleBy_conditions_control = 49, RuleBlockHeader = 50, RuleTypeItem = 51, 
-    RuleTypeSpecifier = 52, RuleTemplateParameters = 53, RuleTemplateParameter = 54, 
-    RuleParameter = 55, RuleDimension = 56, RuleProlog_goal = 57, RuleProlog_statement = 58, 
-    RuleProlog_parameters = 59, RuleProlog_predicates = 60, RuleProlog_parameter = 61, 
-    RuleProlog_parameter_list = 62, RuleProlog_inside_list = 63, RuleProlog_predicate = 64, 
-    RuleProlog_if_then = 65, RuleIs_expression = 66, RuleRelational_expression = 67, 
-    RuleProlog_relation = 68, RulePow_expression = 69, RuleProlog_pow = 70, 
-    RuleMul_div_expression = 71, RuleProlog_mul_div = 72, RulePlus_min_expression = 73, 
-    RuleProlog_plus_minus = 74, RuleUnary_expression = 75, RuleOperand = 76, 
-    RuleOperandList = 77, RuleProlog_term = 78, RuleProlog_call = 79, RuleProlog_call_params = 80, 
-    RuleProlog_predicate_id = 81, RuleCpp_code_without_at = 82, RuleCpp_code_continues = 83, 
-    RuleOtherLine = 84, RuleLiteral = 85
+    RuleXpath_predicate = 13, RuleXpath_fun_params = 14, RuleDef_xpath = 15, 
+    RuleDef_xpath_param = 16, RuleDef_xpath_expression = 17, RuleDef_xpath_and_expression = 18, 
+    RuleDef_xpath_rel_expression = 19, RuleDef_xpath_mul_expression = 20, 
+    RuleDef_xpath_plus_expression = 21, RuleDef_xpath_unary_expression = 22, 
+    RuleDef_xpath_query = 23, RuleDef_xpath_predicate = 24, RuleDef_xpath_fun_params = 25, 
+    RuleRegexps = 26, RuleRegexp_lines = 27, RuleRegexp_body = 28, RulePlc_regexp_logical = 29, 
+    RulePlc_regexp_var = 30, RulePlc_regexp_equal = 31, RulePlc_regexp_not_equal = 32, 
+    RulePlc_regexp_query = 33, RuleRegexp_or_sequence = 34, RuleRegexp_and_sequence = 35, 
+    RuleRegexp_unary = 36, RuleRegexp_pred = 37, RuleRegexp_pred_arg = 38, 
+    RuleRegexp_pred_parallel = 39, RuleDefModule = 40, RuleDefModuleDescriptors = 41, 
+    RuleDefModuleDescriptor = 42, RuleDefMemoization = 43, RulePreprocPasses = 44, 
+    RuleAddScan = 45, RuleScan = 46, RuleAddParse = 47, RuleParse = 48, 
+    RuleScanners_list = 49, RuleMemoMapItem = 50, RuleMemoMapType = 51, 
+    RuleCpp_balanced_expression = 52, RuleMemoizationStyle = 53, RuleMgua = 54, 
+    RuleNnet = 55, RuleExtrapolator = 56, RuleNnet_layer_specifier = 57, 
+    RuleNnet_layer_type = 58, RuleControlPredicate = 59, RuleAutomated_control = 60, 
+    RuleBy_conditions_control = 61, RuleBlockHeader = 62, RuleTypeItem = 63, 
+    RuleTypeSpecifier = 64, RuleTemplateParameters = 65, RuleTemplateParameter = 66, 
+    RuleParameter = 67, RuleDimension = 68, RuleProlog_goal = 69, RuleProlog_statement = 70, 
+    RuleProlog_parameters = 71, RuleProlog_predicates = 72, RuleProlog_parameter = 73, 
+    RuleProlog_parameter_list = 74, RuleProlog_inside_list = 75, RuleProlog_predicate = 76, 
+    RuleProlog_if_then = 77, RuleIs_expression = 78, RuleRelational_expression = 79, 
+    RuleProlog_relation = 80, RulePow_expression = 81, RuleProlog_pow = 82, 
+    RuleMul_div_expression = 83, RuleProlog_mul_div = 84, RulePlus_min_expression = 85, 
+    RuleProlog_plus_minus = 86, RuleUnary_expression = 87, RuleOperand = 88, 
+    RuleOperandList = 89, RuleProlog_term = 90, RuleProlog_call = 91, RuleProlog_call_params = 92, 
+    RuleProlog_predicate_id = 93, RuleCpp_code_without_at = 94, RuleOtherLine = 95, 
+    RuleLiteral = 96
   };
 
   explicit ReentPreParser(antlr4::TokenStream *input);
@@ -92,6 +97,7 @@ public:
   	std::set<std::string> scanners;
   	std::set<std::string> scanner_refs;
   	std::vector<std::string> memo_map;
+  	std::set<std::string> xpaths;
   	std::set<std::string> regexp_vars;
   	std::set<std::string> regexp_refs;
 
@@ -111,6 +117,17 @@ public:
   class Xpath_queryContext;
   class Xpath_predicateContext;
   class Xpath_fun_paramsContext;
+  class Def_xpathContext;
+  class Def_xpath_paramContext;
+  class Def_xpath_expressionContext;
+  class Def_xpath_and_expressionContext;
+  class Def_xpath_rel_expressionContext;
+  class Def_xpath_mul_expressionContext;
+  class Def_xpath_plus_expressionContext;
+  class Def_xpath_unary_expressionContext;
+  class Def_xpath_queryContext;
+  class Def_xpath_predicateContext;
+  class Def_xpath_fun_paramsContext;
   class RegexpsContext;
   class Regexp_linesContext;
   class Regexp_bodyContext;
@@ -126,6 +143,7 @@ public:
   class Regexp_pred_argContext;
   class Regexp_pred_parallelContext;
   class DefModuleContext;
+  class DefModuleDescriptorsContext;
   class DefModuleDescriptorContext;
   class DefMemoizationContext;
   class PreprocPassesContext;
@@ -179,7 +197,6 @@ public:
   class Prolog_call_paramsContext;
   class Prolog_predicate_idContext;
   class Cpp_code_without_atContext;
-  class Cpp_code_continuesContext;
   class OtherLineContext;
   class LiteralContext; 
 
@@ -231,6 +248,8 @@ public:
     antlr4::tree::TerminalNode *Parse();
     Def_patternContext *def_pattern();
     antlr4::tree::TerminalNode *DefPattern();
+    Def_xpathContext *def_xpath();
+    antlr4::tree::TerminalNode *DefXPath();
     OtherLineContext *otherLine();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -345,8 +364,8 @@ public:
     antlr4::tree::TerminalNode* Less(size_t i);
     std::vector<antlr4::tree::TerminalNode *> Greater();
     antlr4::tree::TerminalNode* Greater(size_t i);
-    std::vector<antlr4::tree::TerminalNode *> Equal();
-    antlr4::tree::TerminalNode* Equal(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Assign();
+    antlr4::tree::TerminalNode* Assign(size_t i);
     std::vector<antlr4::tree::TerminalNode *> NotEqual();
     antlr4::tree::TerminalNode* NotEqual(size_t i);
     std::vector<antlr4::tree::TerminalNode *> LessEqual();
@@ -406,12 +425,14 @@ public:
     antlr4::tree::TerminalNode *EmptyAtom();
     antlr4::tree::TerminalNode *IntegerLiteral();
     antlr4::tree::TerminalNode *FloatingLiteral();
-    antlr4::tree::TerminalNode *Identifier();
+    antlr4::tree::TerminalNode *AtValue();
+    antlr4::tree::TerminalNode *GetText();
     antlr4::tree::TerminalNode *LeftParen();
-    antlr4::tree::TerminalNode *RightParen();
-    Xpath_fun_paramsContext *xpath_fun_params();
     Simple_xpath_expressionContext *simple_xpath_expression();
+    antlr4::tree::TerminalNode *RightParen();
     Xpath_queryContext *xpath_query();
+    antlr4::tree::TerminalNode *Identifier();
+    Xpath_fun_paramsContext *xpath_fun_params();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -423,19 +444,22 @@ public:
   class  Xpath_queryContext : public antlr4::ParserRuleContext {
   public:
     antlr4::Token *var = nullptr;
+    antlr4::Token *next = nullptr;
     antlr4::Token *last = nullptr;
     Xpath_queryContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *AtValue();
     std::vector<antlr4::tree::TerminalNode *> Div();
     antlr4::tree::TerminalNode* Div(size_t i);
     std::vector<antlr4::tree::TerminalNode *> DivDiv();
     antlr4::tree::TerminalNode* DivDiv(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Star();
+    antlr4::tree::TerminalNode* Star(size_t i);
+    antlr4::tree::TerminalNode *AtValue();
+    antlr4::tree::TerminalNode *GetText();
     std::vector<antlr4::tree::TerminalNode *> Identifier();
     antlr4::tree::TerminalNode* Identifier(size_t i);
     std::vector<Xpath_predicateContext *> xpath_predicate();
     Xpath_predicateContext* xpath_predicate(size_t i);
-    antlr4::tree::TerminalNode *GetText();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -474,6 +498,242 @@ public:
   };
 
   Xpath_fun_paramsContext* xpath_fun_params();
+
+  class  Def_xpathContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *id = nullptr;
+    Def_xpathContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *DefXPath();
+    antlr4::tree::TerminalNode *LeftBrace();
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+    Def_xpath_expressionContext *def_xpath_expression();
+    antlr4::tree::TerminalNode *RightBrace();
+    antlr4::tree::TerminalNode *Identifier();
+    antlr4::tree::TerminalNode *LeftParen();
+    antlr4::tree::TerminalNode *RightParen();
+    std::vector<Def_xpath_paramContext *> def_xpath_param();
+    Def_xpath_paramContext* def_xpath_param(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Comma();
+    antlr4::tree::TerminalNode* Comma(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpathContext* def_xpath();
+
+  class  Def_xpath_paramContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_paramContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *Regexp_ref();
+    antlr4::tree::TerminalNode *Identifier();
+    antlr4::tree::TerminalNode *And();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_paramContext* def_xpath_param();
+
+  class  Def_xpath_expressionContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_expressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<Def_xpath_and_expressionContext *> def_xpath_and_expression();
+    Def_xpath_and_expressionContext* def_xpath_and_expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Or_();
+    antlr4::tree::TerminalNode* Or_(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_expressionContext* def_xpath_expression();
+
+  class  Def_xpath_and_expressionContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_and_expressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<Def_xpath_rel_expressionContext *> def_xpath_rel_expression();
+    Def_xpath_rel_expressionContext* def_xpath_rel_expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> And_();
+    antlr4::tree::TerminalNode* And_(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_and_expressionContext* def_xpath_and_expression();
+
+  class  Def_xpath_rel_expressionContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_rel_expressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<Def_xpath_mul_expressionContext *> def_xpath_mul_expression();
+    Def_xpath_mul_expressionContext* def_xpath_mul_expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Less();
+    antlr4::tree::TerminalNode* Less(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Greater();
+    antlr4::tree::TerminalNode* Greater(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Assign();
+    antlr4::tree::TerminalNode* Assign(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> NotEqual();
+    antlr4::tree::TerminalNode* NotEqual(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> LessEqual();
+    antlr4::tree::TerminalNode* LessEqual(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> GreaterEqual();
+    antlr4::tree::TerminalNode* GreaterEqual(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_rel_expressionContext* def_xpath_rel_expression();
+
+  class  Def_xpath_mul_expressionContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_mul_expressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<Def_xpath_plus_expressionContext *> def_xpath_plus_expression();
+    Def_xpath_plus_expressionContext* def_xpath_plus_expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Star();
+    antlr4::tree::TerminalNode* Star(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Div();
+    antlr4::tree::TerminalNode* Div(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_mul_expressionContext* def_xpath_mul_expression();
+
+  class  Def_xpath_plus_expressionContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_plus_expressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<Def_xpath_unary_expressionContext *> def_xpath_unary_expression();
+    Def_xpath_unary_expressionContext* def_xpath_unary_expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Plus();
+    antlr4::tree::TerminalNode* Plus(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Minus();
+    antlr4::tree::TerminalNode* Minus(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_plus_expressionContext* def_xpath_plus_expression();
+
+  class  Def_xpath_unary_expressionContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_unary_expressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *StringLiteral();
+    antlr4::tree::TerminalNode *CharacterLiteral();
+    antlr4::tree::TerminalNode *EmptyAtom();
+    antlr4::tree::TerminalNode *IntegerLiteral();
+    antlr4::tree::TerminalNode *FloatingLiteral();
+    antlr4::tree::TerminalNode *AtValue();
+    antlr4::tree::TerminalNode *At();
+    antlr4::tree::TerminalNode *Identifier();
+    antlr4::tree::TerminalNode *GetText();
+    antlr4::tree::TerminalNode *LeftParen();
+    Def_xpath_expressionContext *def_xpath_expression();
+    antlr4::tree::TerminalNode *RightParen();
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+    Def_xpath_fun_paramsContext *def_xpath_fun_params();
+    Def_xpath_queryContext *def_xpath_query();
+    antlr4::tree::TerminalNode *Regexp_ref();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_unary_expressionContext* def_xpath_unary_expression();
+
+  class  Def_xpath_queryContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_queryContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<antlr4::tree::TerminalNode *> Identifier();
+    antlr4::tree::TerminalNode* Identifier(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Star();
+    antlr4::tree::TerminalNode* Star(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+    std::vector<Def_xpath_predicateContext *> def_xpath_predicate();
+    Def_xpath_predicateContext* def_xpath_predicate(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Div();
+    antlr4::tree::TerminalNode* Div(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> DivDiv();
+    antlr4::tree::TerminalNode* DivDiv(size_t i);
+    antlr4::tree::TerminalNode *AtValue();
+    antlr4::tree::TerminalNode *At();
+    antlr4::tree::TerminalNode *GetText();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_queryContext* def_xpath_query();
+
+  class  Def_xpath_predicateContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_predicateContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *LeftBracket();
+    Def_xpath_expressionContext *def_xpath_expression();
+    antlr4::tree::TerminalNode *RightBracket();
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_predicateContext* def_xpath_predicate();
+
+  class  Def_xpath_fun_paramsContext : public antlr4::ParserRuleContext {
+  public:
+    Def_xpath_fun_paramsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<Def_xpath_expressionContext *> def_xpath_expression();
+    Def_xpath_expressionContext* def_xpath_expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Comma();
+    antlr4::tree::TerminalNode* Comma(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> Newline();
+    antlr4::tree::TerminalNode* Newline(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  Def_xpath_fun_paramsContext* def_xpath_fun_params();
 
   class  RegexpsContext : public antlr4::ParserRuleContext {
   public:
@@ -549,12 +809,17 @@ public:
 
   class  Plc_regexp_varContext : public antlr4::ParserRuleContext {
   public:
+    antlr4::Token *lib_or_id = nullptr;
     antlr4::Token *var = nullptr;
     Plc_regexp_varContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *Plc_regexp_var();
-    antlr4::tree::TerminalNode *RightBrace();
-    antlr4::tree::TerminalNode *Identifier();
+    std::vector<antlr4::tree::TerminalNode *> Identifier();
+    antlr4::tree::TerminalNode* Identifier(size_t i);
+    antlr4::tree::TerminalNode *Dot();
+    antlr4::tree::TerminalNode *LeftBrace();
+    std::vector<antlr4::tree::TerminalNode *> RightBrace();
+    antlr4::tree::TerminalNode* RightBrace(size_t i);
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -731,14 +996,11 @@ public:
     std::vector<antlr4::tree::TerminalNode *> RightParen();
     antlr4::tree::TerminalNode* RightParen(size_t i);
     antlr4::tree::TerminalNode *LeftBrace();
-    antlr4::tree::TerminalNode *RightBrace();
-    antlr4::tree::TerminalNode *Semi();
+    DefModuleDescriptorsContext *defModuleDescriptors();
     std::vector<antlr4::tree::TerminalNode *> Identifier();
     antlr4::tree::TerminalNode* Identifier(size_t i);
     std::vector<antlr4::tree::TerminalNode *> Newline();
     antlr4::tree::TerminalNode* Newline(size_t i);
-    std::vector<DefModuleDescriptorContext *> defModuleDescriptor();
-    DefModuleDescriptorContext* defModuleDescriptor(size_t i);
     std::vector<antlr4::tree::TerminalNode *> Comma();
     antlr4::tree::TerminalNode* Comma(size_t i);
 
@@ -748,6 +1010,22 @@ public:
   };
 
   DefModuleContext* defModule();
+
+  class  DefModuleDescriptorsContext : public antlr4::ParserRuleContext {
+  public:
+    DefModuleDescriptorsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<DefModuleDescriptorContext *> defModuleDescriptor();
+    DefModuleDescriptorContext* defModuleDescriptor(size_t i);
+    antlr4::tree::TerminalNode *RightBrace();
+    antlr4::tree::TerminalNode *Semi();
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  DefModuleDescriptorsContext* defModuleDescriptors();
 
   class  DefModuleDescriptorContext : public antlr4::ParserRuleContext {
   public:
@@ -1647,7 +1925,6 @@ public:
   public:
     Cpp_code_without_atContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    Cpp_code_continuesContext *cpp_code_continues();
     std::vector<antlr4::tree::TerminalNode *> At();
     antlr4::tree::TerminalNode* At(size_t i);
     std::vector<antlr4::tree::TerminalNode *> RightBrace();
@@ -1659,20 +1936,6 @@ public:
   };
 
   Cpp_code_without_atContext* cpp_code_without_at();
-
-  class  Cpp_code_continuesContext : public antlr4::ParserRuleContext {
-  public:
-    Cpp_code_continuesContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    Cpp_code_without_atContext *cpp_code_without_at();
-    antlr4::tree::TerminalNode *RightBrace();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-   
-  };
-
-  Cpp_code_continuesContext* cpp_code_continues();
 
   class  OtherLineContext : public antlr4::ParserRuleContext {
   public:
@@ -1712,7 +1975,6 @@ public:
   bool regexp_bodySempred(Regexp_bodyContext *_localctx, size_t predicateIndex);
   bool memoMapTypeSempred(MemoMapTypeContext *_localctx, size_t predicateIndex);
   bool nnet_layer_typeSempred(Nnet_layer_typeContext *_localctx, size_t predicateIndex);
-  bool cpp_code_continuesSempred(Cpp_code_continuesContext *_localctx, size_t predicateIndex);
   bool otherLineSempred(OtherLineContext *_localctx, size_t predicateIndex);
 
 private:

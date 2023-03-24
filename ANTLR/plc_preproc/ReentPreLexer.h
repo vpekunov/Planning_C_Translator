@@ -19,26 +19,26 @@ public:
     FloatingLiteral = 5, StringLiteral = 6, EmptyAtom = 7, BooleanLiteral = 8, 
     PointerLiteral = 9, UserDefinedLiteral = 10, DefModule = 11, DefMemoization = 12, 
     DoNotCheck = 13, DefOtherPragma = 14, PreprocPasses = 15, AddScan = 16, 
-    Scan = 17, AddParse = 18, Parse = 19, DefPattern = 20, Line = 21, MultiLineMacro = 22, 
-    Directive = 23, AtValue = 24, Conditions = 25, Controlled = 26, Div_ = 27, 
-    False_ = 28, Feed_forward = 29, GetText = 30, Goal = 31, Lin_extrapolator = 32, 
-    Mgua = 33, Mod_ = 34, Nullptr = 35, Regexp_analyze = 36, Regexp_begin = 37, 
-    Regexp_end = 38, Regexp_parallel = 39, Regexp_sequential = 40, Rem = 41, 
-    True_ = 42, Plc_regexp_var = 43, Plc_regexp_equal = 44, Plc_regexp_not_equal = 45, 
-    Plc_regexp_query = 46, LeftParen = 47, RightParen = 48, LeftBracket = 49, 
-    RightBracket = 50, LeftBrace = 51, RightBrace = 52, AssignGreater = 53, 
-    DivDiv = 54, Pound = 55, And_ = 56, Or_ = 57, At = 58, Is = 59, Is_ = 60, 
-    Prolog_not = 61, Prolog_not_equal = 62, Slash = 63, ConstructAtom = 64, 
-    Regexp_ref = 65, Underscore = 66, Plus = 67, Minus = 68, Star = 69, 
-    Div = 70, Mod = 71, Caret = 72, And = 73, Or = 74, Tilde = 75, Not = 76, 
-    Assign = 77, Less = 78, Greater = 79, Equal = 80, NotEqual = 81, LessEqual = 82, 
-    GreaterEqual = 83, AndAnd = 84, OrOr = 85, Comma = 86, Arrow = 87, Question = 88, 
-    Colon = 89, Doublecolon = 90, Semi = 91, Dot = 92, DotStar = 93, Ellipsis = 94, 
-    Identifier = 95, DecimalLiteral = 96, OctalLiteral = 97, HexadecimalLiteral = 98, 
-    BinaryLiteral = 99, Integersuffix = 100, UserDefinedIntegerLiteral = 101, 
-    UserDefinedFloatingLiteral = 102, UserDefinedStringLiteral = 103, UserDefinedCharacterLiteral = 104, 
-    Whitespace = 105, Newline = 106, BlockComment = 107, LineComment = 108, 
-    PrologComment = 109
+    Scan = 17, AddParse = 18, Parse = 19, DefPattern = 20, DefXPath = 21, 
+    Line = 22, MultiLineMacro = 23, Directive = 24, AtValue = 25, Conditions = 26, 
+    Controlled = 27, Div_ = 28, False_ = 29, Feed_forward = 30, GetText = 31, 
+    Goal = 32, Lin_extrapolator = 33, Mgua = 34, Mod_ = 35, Nullptr = 36, 
+    Regexp_analyze = 37, Regexp_begin = 38, Regexp_end = 39, Regexp_parallel = 40, 
+    Regexp_sequential = 41, Rem = 42, True_ = 43, Plc_regexp_var = 44, Plc_regexp_equal = 45, 
+    Plc_regexp_not_equal = 46, Plc_regexp_query = 47, LeftParen = 48, RightParen = 49, 
+    LeftBracket = 50, RightBracket = 51, LeftBrace = 52, RightBrace = 53, 
+    AssignGreater = 54, DivDiv = 55, Pound = 56, And_ = 57, Or_ = 58, At = 59, 
+    Is = 60, Is_ = 61, Prolog_not = 62, Prolog_not_equal = 63, Slash = 64, 
+    ConstructAtom = 65, Regexp_ref = 66, Underscore = 67, Plus = 68, Minus = 69, 
+    Star = 70, Div = 71, Mod = 72, Caret = 73, And = 74, Or = 75, Tilde = 76, 
+    Not = 77, Assign = 78, Less = 79, Greater = 80, Equal = 81, NotEqual = 82, 
+    LessEqual = 83, GreaterEqual = 84, AndAnd = 85, OrOr = 86, Comma = 87, 
+    Arrow = 88, Question = 89, Colon = 90, Doublecolon = 91, Semi = 92, 
+    Dot = 93, DotStar = 94, Ellipsis = 95, Identifier = 96, DecimalLiteral = 97, 
+    OctalLiteral = 98, HexadecimalLiteral = 99, BinaryLiteral = 100, Integersuffix = 101, 
+    UserDefinedIntegerLiteral = 102, UserDefinedFloatingLiteral = 103, UserDefinedStringLiteral = 104, 
+    UserDefinedCharacterLiteral = 105, Whitespace = 106, Newline = 107, 
+    BlockComment = 108, LineComment = 109, PrologComment = 110
   };
 
   explicit ReentPreLexer(antlr4::CharStream *input);
@@ -100,6 +100,7 @@ private:
   bool AddParseSempred(antlr4::RuleContext *_localctx, size_t predicateIndex);
   bool ParseSempred(antlr4::RuleContext *_localctx, size_t predicateIndex);
   bool DefPatternSempred(antlr4::RuleContext *_localctx, size_t predicateIndex);
+  bool DefXPathSempred(antlr4::RuleContext *_localctx, size_t predicateIndex);
   bool LineSempred(antlr4::RuleContext *_localctx, size_t predicateIndex);
   bool MultiLineMacroSempred(antlr4::RuleContext *_localctx, size_t predicateIndex);
   bool DirectiveSempred(antlr4::RuleContext *_localctx, size_t predicateIndex);

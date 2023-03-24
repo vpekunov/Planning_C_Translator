@@ -81,7 +81,10 @@ Parse:
 	{ getCharPositionInLine() == 0 }? [ \t]* '#parse' [ \t]*;
 
 DefPattern:
-	{ getCharPositionInLine() == 0 }? [ \t]* '#def_pattern' [ \t]* { def_pattern_state = 1; };
+	{ getCharPositionInLine() == 0 }? [ \t]* '#def_pattern' [ \t]+ { def_pattern_state = 1; };
+
+DefXPath:
+	{ getCharPositionInLine() == 0 }? [ \t]* '#def_xpath' [ \t]+;
 
 Line:
 	{ getCharPositionInLine() == 0 }? [ \t]* '#line' [ \t]+ IntegerLiteral [ \t]+ StringLiteral Newline { __lines[getLine()] = getText(); } -> skip;

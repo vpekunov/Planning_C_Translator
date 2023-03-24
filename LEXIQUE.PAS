@@ -65,9 +65,9 @@ Const MaxLevel = 20;
 
 Type TermSet    = Set Of Char;
      LevelIndex = Array[0..MaxLevel-1] Of Byte;
-     LineSource = Function(Var S:String):Boolean;
+     LineSource = Function(Var S:WideString):Boolean;
      TAnalyser = class(TObject)
-                 S:String;
+                 S:WideString;
                  NumLine:Word;
                  Error:Boolean;
                  NonTerminals:TermSet;
@@ -109,13 +109,13 @@ Type TermSet    = Set Of Char;
                  Function    GetLevelIndex(Var Index:LevelIndex; Var Level:Byte):Boolean;
                  Procedure   DelSpaces;
 
-                 Property    AnlzLine:String read S write S;
+                 Property    AnlzLine:WideString read S write S;
      End;
 
 Function    UpStr(Const S:String):String;
-Procedure   DeleteLeadingSymbols(Var S:String;Const Spaces:TermSet);
+Procedure   DeleteLeadingSymbols(Var S:WideString; Const Spaces:TermSet);
 Procedure   StripSymbols(Var S:String;Const Spaces:TermSet);
-Function    GetSymbolsBefore(Var S:String;Term:TermSet):String;
+Function    GetSymbolsBefore(Var S:WideString;Term:TermSet):String;
 Function    TrimLastSymbol(Const S:String; Sym:Char):String;
 Function    Explode(S:String; Const _Delimiter:String):TStringList;
 Function    Implode(S:TStrings; Const Delimiter:String):String;
@@ -143,7 +143,7 @@ begin
          Result[F]:=UpRuss(UpCase(S[F]))
 end;
 
-Procedure DeleteLeadingSymbols(Var S:String;Const Spaces:TermSet);
+Procedure DeleteLeadingSymbols(Var S:WideString; Const Spaces:TermSet);
 Var K:Integer;
 Begin
      K:=1;
@@ -163,7 +163,7 @@ Begin
           Inc(K)
 End;
 
-Function  GetSymbolsBefore(Var S:String;Term:TermSet):String;
+Function  GetSymbolsBefore(Var S: WideString; Term:TermSet):String;
 Var Count:Integer;
     K:Integer;
     Flag:Boolean;
@@ -569,10 +569,19 @@ Begin
 End;
 
 Var _Quote:Byte;
+    NN: Integer;
     C:Char;
 Begin
      Result:=True;
      _Quote:=qtNone;
+     NN := Length(S);
+     DelSpaces;
+     K := Length(S);
+     Dec(NN, Length(S));
+     If Count > NN Then
+        Dec(Count, NN)
+     Else
+        Count := 1;
      If Empty Then
         Begin
           IncCount;

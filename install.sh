@@ -2,6 +2,18 @@
 
 fpc -B ./Reenterable.lpr
 fpc -B ./mpi2reent.lpr
+cd ./Grammar
+fpc -B -O3 -Mobjfpc -FcUTF-8 ./Grammar.lpr
+cp ./libGrammar.so ../
+cd ..
+export CPPFLAGS="$PWD/link-grammar-5.3.0"
+cd ./link-grammar-5.3.0
+sudo ./configure
+sudo make
+sudo make install
+sudo ldconfig
+cd ..
+cp /usr/local/lib/liblink-grammar.so.5.3.0 ./liblink-grammar.so
 cd Predicates
 g++ -o main.o -c main.cpp -fPIC -O3
 g++ -shared -o libPredicates.so main.o
@@ -23,3 +35,4 @@ cd ..
 chmod +x *.sh   
 make
 make -f Makefile.mpi
+rm -f ./induct.log

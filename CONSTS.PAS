@@ -20,6 +20,7 @@ Const idReenterable          = 'REENTERABLE';
       idSyntax               = 'SYNTAX';
       idPreprocPasses        = 'PREPROC_PASSES';
       iddef_pattern          = 'DEF_PATTERN';
+      iddef_xpath            = 'DEF_XPATH';
       idparse                = 'PARSE';
       idscan                 = 'SCAN';
       idadd_parse            = 'ADD_PARSE';

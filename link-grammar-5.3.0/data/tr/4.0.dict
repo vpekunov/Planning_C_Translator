@@ -1,0 +1,93 @@
+%
+% Turkish dictionary -- experimental -- 2014 -- Can John Bruce
+%
+% Dictionary version number is 5.3.0 (formatted as V5v3v0+)
+<dictionary-version-number>: V5v3v0+;
+% The empty word.
+EMPTY-WORD.zzz: ZZZ-;
+
+%adjectives: fat, sick, angry
+şişman.a hasta.a kızgın.a : {W-} & {EA-} & (({AJl+} & {AJr-}) or {A+}) ;
+
+%nouns: man, woman, kid, apple
+adam kadın çocuk elma: {W-} & {@A-} & {Ds-} & {O+} & (({SJl+} & {SJr-}) or {S3s+});
+
+%pronouns: I, thou, he/she, we, you, they
+ben :   {W-} & (({SJl+} & {SJr-}) or {S1s+});
+sen :   {W-} & (({SJl+} & {SJr-}) or {S2s+});
+o:      {W-} & (({SJl+} & {SJr-}) or {S3s+});
+biz :   {W-} & (({SJl+} & {SJr-}) or {S1p+});
+siz :   {W-} & (({SJl+} & {SJr-}) or {S2p+});
+onlar : {W-} & (({SJl+} & {SJr-}) or {S3p+});
+
+%plural nouns (not sure I need this, I could do it with a suffix)
+%adamlar kadınlar elmalar: {W-} & {@A-} & {Dmc-} & {O+} & (({SJl+} & {SJr-}) or {S3p+});
+adamlar : {W-} & {@A-} & {Ds-} & {O+} & (({SJl+} & {SJr-}) or {S3p+});
+
+%determiners (most of, some, every
+çoğu : Ds+;
+bazı: Dmc+ ;
+her.d bir.d : Ds+ ;
+
+%adverbs
+çok.ad : {W-} & EA+;
+
+%verbs: come, finish
+gel.= bitir.=: {W-} & {VJr-} & (VPast+ or VPres+ or VImp+) & {VJl+};
+
+%transitive verbs: eat
+ye.=:{W-} & {VJr-} & (VPast+ or VPres+ or VImp+) & {VJl+} & {O-};
+
+%verb suffixes: past tense, present cont., imperative
+=dim.past1s: {VPast-} & {S1s-};
+=din.past2s: {VPast-} & {S2s-};
+=di.past3s: {VPast-} & {S3s-};
+=dik.past1p: {VPast-} & {S1p-};
+=diniz.past2p: {VPast-} & {S2p-};
+=diler.past3p: {VPast-} & {S3p-};
+=di.past3p: {VPast-} & {S3p-};
+=iyor.pres3s: {VPres-} & {S2s-};
+=.imp: VImp-;
+
+%conjunctions: and
+ve.j-n: {W-} & {A-} & SJl- & SJr+ & {S3p+}  ;
+ve.j-a: {W-} & AJl- & AJr+ & {A+} ;
+ve.j-v: {W-} & VJl- & VJr+ & {S-} ;
+
+%punctuations
+",": (SJl- & SJr+ & SJl+ )
+   or (AJl- & AJr+ & AJl+)
+   or (VJl- & VJr+ & VJl+) ;
+%",": Xc- & Xd+;
+
+
+LEFT-WALL: W+ or Q+;
+
+HMS-TIME: XXX-;
+DECADE-TIME: XXX-;
+DAY-ORDINALS: XXX-;
+ORDINALS: XXX-;
+NUMBERS: XXX-;
+FRACTION: XXX-;
+ROMAN-NUMERAL-WORDS: XXX-;
+INITIALS: XXX-;
+GREEK-LETTER-AND-NUMBER: XXX-;
+PL-GREEK-LETTER-AND-NUMBER: XXX-;
+UNITS: XXX-;
+FOLD-WORDS: XXX-;
+PL-CAPITALIZED-WORDS: XXX-;
+CAPITALIZED-WORDS: XXX-;
+ING-WORDS: XXX-;
+S-WORDS: XXX-;
+ED-WORDS: XXX-;
+LY-WORDS: XXX-;
+MC-NOUN-WORDS: XXX-;
+NOUN-TO-WORDS: XXX-;
+C-NOUN-WORDS: XXX-;
+ADJ-WORDS: XXX-;
+LATIN-ADJ-WORDS: XXX-;
+LATIN-ADJ-P-NOUN-WORDS: XXX-;
+LATIN-ADJ-S-NOUN-WORDS: XXX-;
+HYPHENATED-WORDS: XXX-;
+UNKNOWN-WORD: XXX-;
+

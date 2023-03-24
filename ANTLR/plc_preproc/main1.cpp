@@ -1,5 +1,7 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
 
+#pragma comment(linker, "/STACK:96000000")
+
 #include <iostream>
 #include <string>
 #include <fstream>

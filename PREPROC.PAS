@@ -86,15 +86,15 @@ Type
         ActionID: String;
         Fact: Boolean;
         Params: TObjStrList;
-        Context1, Needle, Context2: String;
+        Context1, Needle, Context2: WideString;
 
-        Constructor Create(Line: Integer; Const ModID: String; IsFact: Boolean; ModParams: TObjStrList; Const Body: String);
+        Constructor Create(Line: Integer; Const ModID: String; IsFact: Boolean; ModParams: TObjStrList; Const Body: WideString);
         Function GetReplacement(ENV: TXPathEnvironment; Const S: RawByteString): WideString;
         Destructor Destroy; Override;
      End;
 
 constructor TPattern.Create(Line: Integer; const ModID: String;
-  IsFact: Boolean; ModParams: TObjStrList; const Body: String);
+  IsFact: Boolean; ModParams: TObjStrList; const Body: WideString);
 
 Var L: TStringList;
     F: Integer;
@@ -114,7 +114,7 @@ begin
    While (F < L.Count) And (UpperCase(Trim(L[F])) <> SpecSymbol + idbegin) Do
      begin
        If Trim(L[F]) <> '' Then
-          AppendStr(Context1, Trim(L[F]));
+          Context1 := Context1 + Trim(L[F]);
        Inc(F)
      end;
    If F < L.Count Then
@@ -123,7 +123,7 @@ begin
         While (F < L.Count) And (UpperCase(Trim(L[F])) <> SpecSymbol + idend) Do
           begin
             If Trim(L[F]) <> '' Then
-               AppendStr(Needle, Trim(L[F]));
+               Needle := Needle + Trim(L[F]);
             Inc(F)
           end;
         If Needle = '' Then
@@ -140,7 +140,7 @@ begin
         While F < L.Count Do
           begin
             If Trim(L[F]) <> '' Then
-               AppendStr(Context2, Trim(L[F]));
+               Context2 := Context2 + Trim(L[F]);
             Inc(F)
           end;
       end;
@@ -257,7 +257,8 @@ procedure PreprocStage1(ApplyConds: Boolean;
                         PreChecks: Boolean);
 
 Var L: TAnalyser; Eval: TEvaluator;
-    S, S1, S2: String;
+    S: WideString;
+    S1, S2: WideString;
     LSaveCounter: Integer;
     HasParams: Boolean;
     ID: String;
@@ -265,13 +266,13 @@ Var L: TAnalyser; Eval: TEvaluator;
     ModeGPU: Byte;
     FL: TStringList;
     FF: TextFile;
-    FS: String;
+    FS: WideString;
     CommentFlag: Boolean;
     NotEmpty: Boolean;
     LN: TLine;
     Rslt: Real;
     UseLine: Boolean;
-    Original: String;
+    Original: WideString;
     PolyLineDef: Boolean;
     Flag: Boolean;
     F, K: Integer;
@@ -295,7 +296,7 @@ begin
   // Handle simple defines: substitute into defines and consts
   While (LCounter <= Lines.Count) And Not L.Error Do
     Begin
-      S := Lines.Strings[LCounter-1];
+      S := UTF8Decode(Lines.Strings[LCounter-1]);
       L.AnlzLine := S;
 
       PolyLineDef := False;
@@ -362,7 +363,7 @@ begin
               End
          End;
 
-      S := Lines.Strings[LCounter-1];
+      S := UTF8Decode(Lines.Strings[LCounter-1]);
       L.AnlzLine := S;
 
       // Check is this line common or gpu line
@@ -428,7 +429,7 @@ begin
       Original := S;
       For F := 0 To Defines.Count-1 Do
           S := Substitute(S, '', '', Defines.Strings[F], PString(Defines.Objects[F])^);
-      Lines.Strings[LCounter-1] := S;
+      Lines.Strings[LCounter-1] := UTF8Encode(S);
       L.AnlzLine := S;
 
       If L.IsNext(Pound) Then // #...
@@ -453,7 +454,7 @@ begin
                   If Flag Then
                      Begin
                        Inc(LCounter);
-                       S := Lines.Strings[LCounter-1];
+                       S := UTF8Decode(Lines.Strings[LCounter-1]);
                        TLine(Lines.Objects[LCounter-1])._ModeGPU := ModeGPU;
                        S := ' '+Trim(S)
                      End
@@ -813,6 +814,13 @@ begin
               If S[F] = '\' Then
                  Inc(F);
               Inc(F)
+            End
+       Else If S[F] = LeftFBracket Then
+          While (F <= Length(S)) And (S[F] <> RightFBracket) Do
+            Begin
+              If S[F] = '\' Then
+                 Inc(F);
+              Inc(F)
             End;
        Inc(F)
      end
@@ -836,7 +844,6 @@ Begin
       While (F < Length(Map)) And (Map[F] < 0) Do
         Inc(F);
       If F = Length(Map) Then Break;
-
       Start := F;
       Stop := F+1;
       While (Stop < Length(Map)) And (Map[Stop] = Map[Start]) Do
@@ -845,7 +852,6 @@ Begin
       Replacement := Replacers[Map[Start]];
       If Replacers.Objects[Map[Start]] <> Nil Then
          Result := Result + 'assertz(' + Replacement + '),';
-
       If Start > Length(HayStack) Then
          Begin
            K := Files.AddObject(Underscore+'END', Nil);
@@ -858,7 +864,6 @@ Begin
            F := Stop + 1;
            Continue
          End;
-
       K := 0;
       While K < Begs.Count Do
         Begin
@@ -879,7 +884,6 @@ Begin
                 Begs.Insert(K+1, IntegerToTObject(Stop+1));
                 Ends.Insert(K+1, Ends[K])
               End;
-
            Ends[K] := IntegerToTObject(Start - 1);
            If Ends[K] < Begs[K] Then
               Begin
@@ -891,7 +895,7 @@ Begin
               End
            Else
               Begin
-                Lines[K] := UnescapeString(Copy(HayStack, TObjectToInteger(TObject(Begs[K])), Start-TObjectToInteger(TObject(Begs[K]))));
+                Lines[K] := UTF8Encode(UnescapeString(Copy(HayStack, TObjectToInteger(TObject(Begs[K])), Start-TObjectToInteger(TObject(Begs[K])))));
                 LN := TLine(Lines.Objects[K]);
                 Lines.Objects[K] := TLine.Derive(LN, G, 1);
                 LN.Free;
@@ -908,7 +912,7 @@ Begin
              End;
            If K < Begs.Count Then
               Begin
-                Lines[K] := UnescapeString(Copy(HayStack, Stop+1, TObjectToInteger(TObject(Ends[K]))-Stop));
+                Lines[K] := UTF8Encode(UnescapeString(Copy(HayStack, Stop+1, TObjectToInteger(TObject(Ends[K]))-Stop)));
                 LN := TLine(Lines.Objects[K]);
                 Lines.Objects[K] := TLine.Derive(LN, G, 1000);
                 LN.Free;
@@ -922,11 +926,15 @@ Begin
               End;
            If Length(Replacement) > 0 Then
               Begin
-                Lines.InsertObject(K, Replacement, TLine.Create(G, 1, TLine(Lines.Objects[K])._ModeGPU));
+                If K < Lines.Count Then
+                   Lines.InsertObject(K, Replacement, TLine.Create(G, 1, TLine(Lines.Objects[K])._ModeGPU))
+                Else If Lines.Count > 0 Then
+                    Lines.InsertObject(K, Replacement, TLine.Create(G, 1, TLine(Lines.Objects[Lines.Count-1])._ModeGPU))
+                Else
+                    Lines.AddObject(Replacement, TLine.Create(G, 1, gpuNone));
                 Begs.Insert(K, IntegerToTObject(Start));
                 Ends.Insert(K, IntegerToTObject(Start + Length(Replacement) - 1))
               End;
-
            System.Delete(HayStack, Start, Stop-Start+1);
            Move(Map[Stop+1], Map[Start], (Length(Map)-(Stop+1))*SizeOf(Map[0]));
            System.Insert(Replacement, HayStack, Start);
@@ -995,8 +1003,35 @@ Begin
   L.Free
 End;
 
+function CheckXPath(Var L: TAnalyser; Const XPath: String): Boolean;
+
+Var Scan: TXPathScanner;
+    Node: TXPathExprNode;
+Begin
+   Scan := TXPathScanner.Create(XPath);
+   Node := Nil;
+   Try
+     Try
+       Node := Scan.ParseOrExpr;
+       If Scan.CurToken <> tkEndOfStream Then
+          Begin
+            L.MakeError('Garbage after XPath');
+            Exit(False)
+          end;
+     Except
+        L.MakeError('Incorrect XPath');
+        Exit(False)
+     end;
+   finally
+     Node.Free;
+     Scan.Free
+   end;
+   Result := True
+end;
+
 Var L: TAnalyser;
-    S, S1: String;
+    S: WideString;
+    S1: WideString;
     ID, ModID: String;
     ModParams: TObjStrList;
     Patterns: TStringList;
@@ -1009,6 +1044,8 @@ Var L: TAnalyser;
     Start, Stop: Integer;
     R: TRegExpr;
     ENV: TXPathEnvironment;
+    Args: Array Of String;
+    Ref: Boolean;
     Facts: WideString;
     Map: SmallIntArray;
     RS: Array Of TRegExpr;
@@ -1028,12 +1065,18 @@ begin
   if (PreChecks) Then
      VerifyProgram(True, True);
 
+  ENV := TXPathEnvironment.Create;
+  GID := 1;
+  ENV.setGID(GID);
+
   LCounter:=1;
+  CommentFlag := False;
   // PreSecond preprocessing phase
   // Handle patterns
   While (LCounter <= Lines.Count) And Not L.Error Do
     Begin
-      S := Lines.Strings[LCounter-1];
+      S := UTF8Decode(Lines.Strings[LCounter-1]);
+      StripComments(S, CommentFlag);
       L.AnlzLine := S;
 
       ByPass := False;
@@ -1131,6 +1174,73 @@ begin
                 For F := G To LCounter Do
                     TLine(Lines.Objects[F-1]).Restricted := True
               End
+           Else If (L.FindIdent(True) = iddef_xpath) And Not ByPass Then
+              Begin
+                G := LCounter;
+
+                L.GetIdent(True);
+                ID := L.GetIdent(False);
+
+                If Length(ID) = 0 Then
+                   begin
+                     L.Expect('Function identifier');
+                     Halt(300);
+                   end;
+
+                SetLength(Args, 0);
+                If L.IsNext(LeftBracket) Then
+                   begin
+                     If Not L.Check(LeftBracket) Then
+                        Halt(301);
+                     While Not (L.Error Or L.IsNext(RightBracket)) Do
+                        begin
+                          SetLength(Args, Length(Args) + 1);
+                          Ref := L.IsNext(Ampersand) And L.Check(Ampersand);
+                          L.Check(Dollar);
+                          If Not L.Error Then
+                             begin
+                               If L.IsNext(Pound) And L.Check(Pound) Then
+                                  begin
+                                    If Ref Then
+                                       begin
+                                         L.MakeError('# or ## can not be passed by reference (&)');
+                                         Break
+                                       end;
+                                    If L.IsNext(Pound) And L.Check(Pound) Then
+                                       S1 := Pound + Pound
+                                    Else
+                                       S1 := Pound
+                                  end
+                               Else
+                                  S1 := L.GetIdent(False);
+                               If Ref Then
+                                  Args[High(Args)] := Ampersand + Dollar + S1
+                               Else
+                                  Args[High(Args)] := Dollar + S1;
+                               If Length(Args[High(Args)]) = 0 Then
+                                  L.MakeError('Empty argument name in function ' + ID)
+                               Else If L.IsNext(Comma) Then
+                                  L.Check(Comma)
+                               Else If Not L.IsNext(RightBracket) Then
+                                  L.ExpectSet([Comma, RightBracket])
+                             end
+                        end;
+                     L.Check(RightBracket)
+                   end;
+                If (Not L.Error) And L.Check(LeftFBracket) Then
+                   begin
+                     S := LineDelimiter;
+                     LineDelimiter := ' ';
+                     S1 := L.GetBalancedListItem(True, [RightFBracket], @GetLineFromLines);
+                     LineDelimiter := S;
+                     If Not CheckXPath(L, S1) Then
+                        Halt(302);
+                     ENV.AddFunction(ID, Nil, true, Args, S1)
+                   End;
+
+                For F := G To LCounter Do
+                    TLine(Lines.Objects[F-1]).Restricted := True
+              End
          End;
 
       If L.Error Then
@@ -1174,7 +1284,7 @@ begin
         G := 1;
         While LCounter <= Lines.Count Do
           Begin
-            S := Lines.Strings[LCounter-1];
+            S := UTF8Decode(Lines.Strings[LCounter-1]);
             If TLine(Lines.Objects[LCounter-1]).Restricted Then
                Begin
                  Begs.Add(IntegerToTObject(G));
@@ -1206,10 +1316,6 @@ begin
 
             Inc(LCounter)
           End;
-
-        ENV := TXPathEnvironment.Create;
-        GID := 1;
-        ENV.setGID(GID);
 
         db := TFastDB.Create;
         db.Use;
@@ -1327,7 +1433,6 @@ begin
                       Begin
                         Start := R.MatchPos[NeedleNum];
                         Stop := Start + R.MatchLen[NeedleNum] - 1;
-
                         K := Start;
                         While (K <= Stop) And (Map[K] < 0) Do
                           Inc(K);
@@ -1353,7 +1458,15 @@ begin
                              Inc(GID);
                              ENV.setGID(GID);
                              G := Start
-                           End;
+                           End
+                        Else If TPattern(Patterns.Objects[F]).Context1 = '' Then
+                           If Map[Start] >= 0 Then
+                              Begin
+                                G := Start;
+                                While (G < Length(HayStack)) And (Map[G] >= 0) Do
+                                  Inc(G);
+                                Dec(G)
+                              End;
                         Inc(G)
                       End;
                     R.Free;
@@ -1421,7 +1534,7 @@ begin
   // Handle consts and macromodules (early topologies)
   While (LCounter <= Lines.Count) And Not L.Error Do
     Begin
-      S := Lines.Strings[LCounter-1];
+      S := UTF8Decode(Lines.Strings[LCounter-1]);
       L.AnlzLine := S;
 
       ByPass := False;
@@ -1475,7 +1588,7 @@ begin
                 L.AnlzLine := S;
                 For F := G1 To LCounter Do
                     Begin
-                      S := Trim(Lines.Strings[F-1]);
+                      S := Trim(UTF8Decode(Lines.Strings[F-1]));
                       If (Length(S) > 0) And (S[1] = '%') Then
                          Lines.Strings[F-1] := ''
                     End;

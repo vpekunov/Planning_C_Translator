@@ -21,6 +21,7 @@ options {
 	std::set<std::string> scanners;
 	std::set<std::string> scanner_refs;
 	std::vector<std::string> memo_map;
+	std::set<std::string> xpaths;
 	std::set<std::string> regexp_vars;
 	std::set<std::string> regexp_refs;
 }
@@ -76,6 +77,10 @@ statement:
 	| def_pattern
 	| DefPattern {
 		throw FailedPredicateException(this, "Something wrong with '#def_pattern'");
+	}
+	| def_xpath
+	| DefXPath {
+		throw FailedPredicateException(this, "Something wrong with '#def_xpath'");
 	}
 	| otherLine;
 
@@ -136,7 +141,7 @@ xpath_and_expression:
 	xpath_rel_expression (And_ xpath_rel_expression)*;
 
 xpath_rel_expression:
-	xpath_mul_expression ((Less | Greater | Equal | NotEqual | LessEqual | GreaterEqual) xpath_mul_expression)*;
+	xpath_mul_expression ((Less | Greater | Assign | NotEqual | LessEqual | GreaterEqual) xpath_mul_expression)*;
 
 xpath_mul_expression:
 	xpath_plus_expression ((Star | Div) xpath_plus_expression)*;
@@ -150,21 +155,81 @@ xpath_unary_expression:
 	| EmptyAtom
 	| IntegerLiteral
 	| FloatingLiteral
-	| Identifier (LeftParen xpath_fun_params? RightParen)?
+	| AtValue
+	| GetText
 	| LeftParen simple_xpath_expression RightParen
-	| xpath_query;
+	| xpath_query
+	| Identifier (LeftParen xpath_fun_params? RightParen)?;
 
 xpath_query:
-	((Div | DivDiv) var=Identifier { regexp_refs.insert($var.text); } xpath_predicate?)*
-	( ((Div | DivDiv) (last=Identifier { regexp_refs.insert($last.text); } | AtValue | GetText))
-	  | AtValue
-	);
+	(Div | DivDiv)? (var=Identifier { regexp_refs.insert($var.text); } | Star) xpath_predicate?
+	((Div | DivDiv) (next=Identifier { regexp_refs.insert($next.text); } | Star) xpath_predicate?)*
+	(Div | DivDiv) ((last=Identifier { regexp_refs.insert($last.text); } | Star) | AtValue | GetText);
 
 xpath_predicate:
 	LeftBracket simple_xpath_expression RightBracket;
 
 xpath_fun_params:
 	simple_xpath_expression (Comma simple_xpath_expression)*;
+
+def_xpath:
+	DefXPath
+	id=Identifier {
+		if (xpaths.find($id.text) != xpaths.end())
+			throw FailedPredicateException(this, "XPath is already defined");
+		xpaths.insert($id.text);
+	}
+	(
+	 LeftParen
+		(def_xpath_param (Comma def_xpath_param)*)?
+	 RightParen
+	)?
+	LeftBrace Newline
+		def_xpath_expression
+	RightBrace Newline;
+
+def_xpath_param:
+	And? Regexp_ref Identifier;
+
+def_xpath_expression:
+	def_xpath_and_expression (Newline? Or_ Newline? def_xpath_and_expression)* Newline?;
+
+def_xpath_and_expression:
+	def_xpath_rel_expression (Newline? And_ Newline? def_xpath_rel_expression)* Newline?;
+
+def_xpath_rel_expression:
+	def_xpath_mul_expression (Newline? (Less | Greater | Assign | NotEqual | LessEqual | GreaterEqual) Newline? def_xpath_mul_expression)* Newline?;
+
+def_xpath_mul_expression:
+	def_xpath_plus_expression (Newline? (Star | Div) Newline? def_xpath_plus_expression)* Newline?;
+
+def_xpath_plus_expression:
+	def_xpath_unary_expression (Newline? (Plus | Minus) Newline? def_xpath_unary_expression)* Newline?;
+
+def_xpath_unary_expression:
+	StringLiteral
+	| CharacterLiteral
+	| EmptyAtom
+	| IntegerLiteral
+	| FloatingLiteral
+	| AtValue
+	| At Identifier
+	| GetText
+	| LeftParen Newline? def_xpath_expression Newline? RightParen Newline?
+	| Identifier Newline? LeftParen Newline? def_xpath_fun_params? Newline? RightParen Newline?
+	| def_xpath_query Newline?
+	| Regexp_ref Identifier;
+
+def_xpath_query:
+	(Div | DivDiv)? Newline? (Identifier | Star) Newline? def_xpath_predicate?
+	((Div | DivDiv) Newline? (Identifier | Star) Newline? def_xpath_predicate?)*
+	((Div | DivDiv) Newline? ((Identifier | Star) | AtValue | At Identifier | GetText))?;
+
+def_xpath_predicate:
+	LeftBracket Newline? def_xpath_expression Newline? RightBracket;
+
+def_xpath_fun_params:
+	def_xpath_expression (Newline? Comma Newline? def_xpath_expression)* Newline?;
 
 regexps:
 	LeftBrace Newline
@@ -195,9 +260,14 @@ plc_regexp_logical:
 	| plc_regexp_query;
 
 plc_regexp_var:
-	Plc_regexp_var (var=Identifier | { throw FailedPredicateException(this, "->{Id} expected"); }) RightBrace {
-		regexp_vars.insert($var.text);
-	};
+	Plc_regexp_var
+	(
+	 lib_or_id=Identifier
+		(Dot Identifier LeftBrace var=Identifier RightBrace RightBrace { regexp_vars.insert($var.text); }
+		 | RightBrace { regexp_vars.insert($lib_or_id.text); }
+		 | { throw FailedPredicateException(this, "->{Id} expected"); }
+		)
+	);
 
 plc_regexp_equal:
 	Plc_regexp_equal (req=Identifier | { throw FailedPredicateException(this, "==>{Id} expected"); }) RightBrace {
@@ -252,8 +322,11 @@ defModule:
 	RightParen {
 		modules[$ident.text] = param_counter;
 	} Newline* LeftBrace Newline*
-		defModuleDescriptor+
-	RightBrace Semi Newline*;
+		defModuleDescriptors 
+	Newline*;
+
+defModuleDescriptors:
+	defModuleDescriptor (RightBrace Semi | defModuleDescriptor);
 
 defModuleDescriptor:
 	At (prolog_goal | prolog_statement | { throw FailedPredicateException(this, "Corrupted Prolog statement in module definition"); } )
@@ -508,13 +581,7 @@ prolog_predicate_id:
 	| ConstructAtom;
 
 cpp_code_without_at:
-	~(At | RightBrace)+ cpp_code_continues?;
-
-cpp_code_continues:
-	{ _input->LT(1) && _input->LT(1)->getText() == "}" &&
-		(!_input->LT(2) || _input->LT(2)->getText() != ";") }?
-	RightBrace?
-	cpp_code_without_at;
+	~(At | RightBrace)+;
 
 otherLine:
 	{ _input->LT(-1) == NULL || _input->LT(-1)->getText() == "\n" }? (~Newline)* Newline;

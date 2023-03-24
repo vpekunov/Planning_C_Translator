@@ -415,6 +415,33 @@ type
   Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
  end;
 
+ { TFastEqual }
+
+ TFastEqual = class(TFastExternal)
+ public
+  Constructor Create(V: Boolean);
+
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+ end;
+
+ { TFastSimilar }
+
+ TFastSimilar = class(TFastExternal)
+ public
+  Constructor Create(V: Boolean);
+
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+ end;
+
+ { TFastSet }
+
+ TFastSet = class(TFastExternal)
+ public
+  Constructor Create(V: Boolean);
+
+  Function Unify(R: TRegExpr; ENV: TXPathEnvironment; Var Descriptor: TFastPositions): Boolean; override;
+ end;
+
  { TFastNet }
 
  TFastNet = class(TFastPredicate)
@@ -1795,6 +1822,68 @@ Begin
    Result := _GetLU(Z+1, iRow, MAT, LU) And _SolveLU(Z+1, iRow, LU, B, a)
 end;
 
+{ TFastSet }
+
+constructor TFastSet.Create(V: Boolean);
+begin
+ Inherited Create(Nil)
+end;
+
+function TFastSet.Unify(R: TRegExpr; ENV: TXPathEnvironment;
+  var Descriptor: TFastPositions): Boolean;
+begin
+ If Length(Descriptor) = 2 Then
+    If (Descriptor[0].Kind = fpBound) Then
+       Exit(Descriptor[0].Value = Descriptor[1].Value)
+    Else
+       Begin
+         Descriptor[0].Value := Descriptor[1].Value;
+         Exit(True)
+       end;
+ Exit(False)
+end;
+
+{ TFastSimilar }
+
+constructor TFastSimilar.Create(V: Boolean);
+begin
+ Inherited Create(Nil)
+end;
+
+function TFastSimilar.Unify(R: TRegExpr; ENV: TXPathEnvironment;
+  var Descriptor: TFastPositions): Boolean;
+
+Var Threshold: Integer;
+begin
+ If Length(Descriptor) = 3 Then
+    If (Descriptor[0].Kind = fpBound) And
+       (Descriptor[1].Kind = fpBound) And
+       (Descriptor[2].Kind = fpBound) Then
+       Try
+          Threshold := StrToInt(Descriptor[2].Value);
+          Exit(Levenshtein(Descriptor[0].Value, Descriptor[1].Value) <= Threshold);
+       Except
+          Exit(False)
+       End;
+ Exit(False)
+end;
+
+{ TFastEqual }
+
+constructor TFastEqual.Create(V: Boolean);
+begin
+ Inherited Create(Nil)
+end;
+
+function TFastEqual.Unify(R: TRegExpr; ENV: TXPathEnvironment;
+  var Descriptor: TFastPositions): Boolean;
+begin
+ If Length(Descriptor) = 2 Then
+    If (Descriptor[0].Kind = fpBound) And (Descriptor[1].Kind = fpBound) Then
+       Exit(Descriptor[0].Value = Descriptor[1].Value);
+ Exit(False)
+end;
+
 { TFastXPathF }
 
 constructor TFastStopFail.Create;
@@ -3129,7 +3218,10 @@ begin
   AddObject('xpathf', TFastXPathF.Create);
   AddObject('stop_fail', TFastStopFail.Create);
   AddObject('fail', TFastBoolConst.Create(False));
-  AddObject('true', TFastBoolConst.Create(True))
+  AddObject('true', TFastBoolConst.Create(True));
+  AddObject('eq', TFastEqual.Create(True));
+  AddObject('similar', TFastSimilar.Create(True));
+  AddObject('set', TFastSet.Create(True))
 end;
 
 destructor TFastDB.Destroy;

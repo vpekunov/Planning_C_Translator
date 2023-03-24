@@ -30,7 +30,7 @@ Const Tunnels_Vars_Sems: PChar =
 ' #ifndef __max'+CRLF+
 ' #define __max(a,b) ((a)>(b) ? (a) : (b))'+CRLF+
 ' #endif'+CRLF+
-' /* LU - разложение  с выбором максимального элемента по диагонали */'+CRLF+
+' /* LU - СЂР°Р·Р»РѕР¶РµРЅРёРµ  СЃ РІС‹Р±РѕСЂРѕРј РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РїРѕ РґРёР°РіРѕРЅР°Р»Рё */'+CRLF+
 ' bool _GetLU(int NN, int * iRow, long double * A, long double * LU)'+CRLF+
 ' {'+CRLF+
 '  int i,j,k;'+CRLF+
@@ -76,7 +76,7 @@ Const Tunnels_Vars_Sems: PChar =
 '  }'+CRLF+
 '  return true;'+CRLF+
 ' }'+CRLF+
-' /* Метод LU - разложения */'+CRLF+
+' /* РњРµС‚РѕРґ LU - СЂР°Р·Р»РѕР¶РµРЅРёСЏ */'+CRLF+
 ' bool _SolveLU(int NN, int * iRow, long double * LU, long double * Y, long double * X)'+CRLF+
 ' {'+CRLF+
 '  int i,j,k;'+CRLF+
@@ -103,7 +103,7 @@ Const Tunnels_Vars_Sems: PChar =
 '  }'+CRLF+
 '  return true;'+CRLF+
 ' }'+CRLF+
-' /* Метод Гаусса-Зейделя  с выбором максимального элемента по диагонали */'+CRLF+
+' /* РњРµС‚РѕРґ Р“Р°СѓСЃСЃР°-Р—РµР№РґРµР»СЏ  СЃ РІС‹Р±РѕСЂРѕРј РјР°РєСЃРёРјР°Р»СЊРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РїРѕ РґРёР°РіРѕРЅР°Р»Рё */'+CRLF+
 ' bool _SolveGaussZeidel(int NN, int * iRow, long double * A, long double * LU, long double * Y, long double * X) {'+CRLF+
 '  int np = omp_get_num_procs();'+CRLF+
 '  double prev_eps, eps;'+CRLF+
@@ -2515,8 +2515,8 @@ Const Transact: PChar =
 ''+CRLF+
 'typedef struct {'+CRLF+
 '	int __transaction_counter__; // K'+CRLF+
-'	map<int, LARGE_INTEGER> __transaction_timings__[__max_procs__]; // Меньше нуля!'+CRLF+
-'	map<int, LARGE_INTEGER> __transaction_retimings__[__max_procs__]; // Меньше нуля!'+CRLF+
+'	map<int, LARGE_INTEGER> __transaction_timings__[__max_procs__]; // РњРµРЅСЊС€Рµ РЅСѓР»СЏ!'+CRLF+
+'	map<int, LARGE_INTEGER> __transaction_retimings__[__max_procs__]; // РњРµРЅСЊС€Рµ РЅСѓР»СЏ!'+CRLF+
 '	vector<int> __transaction_procs__;'+CRLF+
 '	vector<int> __transaction_misses__;'+CRLF+
 '} __opt_transaction__;'+CRLF+
@@ -2600,7 +2600,7 @@ Const Transact: PChar =
 '     __nthreads = nthreads;'+CRLF+
 '     __tid = get_thread_id();'+CRLF+
 '     sprintf(__this_id, "&&%llX", (unsigned long long) this);'+CRLF+
-'     // Помещаем в стек свой this-ptr'+CRLF+
+'     // РџРѕРјРµС‰Р°РµРј РІ СЃС‚РµРє СЃРІРѕР№ this-ptr'+CRLF+
 '     omp_set_lock(&__lock_tobjs__);'+CRLF+
 '     stack<TOBJ_STARTER *> * st = __tobj_this_stack[__tid];'+CRLF+
 '     if (st == NULL)'+CRLF+
@@ -2608,15 +2608,15 @@ Const Transact: PChar =
 '     st->push(this);'+CRLF+
 '     omp_unset_lock(&__lock_tobjs__);'+CRLF+
 '   }'+CRLF+
-'   // Возвращает идентификатор транзакции текущего объекта'+CRLF+
+'   // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ С‚СЂР°РЅР·Р°РєС†РёРё С‚РµРєСѓС‰РµРіРѕ РѕР±СЉРµРєС‚Р°'+CRLF+
 '   const char * get_transaction_id() {'+CRLF+
 '     return __this_id;'+CRLF+
 '   }'+CRLF+
 '   virtual void sync(bool sync_children = true) = 0;'+CRLF+
 '   virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) = 0;'+CRLF+
-'   // Не прерывая работу, ставит ее на пересогласование в транзакционном блоке. Если вызван с отличным'+CRLF+
-'   // от NULL параметром = идентификатором базовой транзакции, то ставит на пересогласование все работы'+CRLF+
-'   // от текущей до породивших ее в транзакциях более высокого уровня вплоть до базовой транзакции.'+CRLF+
+'   // РќРµ РїСЂРµСЂС‹РІР°СЏ СЂР°Р±РѕС‚Сѓ, СЃС‚Р°РІРёС‚ РµРµ РЅР° РїРµСЂРµСЃРѕРіР»Р°СЃРѕРІР°РЅРёРµ РІ С‚СЂР°РЅР·Р°РєС†РёРѕРЅРЅРѕРј Р±Р»РѕРєРµ. Р•СЃР»Рё РІС‹Р·РІР°РЅ СЃ РѕС‚Р»РёС‡РЅС‹Рј'+CRLF+
+'   // РѕС‚ NULL РїР°СЂР°РјРµС‚СЂРѕРј = РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂРѕРј Р±Р°Р·РѕРІРѕР№ С‚СЂР°РЅР·Р°РєС†РёРё, С‚Рѕ СЃС‚Р°РІРёС‚ РЅР° РїРµСЂРµСЃРѕРіР»Р°СЃРѕРІР°РЅРёРµ РІСЃРµ СЂР°Р±РѕС‚С‹'+CRLF+
+'   // РѕС‚ С‚РµРєСѓС‰РµР№ РґРѕ РїРѕСЂРѕРґРёРІС€РёС… РµРµ РІ С‚СЂР°РЅР·Р°РєС†РёСЏС… Р±РѕР»РµРµ РІС‹СЃРѕРєРѕРіРѕ СѓСЂРѕРІРЅСЏ РІРїР»РѕС‚СЊ РґРѕ Р±Р°Р·РѕРІРѕР№ С‚СЂР°РЅР·Р°РєС†РёРё.'+CRLF+
 '   virtual bool fail_till(const char * __till_id__ = NULL) {'+CRLF+
 '   	__info_transaction__ * till_info;'+CRLF+
 '   	string id;'+CRLF+
@@ -2645,7 +2645,7 @@ Const Transact: PChar =
 '   }'+CRLF+
 '   virtual int  num_free() = 0;'+CRLF+
 '   virtual ~TOBJ_STARTER() {'+CRLF+
-'     // Уничтожаем транзакцию this+ptr -- стираем ее из списка'+CRLF+
+'     // РЈРЅРёС‡С‚РѕР¶Р°РµРј С‚СЂР°РЅР·Р°РєС†РёСЋ this+ptr -- СЃС‚РёСЂР°РµРј РµРµ РёР· СЃРїРёСЃРєР°'+CRLF+
 '     omp_set_lock(&__lock_atomics__);'+CRLF+
 '     map< string, __info_transaction__ * >::iterator it = __transactions__.find(__this_id);'+CRLF+
 '     if (it != __transactions__.end())'+CRLF+
@@ -2657,7 +2657,7 @@ Const Transact: PChar =
 'class TOBJ_STOPPER {'+CRLF+
 'public:'+CRLF+
 '   TOBJ_STOPPER(int nthreads) {'+CRLF+
-'     // Извлекаем из стека свой this-ptr'+CRLF+
+'     // РР·РІР»РµРєР°РµРј РёР· СЃС‚РµРєР° СЃРІРѕР№ this-ptr'+CRLF+
 '     omp_set_lock(&__lock_tobjs__);'+CRLF+
 '     __tobj_this_stack[get_thread_id()]->pop();'+CRLF+
 '     omp_unset_lock(&__lock_tobjs__);'+CRLF+
@@ -2761,7 +2761,7 @@ Const Transact: PChar =
 '	return info != NULL && info->__in_transaction__;'+CRLF+
 '}'+CRLF+
 ''+CRLF+
-'// Был ли вызван fail для текущего потока'+CRLF+
+'// Р‘С‹Р» Р»Рё РІС‹Р·РІР°РЅ fail РґР»СЏ С‚РµРєСѓС‰РµРіРѕ РїРѕС‚РѕРєР°'+CRLF+
 'bool is_failed() {'+CRLF+
 '	__info_transaction__ * info;'+CRLF+
 '	string id;'+CRLF+
@@ -2773,7 +2773,7 @@ Const Transact: PChar =
 '	return info != NULL && info->failed[omp_get_thread_num()];'+CRLF+
 '}'+CRLF+
 ''+CRLF+
-'// Не прерывая работу, ставит ее на пересогласование в транзакционном блоке'+CRLF+
+'// РќРµ РїСЂРµСЂС‹РІР°СЏ СЂР°Р±РѕС‚Сѓ, СЃС‚Р°РІРёС‚ РµРµ РЅР° РїРµСЂРµСЃРѕРіР»Р°СЃРѕРІР°РЅРёРµ РІ С‚СЂР°РЅР·Р°РєС†РёРѕРЅРЅРѕРј Р±Р»РѕРєРµ'+CRLF+
 'bool fail() {'+CRLF+
 '	string id;'+CRLF+
 '	omp_set_lock(&__lock_atomics__);'+CRLF+
@@ -3165,7 +3165,7 @@ Const Transact: PChar =
 '		  omp_set_lock(&__lock_atomics__);'+CRLF+
 ''+CRLF+
 '		  int nn = info->__stat_transaction__.__transaction_procs__[id];'+CRLF+
-'		  if (clock_val(info->__stat_transaction__.__transaction_timings__[id][nn]) >= 0) { // Первый счет'+CRLF+
+'		  if (clock_val(info->__stat_transaction__.__transaction_timings__[id][nn]) >= 0) { // РџРµСЂРІС‹Р№ СЃС‡РµС‚'+CRLF+
 '			  if (info->working[id]) {'+CRLF+
 '				  LARGE_INTEGER c1 = { 0 };'+CRLF+
 '				  QueryPerformanceCounter(&c1);'+CRLF+
@@ -3178,7 +3178,7 @@ Const Transact: PChar =
 '			  }'+CRLF+
 '			  clock_val(info->__stat_transaction__.__transaction_timings__[id][nn]) -= clock_val(c);'+CRLF+
 '		  }'+CRLF+
-'		  else if (info->__stat_transaction__.__transaction_retimings__[id].find(nn) != info->__stat_transaction__.__transaction_retimings__[id].end() && clock_val(info->__stat_transaction__.__transaction_retimings__[id][nn]) >= 0) { // Пересчет'+CRLF+
+'		  else if (info->__stat_transaction__.__transaction_retimings__[id].find(nn) != info->__stat_transaction__.__transaction_retimings__[id].end() && clock_val(info->__stat_transaction__.__transaction_retimings__[id][nn]) >= 0) { // РџРµСЂРµСЃС‡РµС‚'+CRLF+
 '			  if (!info->working[id]) {'+CRLF+
 '				  clock_val(info->__stat_transaction__.__transaction_retimings__[id][nn]) -= clock_val(c);'+CRLF+
 '				  info->__stat_transaction__.__transaction_retimings__[id].erase(-1);'+CRLF+
@@ -3451,7 +3451,7 @@ Const Transact: PChar =
 '           delete d;'+CRLF+
 '    }'+CRLF+
 '    virtual void startTransaction() {'+CRLF+
-'       // Все элементы стартуют самостоятельно как потомки TVar'+CRLF+
+'       // Р’СЃРµ СЌР»РµРјРµРЅС‚С‹ СЃС‚Р°СЂС‚СѓСЋС‚ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ РєР°Рє РїРѕС‚РѕРјРєРё TVar'+CRLF+
 '    }'+CRLF+
 '    Type * copy() {'+CRLF+
 '       Type * res = new Type[Data.size()];'+CRLF+
@@ -3471,23 +3471,23 @@ Const Transact: PChar =
 '      return *this;'+CRLF+
 '    }'+CRLF+
 '    virtual void check(signed char * state) {'+CRLF+
-'       // Все элементы проверяются самостоятельно как потомки TVar'+CRLF+
+'       // Р’СЃРµ СЌР»РµРјРµРЅС‚С‹ РїСЂРѕРІРµСЂСЏСЋС‚СЃСЏ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ РєР°Рє РїРѕС‚РѕРјРєРё TVar'+CRLF+
 '    }'+CRLF+
 '    virtual void commit(const vector<int> & _winners) {'+CRLF+
-'       // Все элементы утверждаются самостоятельно как потомки TVar'+CRLF+
+'       // Р’СЃРµ СЌР»РµРјРµРЅС‚С‹ СѓС‚РІРµСЂР¶РґР°СЋС‚СЃСЏ СЃР°РјРѕСЃС‚РѕСЏС‚РµР»СЊРЅРѕ РєР°Рє РїРѕС‚РѕРјРєРё TVar'+CRLF+
 '    }'+CRLF+
 '  };'+CRLF+
 ''+CRLF+
 'template <class C>'+CRLF+
 'class TObj : public TOBJ_STARTER, public C, public TOBJ_STOPPER {'+CRLF+
-'// Часть методов наследуется от TOBJ_STARTER, см. выше'+CRLF+
+'// Р§Р°СЃС‚СЊ РјРµС‚РѕРґРѕРІ РЅР°СЃР»РµРґСѓРµС‚СЃСЏ РѕС‚ TOBJ_STARTER, СЃРј. РІС‹С€Рµ'+CRLF+
 'protected:'+CRLF+
-'   thread * __thread__; // Дежурный поток'+CRLF+
-'   volatile unsigned short __joined; // Число занятых потоков блока'+CRLF+
+'   thread * __thread__; // Р”РµР¶СѓСЂРЅС‹Р№ РїРѕС‚РѕРє'+CRLF+
+'   volatile unsigned short __joined; // Р§РёСЃР»Рѕ Р·Р°РЅСЏС‚С‹С… РїРѕС‚РѕРєРѕРІ Р±Р»РѕРєР°'+CRLF+
 '   omp_lock_t __join_lock__;'+CRLF+
-'   volatile bool __stopped; // Флаг, требующий завершения всех работ'+CRLF+
+'   volatile bool __stopped; // Р¤Р»Р°Рі, С‚СЂРµР±СѓСЋС‰РёР№ Р·Р°РІРµСЂС€РµРЅРёСЏ РІСЃРµС… СЂР°Р±РѕС‚'+CRLF+
 ''+CRLF+
-'   // Подкачка работ в блок'+CRLF+
+'   // РџРѕРґРєР°С‡РєР° СЂР°Р±РѕС‚ РІ Р±Р»РѕРє'+CRLF+
 '   virtual bool pump_jobs(__page_fun &f, __info_transaction__ * &parent_info, int &parent_id) {'+CRLF+
 '	f = nullptr;'+CRLF+
 '	parent_info = NULL;'+CRLF+
@@ -3495,7 +3495,7 @@ Const Transact: PChar =
 '	return false;'+CRLF+
 '   }'+CRLF+
 'private:'+CRLF+
-'   // Исполняемая процедура дежурного потока'+CRLF+
+'   // РСЃРїРѕР»РЅСЏРµРјР°СЏ РїСЂРѕС†РµРґСѓСЂР° РґРµР¶СѓСЂРЅРѕРіРѕ РїРѕС‚РѕРєР°'+CRLF+
 '   void worker() {'+CRLF+
 '        do {'+CRLF+
 '			omp_set_lock(&__lock_atomics__);'+CRLF+
@@ -3564,11 +3564,11 @@ Const Transact: PChar =
 '           }'+CRLF+
 '        } while (1);'+CRLF+
 '   }'+CRLF+
-'   // Создает запись о незавершенной работе с предусловиями preconds[npreconds], представляющими собой идентификаторы работ,'+CRLF+
-'   // которые должны закончиться до текущей работы.'+CRLF+
-'   // Возвращает идентификатор работы (больше или равен 1) или 0, если работа не создана'+CRLF+
-'   // Для создания работ с уникальными идентификаторами и корректной работы режима ожидания необходим предварительный'+CRLF+
-'   // вызов set_jobs_mode(true);'+CRLF+
+'   // РЎРѕР·РґР°РµС‚ Р·Р°РїРёСЃСЊ Рѕ РЅРµР·Р°РІРµСЂС€РµРЅРЅРѕР№ СЂР°Р±РѕС‚Рµ СЃ РїСЂРµРґСѓСЃР»РѕРІРёСЏРјРё preconds[npreconds], РїСЂРµРґСЃС‚Р°РІР»СЏСЋС‰РёРјРё СЃРѕР±РѕР№ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂС‹ СЂР°Р±РѕС‚,'+CRLF+
+'   // РєРѕС‚РѕСЂС‹Рµ РґРѕР»Р¶РЅС‹ Р·Р°РєРѕРЅС‡РёС‚СЊСЃСЏ РґРѕ С‚РµРєСѓС‰РµР№ СЂР°Р±РѕС‚С‹.'+CRLF+
+'   // Р’РѕР·РІСЂР°С‰Р°РµС‚ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂ СЂР°Р±РѕС‚С‹ (Р±РѕР»СЊС€Рµ РёР»Рё СЂР°РІРµРЅ 1) РёР»Рё 0, РµСЃР»Рё СЂР°Р±РѕС‚Р° РЅРµ СЃРѕР·РґР°РЅР°'+CRLF+
+'   // Р”Р»СЏ СЃРѕР·РґР°РЅРёСЏ СЂР°Р±РѕС‚ СЃ СѓРЅРёРєР°Р»СЊРЅС‹РјРё РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂР°РјРё Рё РєРѕСЂСЂРµРєС‚РЅРѕР№ СЂР°Р±РѕС‚С‹ СЂРµР¶РёРјР° РѕР¶РёРґР°РЅРёСЏ РЅРµРѕР±С…РѕРґРёРј РїСЂРµРґРІР°СЂРёС‚РµР»СЊРЅС‹Р№'+CRLF+
+'   // РІС‹Р·РѕРІ set_jobs_mode(true);'+CRLF+
 '   int create_job(int npreconds, int * preconds) {'+CRLF+
 '	int res = 0;'+CRLF+
 '	omp_set_lock(&__lock_tobjs__);'+CRLF+
@@ -3592,14 +3592,14 @@ Const Transact: PChar =
 '	return res;'+CRLF+
 '   }'+CRLF+
 'public:'+CRLF+
-'   // Передается число требуемых рабочих потоков. Может равняться единице'+CRLF+
+'   // РџРµСЂРµРґР°РµС‚СЃСЏ С‡РёСЃР»Рѕ С‚СЂРµР±СѓРµРјС‹С… СЂР°Р±РѕС‡РёС… РїРѕС‚РѕРєРѕРІ. РњРѕР¶РµС‚ СЂР°РІРЅСЏС‚СЊСЃСЏ РµРґРёРЅРёС†Рµ'+CRLF+
 '   TObj<C>(int nthreads) : TOBJ_STARTER(nthreads), C(nthreads), TOBJ_STOPPER(nthreads) {'+CRLF+
-'     // Создаем дежурный поток и ждем присоединений'+CRLF+
+'     // РЎРѕР·РґР°РµРј РґРµР¶СѓСЂРЅС‹Р№ РїРѕС‚РѕРє Рё Р¶РґРµРј РїСЂРёСЃРѕРµРґРёРЅРµРЅРёР№'+CRLF+
 '     omp_init_lock(&__join_lock__);'+CRLF+
 '	 __thread__ = NULL;'+CRLF+
 '     reinit();'+CRLF+
 '   }'+CRLF+
-'   // Реинициализация'+CRLF+
+'   // Р РµРёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ'+CRLF+
 '   virtual void reinit(bool sync_children = true) {'+CRLF+
 '	   sync(sync_children);'+CRLF+
 '	   __joined = 0;'+CRLF+
@@ -3643,7 +3643,7 @@ Const Transact: PChar =
 '        return f;'+CRLF+
 '     }'+CRLF+
 '   }'+CRLF+
-'   // Помещает работу на выполнение и возвращает true. Если блок занят, то возвращает false'+CRLF+
+'   // РџРѕРјРµС‰Р°РµС‚ СЂР°Р±РѕС‚Сѓ РЅР° РІС‹РїРѕР»РЅРµРЅРёРµ Рё РІРѕР·РІСЂР°С‰Р°РµС‚ true. Р•СЃР»Рё Р±Р»РѕРє Р·Р°РЅСЏС‚, С‚Рѕ РІРѕР·РІСЂР°С‰Р°РµС‚ false'+CRLF+
 '   virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) {'+CRLF+
 '     if (set_join_lock) omp_set_lock(&this->__join_lock__);'+CRLF+
 '     if (__joined >= __nthreads) {'+CRLF+
@@ -3660,7 +3660,7 @@ Const Transact: PChar =
 '     omp_unset_lock(&__join_lock__);'+CRLF+
 '     return true;'+CRLF+
 '   }'+CRLF+
-'   // Ожидает полного завершения работ (своих, и, если sync_children, всех дочерних TObj-объектов)'+CRLF+
+'   // РћР¶РёРґР°РµС‚ РїРѕР»РЅРѕРіРѕ Р·Р°РІРµСЂС€РµРЅРёСЏ СЂР°Р±РѕС‚ (СЃРІРѕРёС…, Рё, РµСЃР»Рё sync_children, РІСЃРµС… РґРѕС‡РµСЂРЅРёС… TObj-РѕР±СЉРµРєС‚РѕРІ)'+CRLF+
 '   virtual void sync(bool sync_children = true) {'+CRLF+
 '	 if (__thread__ == NULL) return;'+CRLF+
 '     if (sync_children) {'+CRLF+
@@ -3682,10 +3682,10 @@ Const Transact: PChar =
 '	 omp_set_lock(&__join_lock__);'+CRLF+
 '	 __stopped = true;'+CRLF+
 '	 omp_unset_lock(&__join_lock__);'+CRLF+
-'	 // Уничтожаем дежурный поток'+CRLF+
+'	 // РЈРЅРёС‡С‚РѕР¶Р°РµРј РґРµР¶СѓСЂРЅС‹Р№ РїРѕС‚РѕРє'+CRLF+
 '     if (__thread__->joinable()) __thread__->join();'+CRLF+
 '   }'+CRLF+
-'   // Возвращает число свободных потоков блока'+CRLF+
+'   // Р’РѕР·РІСЂР°С‰Р°РµС‚ С‡РёСЃР»Рѕ СЃРІРѕР±РѕРґРЅС‹С… РїРѕС‚РѕРєРѕРІ Р±Р»РѕРєР°'+CRLF+
 '   virtual int  num_free() {'+CRLF+
 '     omp_set_lock(&__join_lock__);'+CRLF+
 '     int res = __joined >= __nthreads ? 0 : (__nthreads - __joined);'+CRLF+
@@ -3693,7 +3693,7 @@ Const Transact: PChar =
 '     return res;'+CRLF+
 '   }'+CRLF+
 '   virtual ~TObj<C>() {'+CRLF+
-'     // Вызываем sync()'+CRLF+
+'     // Р’С‹Р·С‹РІР°РµРј sync()'+CRLF+
 '     sync();'+CRLF+
 '     delete __thread__;'+CRLF+
 '     omp_destroy_lock(&__join_lock__);'+CRLF+
@@ -3710,7 +3710,7 @@ Const Transact: PChar =
 '   } queue_item;'+CRLF+
 '   queue<queue_item> Q;'+CRLF+
 ''+CRLF+
-'   // Подкачка работ в блок'+CRLF+
+'   // РџРѕРґРєР°С‡РєР° СЂР°Р±РѕС‚ РІ Р±Р»РѕРє'+CRLF+
 '   virtual bool pump_jobs(__page_fun &f, __info_transaction__ * &parent_info, int &parent_id) {'+CRLF+
 '	if (Q.empty()) return TObj<C>::pump_jobs(f, parent_info, parent_id);'+CRLF+
 '	else {'+CRLF+
@@ -3724,17 +3724,17 @@ Const Transact: PChar =
 '   }'+CRLF+
 ''+CRLF+
 'public:'+CRLF+
-'   // Передается число требуемых рабочих потоков. Может равняться единице'+CRLF+
+'   // РџРµСЂРµРґР°РµС‚СЃСЏ С‡РёСЃР»Рѕ С‚СЂРµР±СѓРµРјС‹С… СЂР°Р±РѕС‡РёС… РїРѕС‚РѕРєРѕРІ. РњРѕР¶РµС‚ СЂР°РІРЅСЏС‚СЊСЃСЏ РµРґРёРЅРёС†Рµ'+CRLF+
 '   TQueuedObj<C>(int nthreads) : TObj<C>(nthreads) {'+CRLF+
 '   }'+CRLF+
-'   // Реинициализация. Если блок работал, то сначала следует вызвать sync(), и только затем reinit()'+CRLF+
+'   // Р РµРёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ. Р•СЃР»Рё Р±Р»РѕРє СЂР°Р±РѕС‚Р°Р», С‚Рѕ СЃРЅР°С‡Р°Р»Р° СЃР»РµРґСѓРµС‚ РІС‹Р·РІР°С‚СЊ sync(), Рё С‚РѕР»СЊРєРѕ Р·Р°С‚РµРј reinit()'+CRLF+
 '   virtual void reinit(bool sync_children = true) {'+CRLF+
 '     TObj<C>::reinit(sync_children);'+CRLF+
 '     omp_set_lock(&this->__join_lock__);'+CRLF+
 '     Q = queue<queue_item>();'+CRLF+
 '     omp_unset_lock(&this->__join_lock__);'+CRLF+
 '   }'+CRLF+
-'   // Помещает работу в очередь или запускает, если есть свободный поток. Всегда возвращает true'+CRLF+
+'   // РџРѕРјРµС‰Р°РµС‚ СЂР°Р±РѕС‚Сѓ РІ РѕС‡РµСЂРµРґСЊ РёР»Рё Р·Р°РїСѓСЃРєР°РµС‚, РµСЃР»Рё РµСЃС‚СЊ СЃРІРѕР±РѕРґРЅС‹Р№ РїРѕС‚РѕРє. Р’СЃРµРіРґР° РІРѕР·РІСЂР°С‰Р°РµС‚ true'+CRLF+
 '   virtual bool join(__page_fun f, int &id, int npreconds = 0, int * preconds = NULL, bool set_join_lock = true) {'+CRLF+
 '     if (set_join_lock) omp_set_lock(&this->__join_lock__);'+CRLF+
 '	 if (Q.size() == 0) {'+CRLF+

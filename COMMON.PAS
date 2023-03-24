@@ -69,7 +69,7 @@ Type TIODirections = Set Of TIODirection;
 
 Type TResultType = (rsOk, rsNonStrict, rsStrict);
 
-Type SubstituteHandle = Function(Var S: String; Const Word: String; Var Idx: Integer): String;
+Type SubstituteHandle = Function(Var S: WideString; Const Word: String; Var Idx: Integer): WideString;
 
 Function TObjectToInteger(S: TObject): Integer;
 Function IntegerToTObject(S: Integer): TObject;
@@ -78,13 +78,13 @@ Function RandomName: String;
 
 Function RemoveCRLF(Const S: String): String;
 
-Procedure StripComments(Var S: String; Var Flag: Boolean);
-Function GetLineFromLines(Var S:String):Boolean;
+Procedure StripComments(Var S: WideString; Var Flag: Boolean);
+Function GetLineFromLines(Var S: WideString):Boolean;
 Function _TrimRight(Const S: String): String;
 
 Procedure GetFBlock(L: TAnalyser; Dividers: TermSet; Var List: TStringList);
-Function Substitute(S: String; Const Prefix, Postfix: String; Const ID, Subst: String;
-                       Const Handler: SubstituteHandle = Nil; Const UseTriagQuotes: Boolean = False): String;
+Function Substitute(S: WideString; Const Prefix, Postfix: String; Const ID, Subst: String;
+                       Const Handler: SubstituteHandle = Nil; Const UseTriagQuotes: Boolean = False): WideString;
 
 Function _IndexOf(L: TStringList; Const What: String): Integer;
 
@@ -300,14 +300,22 @@ Begin
        Result := Not Result
 End;
 
-Procedure StripComments(Var S: String; Var Flag: Boolean);
+Procedure StripComments(Var S: WideString; Var Flag: Boolean);
 
-Var S1:String;
-    ProbablyXPath: Boolean;
+Const ProbablyXPathF: Boolean = False;
+
+Var S1:WideString;
+    ProbablyPattern: Boolean;
+    ByPass: Boolean;
     F: Integer;
 begin
      S1 := Trim(S);
-     ProbablyXPath := Pos('#def_pattern', S1) = 1;
+     ProbablyPattern := Pos('#def_pattern', S1) = 1;
+     If ProbablyXPathF Then
+        ProbablyXPathF := Pos('}', S1) <> 1
+     Else
+        ProbablyXPathF := Pos('#def_xpath', S1) = 1;
+     ByPass := ProbablyPattern Or ProbablyXPathF;
      S1 := '';
      F := 1;
      While F <= Length(S) Do
@@ -324,25 +332,25 @@ begin
        Else
           begin
             If Not Flag Then
-               If (F+1 <= Length(S)) And (S[F] = '/') And (S[F+1] = '/') And Not ProbablyXPath Then
+               If (F+1 <= Length(S)) And (S[F] = '/') And (S[F+1] = '/') And Not ByPass Then
                   Break
                Else
-                  AppendStr(S1, S[F]);
+                  S1 := S1 + S[F];
             Inc(F)
           end;
      S := S1
 end;
 
-Function GetLineFromLines(Var S:String):Boolean;
+Function GetLineFromLines(Var S:WideString):Boolean;
 
-Var L:String;
+Var L:WideString;
 Begin
      Result:=LCounter < Lines.Count;
      If Result Then
         Begin
           Repeat
              Inc(LCounter);
-             L := Lines.Strings[LCounter-1];
+             L := UTF8Decode(Lines.Strings[LCounter-1]);
              L := L+LineDelimiter;
              StripComments(L, CommentFlag);
              L:=Trim(L);
@@ -361,8 +369,8 @@ End;
 Procedure GetFBlock(L: TAnalyser; Dividers: TermSet; Var List: TStringList);
 
 Var LST: TStringList;
-    LD: String;
-    S, S1: String;
+    LD: WideString;
+    S, S1: WideString;
     F, G: Integer;
 Begin
   LST := TStringList.Create;
@@ -405,8 +413,8 @@ Begin
   LST.Free
 End;
 
-Function Substitute(S: String; Const Prefix, Postfix: String; Const ID, Subst: String;
-            Const Handler: SubstituteHandle = Nil; Const UseTriagQuotes: Boolean = False): String;
+Function Substitute(S: WideString; Const Prefix, Postfix: String; Const ID, Subst: String;
+            Const Handler: SubstituteHandle = Nil; Const UseTriagQuotes: Boolean = False): WideString;
 
 Const qtNone   = 0;
       qtSingle = 1;

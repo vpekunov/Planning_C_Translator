@@ -321,6 +321,8 @@ program Reenterable;
 {$ENDIF}
 {$H+}
 
+{$CODEPAGE UTF8}
+
 uses
 {$IF (DEFINED(UNIX) OR DEFINED(LINUX)) AND DEFINED(FPC)}
   cthreads, cmem,
@@ -639,7 +641,7 @@ Begin
   Result := Substs.Strings[K]
 End;
 
-Procedure CorrectParamNames(Var ParamNames,S:String);
+Procedure CorrectParamNames(Var ParamNames: String; Var S: WideString);
 Begin
      If Length(ParamNames)>0 Then
         Begin
@@ -652,7 +654,7 @@ Begin
      ParamNames:=','+ParamNames
 End;
 
-Function CheckOneArgPredicate(Var Out:String; L:TAnalyser; Const Types,Names: Array Of String; Const ID,TypeValue,Name,Init,redOp,TmplVal:String; Var Arg:String):Boolean;
+Function CheckOneArgPredicate(Var Out:String; L:TAnalyser; Const Types,Names: Array Of String; Const ID,TypeValue,Name,Init,redOp,TmplVal:String; Var Arg:WideString):Boolean;
 
 Var S, Enum: String;
     F: Integer;
@@ -697,7 +699,7 @@ Begin
         End
 End;
 
-Procedure CollectTypeName(L:TAnalyser; Var Tp,Nm:String);
+Procedure CollectTypeName(L:TAnalyser; Var Tp,Nm:WideString);
 Begin
      Tp:='';
      Nm:='';
@@ -711,14 +713,14 @@ Begin
 End;
 
 Function AnalyzeType(Var L:TAnalyser; IsMarkup: Boolean;
-                     Var TagID: String; Var S:String): String;
+                     Var TagID: String; Var S:WideString): WideString;
 
-Var S1,S2,S3,PtrID,ID: String;
-    InactiveState, ActiveState, NameState: String;
+Var S1,S2,S3,PtrID,ID: WideString;
+    InactiveState, ActiveState, NameState: WideString;
     Prereqs: TStringList;
     ObjFlag: TObject;
     BoolFlag: Boolean Absolute ObjFlag;
-    Tp, Nm: String;
+    Tp, Nm: WideString;
     F: Integer;
 Begin
      S2:=S;
@@ -857,10 +859,10 @@ Begin
      End
 End;
 
-Procedure HandleChains(Var Out: TextFile; L, L1: TAnalyser; Var S: String;
+Procedure HandleChains(Var Out: TextFile; L, L1: TAnalyser; Var S: WideString;
                        Var ClusteredArrID: String; Chain: TStringList);
 
-Var S1, S2, S3: String;
+Var S1, S2, S3: WideString;
     Start: Integer;
     Parallelize: String;
     ChainInit: String;
@@ -1016,9 +1018,9 @@ Begin
   ChainItems.Free
 End;
 
-Procedure HandleProcMentions(L, L1: TAnalyser; Declared: TStringList; Var S: String);
+Procedure HandleProcMentions(L, L1: TAnalyser; Declared: TStringList; Var S: WideString);
 
-Var S1, S2: String;
+Var S1, S2: WideString;
     Indexing: String;
     Handled: Boolean;
     C : Char;
@@ -1194,7 +1196,7 @@ Begin
   Until F=0
 End;
 
-Procedure HandleContinues(L: TAnalyser; Var S: String);
+Procedure HandleContinues(L: TAnalyser; Var S: WideString);
 
 Var Start: Integer;
     F, G: Integer;
@@ -1219,9 +1221,9 @@ Begin
   Until (F=0) Or L.Error
 End;
 
-Procedure HandlePlansThrows(L: TAnalyser; Var S: String);
+Procedure HandlePlansThrows(L: TAnalyser; Var S: WideString);
 
-Var S1, S2, S3: String;
+Var S1, S2, S3: WideString;
     Start: Integer;
     F, G: Integer;
 Begin
@@ -1318,12 +1320,13 @@ Begin
      End
 End;
 
-Var Inp, Out: TextFile;
+Var Out: TextFile;
     OldName, NewName: String;
     Defines: TStringList;
     NoSourceLines: Boolean;
     PreChecks, PlcChecks: Boolean;
-    S, S1, rS1, S2, S3, oEvs, Evs, Proc, PrmStruct, ThrStruct, Params, gpuParams, ParamNames, _ParamNames,
+    S, S1: WideString;
+    rS1, S2, S3, oEvs, Evs, Proc, PrmStruct, ThrStruct, Params, gpuParams, ParamNames, _ParamNames,
     ParamAsgns, ParamReasgns, rParamReasgns, STParamReasgns,
     ParamDummy, ParamDummies, STParamDummies, SoftSTParamDummies,
     rParamNames, _rParamNames, rParamDummies, _rParamDummies,
@@ -1336,6 +1339,7 @@ Var Inp, Out: TextFile;
     _pRedDummies, pRedDummies, pRedModifs, pRedModifs_, ResetDummies,
     Ldecl, Lparm, Lfmt,
     TypeID, ID: String;
+    dS: String;
     LocGlobs: TStringList;
     InputProcName: String;
     ClusteredArrID: String;
@@ -1343,7 +1347,8 @@ Var Inp, Out: TextFile;
     TagID: String;
     TypeTaskID, NameTaskID: String;
     RetAssgn: String;
-    TaskIf, TaskSet, TaskReset, d_eli, TaskEmpty: String;
+    TaskIf, TaskSet, TaskReset, d_eli: WideString;
+    TaskEmpty: String;
     Declared, Chain, _Names, Substs, ChainNames, ChainSubsts, Reducts, TypeMaps: TStringList;
     TaskDependsList: TStringList;
     Topology: TStringList;
@@ -1379,6 +1384,8 @@ Var Inp, Out: TextFile;
     ParamNameNum: Integer;
     Flag: Boolean Absolute CastedFlag;
 begin
+     SetMultiByteConversionCodePage(CP_UTF8);
+     SetMultiByteRTLFileSystemCodePage(CP_UTF8);
      If ParamCount=0 Then
         Begin
           WriteLn('Planning C (R) Translator V0.945beta2');
@@ -1435,13 +1442,6 @@ begin
           Repeat
               NewFileName := '';
 
-              Assign(Inp,OldName);
-              Try
-                 Reset(Inp);
-              Except
-                 WriteLn('Can''t open input file ', OldName, ' for reading');
-                 Halt(-1)
-              End;
               If FileExists(NewName) Then
                  Begin
                    S := ChangeFileExt(NewName, '.bak');
@@ -1486,27 +1486,28 @@ begin
                 ProgGPU.Free;
 
                 WriteLn('Preprocessing: Pass [', PassCount+1, ']');
-                If PassCount > 0 Then
-                   Reset(Inp);
 
                 Lines := TStringList.Create;
+                Try
+                   Lines.LoadFromFile(OldName);
+                Except
+                   WriteLn('Can''t open input file ', OldName, ' for reading');
+                   Halt(-1)
+                End;
                 // Preprocessing
                 CommentFlag := False;
                 // Read file into Lines
                 Files := TStringList.Create;
-                F := 1;
-                While Not Eof(Inp) Do
+                For F := 1 To Lines.Count Do
                   Begin
-                    ReadLn(Inp,S);
+                    S := UTF8Decode(Lines[F-1]);
                     StripComments(S, CommentFlag);
-                    Lines.AddObject(UTF8Decode(S), TLine.Create(0, F, gpuNone));
-                    Inc(F)
+                    Lines[F-1] := UTF8Encode(S);
+                    Lines.Objects[F-1] := TLine.Create(0, F, gpuNone)
                   End;
                 FL := TStringList.Create;
                 FL.Assign(Lines);
                 Files.AddObject(Asterisk+OldName, FL);
-
-                CloseFile(Inp);
 
                 ProgGPU := TStringList.Create;
                 ProgGPU.Add('#define __GPU__');
@@ -1591,7 +1592,7 @@ begin
           For F := 0 To Lines.Count-1 Do
             If Not TLine(Lines.Objects[F]).IsMacroResult Then
                Begin
-                 S := TLine(Lines.Objects[F]).GetOriginalLine;
+                 S := UTF8Decode(TLine(Lines.Objects[F]).GetOriginalLine);
                  StripComments(S, CommentFlag);
                  L.AnlzLine := S;
                  If L.IsNext(Pound) And L.Check(Pound) And L.IsNextIdent(idPragma, True) Then
@@ -1600,7 +1601,7 @@ begin
                       If L.IsNextIdent(idSyntax, True) Then
                          S := ''
                     End;
-                 Lines.Strings[F] := S;
+                 Lines.Strings[F] := UTF8Encode(S);
                End;
 
           Declared:=TStringList.Create;
@@ -1663,7 +1664,7 @@ begin
                    Continue
                  End;
               Flag := True;
-              S := Lines.Strings[LCounter-1];
+              S := UTF8Decode(Lines.Strings[LCounter-1]);
               If Not (PolyDef Or NoSourceLines) Then
                  Write(Out, TLine(Lines.Objects[LCounter-1]).GetLineNumbers);
               StripComments(S, CommentFlag);
@@ -1884,7 +1885,6 @@ begin
                    S:=L.AnlzLine;
                    ID:=L.FindIdent(True)
                  End;
-
               If Not ((ID=idReenterable) Or (ID=idChain)) Then
                  Begin // Isn't declaration
                    HandleChains(Out, L, L1, S, ClusteredArrID, Chain);
@@ -2137,12 +2137,12 @@ begin
                                            If (Pos(Space, S) <> 0) Or (Pos(Tabulation, S) <> 0) Then
                                               Begin
                                                  ThrDeclaration := '';
-                                                 CollectParamsAfterBracket(L,ChainNames,ChainSubsts,ThrDeclaration,S, Nil,
-                                                                           S, S, S, S, S, S,
-                                                                           S, S, S,
-                                                                           S, S, S,
+                                                 CollectParamsAfterBracket(L,ChainNames,ChainSubsts,ThrDeclaration,dS, Nil,
+                                                                           dS, dS, dS, dS, dS, dS,
+                                                                           dS, dS, dS,
+                                                                           dS, dS, dS,
                                                                            InputProcName,
-                                                                           S, S, S, S,
+                                                                           dS, dS, dS, dS,
                                                                            Nil,
                                                                            Nil);
                                                  eRedDummies:=StringReplace(RedDummies,CRLF,' \'+CRLF,[rfReplaceAll]);

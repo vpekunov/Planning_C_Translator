@@ -21,31 +21,27 @@
     </PublishOptions>
     <RunParams>
       <local>
-        <CommandLineParams Value="-nosourcelines reent_atomic.cpp reent1.cpp"/>
+        <CommandLineParams Value="-nosourcelines reent_russian_transform.cpp reent1.cpp"/>
         <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T &apos;Lazarus Run Output&apos; -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
       </local>
       <FormatVersion Value="2"/>
       <Modes Count="1">
         <Mode0 Name="default">
           <local>
-            <CommandLineParams Value="-nosourcelines reent_atomic.cpp reent1.cpp"/>
+            <CommandLineParams Value="-nosourcelines reent_russian_transform.cpp reent1.cpp"/>
             <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T &apos;Lazarus Run Output&apos; -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
           </local>
         </Mode0>
       </Modes>
     </RunParams>
-    <Units Count="21">
+    <Units Count="22">
       <Unit0>
         <Filename Value="Reenterable.lpr"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="1581"/>
-        <CursorPos X="26" Y="1597"/>
+        <TopLine Value="1381"/>
+        <CursorPos Y="1389"/>
         <UsageCount Value="201"/>
-        <Bookmarks Count="1">
-          <Item0 Y="1210" ID="1"/>
-        </Bookmarks>
         <Loaded Value="True"/>
       </Unit0>
       <Unit1>
@@ -54,8 +50,8 @@
         <UnitName Value="Lexique"/>
         <EditorIndex Value="12"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="320"/>
-        <CursorPos X="6" Y="323"/>
+        <TopLine Value="637"/>
+        <CursorPos Y="654"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit1>
@@ -76,7 +72,7 @@
         <WindowIndex Value="1"/>
         <TopLine Value="30"/>
         <CursorPos X="73" Y="43"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="5"/>
       </Unit3>
       <Unit4>
         <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\classes\classesh.inc"/>
@@ -84,7 +80,7 @@
         <WindowIndex Value="1"/>
         <TopLine Value="630"/>
         <CursorPos X="14" Y="643"/>
-        <UsageCount Value="6"/>
+        <UsageCount Value="3"/>
       </Unit4>
       <Unit5>
         <Filename Value="TOPO.PAS"/>
@@ -101,9 +97,10 @@
         <Filename Value="COMMON.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Common"/>
-        <EditorIndex Value="7"/>
+        <EditorIndex Value="6"/>
         <WindowIndex Value="1"/>
-        <CursorPos X="30" Y="190"/>
+        <TopLine Value="9"/>
+        <CursorPos X="9" Y="37"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit6>
@@ -111,7 +108,7 @@
         <Filename Value="C:\lazarus\fpc\2.6.4\source\rtl\objpas\sysutils\sysstrh.inc"/>
         <WindowIndex Value="1"/>
         <CursorPos X="11" Y="70"/>
-        <UsageCount Value="6"/>
+        <UsageCount Value="3"/>
       </Unit7>
       <Unit8>
         <Filename Value="PROLOG.PAS"/>
@@ -119,8 +116,8 @@
         <UnitName Value="Prolog"/>
         <EditorIndex Value="9"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="689"/>
-        <CursorPos X="45" Y="703"/>
+        <TopLine Value="686"/>
+        <CursorPos X="32" Y="693"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit8>
@@ -128,13 +125,14 @@
         <Filename Value="PREPROC.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Preproc"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="5"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="473"/>
-        <CursorPos X="21" Y="477"/>
+        <TopLine Value="1425"/>
+        <CursorPos Y="1436"/>
         <UsageCount Value="200"/>
         <Bookmarks Count="1">
-          <Item0 X="37" Y="1201"/>
+          <Item0 X="22" Y="1237" ID="1"/>
         </Bookmarks>
         <Loaded Value="True"/>
       </Unit9>
@@ -172,7 +170,7 @@
         <EditorIndex Value="1"/>
         <WindowIndex Value="1"/>
         <TopLine Value="12"/>
-        <CursorPos X="41" Y="20"/>
+        <CursorPos X="44" Y="23"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit13>
@@ -182,7 +180,7 @@
         <WindowIndex Value="1"/>
         <TopLine Value="770"/>
         <CursorPos X="5" Y="772"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="5"/>
       </Unit14>
       <Unit15>
         <Filename Value="..\Ecology\Droplets\Soiled\Перебор\Spline.coalesc.lpr"/>
@@ -190,16 +188,14 @@
         <WindowIndex Value="1"/>
         <TopLine Value="293"/>
         <CursorPos X="23" Y="313"/>
-        <UsageCount Value="10"/>
+        <UsageCount Value="7"/>
       </Unit15>
       <Unit16>
         <Filename Value="xpath.pas"/>
         <UnitName Value="XPath"/>
-        <EditorIndex Value="6"/>
+        <EditorIndex Value="7"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="490"/>
-        <CursorPos X="3" Y="497"/>
-        <UsageCount Value="81"/>
+        <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit16>
       <Unit17>
@@ -207,9 +203,12 @@
         <UnitName Value="RegExpr"/>
         <EditorIndex Value="8"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="2965"/>
-        <CursorPos Y="2973"/>
-        <UsageCount Value="81"/>
+        <TopLine Value="1942"/>
+        <CursorPos X="73" Y="1953"/>
+        <UsageCount Value="100"/>
+        <Bookmarks Count="1">
+          <Item0 X="7" Y="1840"/>
+        </Bookmarks>
         <Loaded Value="True"/>
       </Unit17>
       <Unit18>
@@ -218,141 +217,152 @@
         <WindowIndex Value="1"/>
         <TopLine Value="180"/>
         <CursorPos X="23" Y="193"/>
-        <UsageCount Value="8"/>
+        <UsageCount Value="5"/>
       </Unit18>
       <Unit19>
-        <Filename Value="D:\lazarus\fpc\3.0.2\source\rtl\inc\objpas.inc"/>
-        <EditorIndex Value="-1"/>
-        <WindowIndex Value="1"/>
-        <TopLine Value="279"/>
-        <CursorPos X="9" Y="281"/>
-        <UsageCount Value="3"/>
-      </Unit19>
-      <Unit20>
         <Filename Value="D:\lazarus\fpc\3.0.2\source\rtl\win32\system.pp"/>
         <UnitName Value="System"/>
         <EditorIndex Value="-1"/>
         <WindowIndex Value="1"/>
         <CursorPos Y="16"/>
-        <UsageCount Value="4"/>
+        <UsageCount Value="1"/>
+      </Unit19>
+      <Unit20>
+        <Filename Value="Grammar\Grammar.lpr"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="175"/>
+        <CursorPos X="17" Y="182"/>
+        <UsageCount Value="9"/>
       </Unit20>
+      <Unit21>
+        <Filename Value="..\Automodeling\Grammar\Grammar.lpr"/>
+        <EditorIndex Value="-1"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="173"/>
+        <CursorPos X="28" Y="187"/>
+        <UsageCount Value="10"/>
+      </Unit21>
     </Units>
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="238" Column="42" TopLine="220"/>
+        <Caret Line="1428" Column="25" TopLine="1409"/>
       </Position1>
       <Position2>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="239" Column="19" TopLine="221"/>
+        <Caret Line="1417" TopLine="1409"/>
       </Position2>
       <Position3>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="241" Column="23" TopLine="223"/>
+        <Caret Line="812" TopLine="798"/>
       </Position3>
       <Position4>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="579" Column="58" TopLine="562"/>
+        <Caret Line="1417" TopLine="1407"/>
       </Position4>
       <Position5>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="582" Column="36" TopLine="565"/>
+        <Caret Line="808" TopLine="798"/>
       </Position5>
       <Position6>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="641" Column="100" TopLine="624"/>
+        <Caret Line="818" TopLine="802"/>
       </Position6>
       <Position7>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="644" Column="46" TopLine="627"/>
+        <Caret Line="820" Column="20" TopLine="802"/>
       </Position7>
       <Position8>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="731" Column="61" TopLine="713"/>
+        <Caret Line="808" TopLine="802"/>
       </Position8>
       <Position9>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="763" Column="40" TopLine="746"/>
+        <Caret Line="812" TopLine="802"/>
       </Position9>
       <Position10>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="768" Column="58" TopLine="751"/>
+        <Caret Line="1417" TopLine="1406"/>
       </Position10>
       <Position11>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="783" Column="56" TopLine="766"/>
+        <Caret Line="807" Column="15" TopLine="797"/>
       </Position11>
       <Position12>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="1741" Column="48" TopLine="1729"/>
+        <Caret Line="806" Column="13" TopLine="797"/>
       </Position12>
       <Position13>
         <Filename Value="PREPROC.PAS"/>
+        <Caret Line="809" TopLine="797"/>
       </Position13>
       <Position14>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="238" Column="49" TopLine="220"/>
+        <Caret Line="811" TopLine="797"/>
       </Position14>
       <Position15>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="466" Column="26" TopLine="466"/>
+        <Caret Line="818" TopLine="809"/>
       </Position15>
       <Position16>
         <Filename Value="PREPROC.PAS"/>
+        <Caret Line="807" Column="15" TopLine="796"/>
       </Position16>
       <Position17>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="238" Column="49" TopLine="220"/>
+        <Caret Line="809" TopLine="796"/>
       </Position17>
       <Position18>
         <Filename Value="PREPROC.PAS"/>
+        <Caret Line="811" TopLine="796"/>
       </Position18>
       <Position19>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="8" Column="30"/>
+        <Caret Line="819" Column="53" TopLine="806"/>
       </Position19>
       <Position20>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="233" Column="23" TopLine="215"/>
+        <Caret Line="1424" TopLine="1413"/>
       </Position20>
       <Position21>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="244" Column="11" TopLine="233"/>
+        <Caret Line="1432" TopLine="1415"/>
       </Position21>
       <Position22>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="432" Column="32" TopLine="419"/>
+        <Caret Line="1434" TopLine="1417"/>
       </Position22>
       <Position23>
-        <Filename Value="PREPROC.PAS"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="4029" TopLine="4019"/>
       </Position23>
       <Position24>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="308" Column="28" TopLine="301"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="4032" TopLine="4019"/>
       </Position24>
       <Position25>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="439" Column="17" TopLine="436"/>
+        <Caret Line="1435" TopLine="1418"/>
       </Position25>
       <Position26>
-        <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="97" Column="30" TopLine="86"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2" Column="34"/>
       </Position26>
       <Position27>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="476" Column="43" TopLine="463"/>
+        <Caret Line="1469" TopLine="1459"/>
       </Position27>
       <Position28>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="270" TopLine="257"/>
       </Position28>
       <Position29>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1598" Column="33" TopLine="1581"/>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="939" Column="106" TopLine="923"/>
       </Position29>
       <Position30>
-        <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="85" Column="30" TopLine="75"/>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="825" TopLine="825"/>
       </Position30>
     </JumpHistory>
   </ProjectOptions>

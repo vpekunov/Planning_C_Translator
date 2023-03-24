@@ -68,6 +68,39 @@ public:
   virtual void enterXpath_fun_params(ReentPreParser::Xpath_fun_paramsContext *ctx) = 0;
   virtual void exitXpath_fun_params(ReentPreParser::Xpath_fun_paramsContext *ctx) = 0;
 
+  virtual void enterDef_xpath(ReentPreParser::Def_xpathContext *ctx) = 0;
+  virtual void exitDef_xpath(ReentPreParser::Def_xpathContext *ctx) = 0;
+
+  virtual void enterDef_xpath_param(ReentPreParser::Def_xpath_paramContext *ctx) = 0;
+  virtual void exitDef_xpath_param(ReentPreParser::Def_xpath_paramContext *ctx) = 0;
+
+  virtual void enterDef_xpath_expression(ReentPreParser::Def_xpath_expressionContext *ctx) = 0;
+  virtual void exitDef_xpath_expression(ReentPreParser::Def_xpath_expressionContext *ctx) = 0;
+
+  virtual void enterDef_xpath_and_expression(ReentPreParser::Def_xpath_and_expressionContext *ctx) = 0;
+  virtual void exitDef_xpath_and_expression(ReentPreParser::Def_xpath_and_expressionContext *ctx) = 0;
+
+  virtual void enterDef_xpath_rel_expression(ReentPreParser::Def_xpath_rel_expressionContext *ctx) = 0;
+  virtual void exitDef_xpath_rel_expression(ReentPreParser::Def_xpath_rel_expressionContext *ctx) = 0;
+
+  virtual void enterDef_xpath_mul_expression(ReentPreParser::Def_xpath_mul_expressionContext *ctx) = 0;
+  virtual void exitDef_xpath_mul_expression(ReentPreParser::Def_xpath_mul_expressionContext *ctx) = 0;
+
+  virtual void enterDef_xpath_plus_expression(ReentPreParser::Def_xpath_plus_expressionContext *ctx) = 0;
+  virtual void exitDef_xpath_plus_expression(ReentPreParser::Def_xpath_plus_expressionContext *ctx) = 0;
+
+  virtual void enterDef_xpath_unary_expression(ReentPreParser::Def_xpath_unary_expressionContext *ctx) = 0;
+  virtual void exitDef_xpath_unary_expression(ReentPreParser::Def_xpath_unary_expressionContext *ctx) = 0;
+
+  virtual void enterDef_xpath_query(ReentPreParser::Def_xpath_queryContext *ctx) = 0;
+  virtual void exitDef_xpath_query(ReentPreParser::Def_xpath_queryContext *ctx) = 0;
+
+  virtual void enterDef_xpath_predicate(ReentPreParser::Def_xpath_predicateContext *ctx) = 0;
+  virtual void exitDef_xpath_predicate(ReentPreParser::Def_xpath_predicateContext *ctx) = 0;
+
+  virtual void enterDef_xpath_fun_params(ReentPreParser::Def_xpath_fun_paramsContext *ctx) = 0;
+  virtual void exitDef_xpath_fun_params(ReentPreParser::Def_xpath_fun_paramsContext *ctx) = 0;
+
   virtual void enterRegexps(ReentPreParser::RegexpsContext *ctx) = 0;
   virtual void exitRegexps(ReentPreParser::RegexpsContext *ctx) = 0;
 
@@ -112,6 +145,9 @@ public:
 
   virtual void enterDefModule(ReentPreParser::DefModuleContext *ctx) = 0;
   virtual void exitDefModule(ReentPreParser::DefModuleContext *ctx) = 0;
+
+  virtual void enterDefModuleDescriptors(ReentPreParser::DefModuleDescriptorsContext *ctx) = 0;
+  virtual void exitDefModuleDescriptors(ReentPreParser::DefModuleDescriptorsContext *ctx) = 0;
 
   virtual void enterDefModuleDescriptor(ReentPreParser::DefModuleDescriptorContext *ctx) = 0;
   virtual void exitDefModuleDescriptor(ReentPreParser::DefModuleDescriptorContext *ctx) = 0;
@@ -271,9 +307,6 @@ public:
 
   virtual void enterCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext *ctx) = 0;
   virtual void exitCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext *ctx) = 0;
-
-  virtual void enterCpp_code_continues(ReentPreParser::Cpp_code_continuesContext *ctx) = 0;
-  virtual void exitCpp_code_continues(ReentPreParser::Cpp_code_continuesContext *ctx) = 0;
 
   virtual void enterOtherLine(ReentPreParser::OtherLineContext *ctx) = 0;
   virtual void exitOtherLine(ReentPreParser::OtherLineContext *ctx) = 0;
