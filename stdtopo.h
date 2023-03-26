@@ -279,7 +279,7 @@ using namespace std;
   */
   @inner_loop(_,0,_):-!.
   @inner_loop(I,J,N) :-
-    (I==J ->
+    (=(I,J) ->
       true;
       (
        number_atom(I,IND1),

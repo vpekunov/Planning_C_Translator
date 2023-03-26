@@ -29,6 +29,7 @@ using namespace std;
   write('       worker(input_index(in), send, data);'), nl,
   write('}'), nl.
 @insert_ring_defs:-
+  predicate_property(ring_def(_,_,_,_,_),'dynamic'),
   ring_def(ID, NP, DT, INIT, BODY),
   make_ring_def(ID, NP, DT, INIT, BODY),
   fail.

@@ -65,6 +65,15 @@ DoNotCheck:
 DefOtherPragma:
 	{ getCharPositionInLine() == 0 }? [ \t]* '#pragma' [ \t]+ ~[ms] ~[\n]* Newline -> channel (HIDDEN);
 
+Introduce:
+	{ getCharPositionInLine() == 0 }? '#introduce' [ \t]* '(' Identifier ')' [ \t]* Newline -> channel (HIDDEN);
+
+MetaSentence:
+	{ getCharPositionInLine() == 0 }? '#(' .+? '.)' Newline -> channel (HIDDEN);
+
+Stop:
+	{ getCharPositionInLine() == 0 }? '#stop' [ \t]* Newline -> channel (HIDDEN);
+
 PreprocPasses:
 	{ getCharPositionInLine() == 0 }? [ \t]* '#preproc_passes' [ \t]*;
 

@@ -61,6 +61,7 @@ using namespace std;
   write('    }'), nl,
   write('}'), nl.
 @insert_sun_defs:-
+  predicate_property(sun_def(_,_,_),'dynamic'),
   sun_def(ID, NP, BODY),
   make_sun_def(ID, NP, BODY),
   fail.

@@ -288,19 +288,19 @@ plc_regexp_query:
 	RightBrace;
 
 regexp_or_sequence:
-	regexp_and_sequence (Semi regexp_and_sequence)*;
+	Newline? regexp_and_sequence (Newline? Semi Newline? regexp_and_sequence)* Newline?;
 
 regexp_and_sequence:
-	regexp_unary (Comma regexp_unary)*;
+	Newline? regexp_unary (Newline? Comma Newline? regexp_unary)* Newline?;
 
 regexp_unary:
-	LeftParen regexp_or_sequence RightParen
-	| regexp_pred;
+	Newline? LeftParen Newline? regexp_or_sequence Newline? RightParen Newline?
+	| Newline? regexp_pred Newline?;
 
 regexp_pred:
 	regexp_pred_parallel
 	| Regexp_sequential
-	| Not? Identifier (Dot Identifier)? (LeftParen (regexp_pred_arg (Comma regexp_pred_arg)*)? RightParen)?;
+	| Not? Identifier (Dot Identifier)? (LeftParen (Newline? regexp_pred_arg (Newline? Comma Newline? regexp_pred_arg)*)? Newline? RightParen)?;
 
 regexp_pred_arg:
 	Underscore
@@ -313,7 +313,7 @@ regexp_pred_arg:
 	| var=Identifier { regexp_refs.insert($var.text); };
 
 regexp_pred_parallel:
-	Regexp_parallel (LeftParen Regexp_analyze RightParen)?;
+	Regexp_parallel Newline? (LeftParen Newline? Regexp_analyze Newline? RightParen)? Newline?;
 
 defModule:
 	DefModule LeftParen Identifier? RightParen ident=Identifier LeftParen

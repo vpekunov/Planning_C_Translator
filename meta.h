@@ -1,7 +1,7 @@
 #ifndef __META_H__
 #define __META_H__
 
-#def_pattern metaCleanup => meta_info(gid(), 'Content') {
+#def_pattern metaCleanup => meta_info(gid(), 'Content', '') {
   @begin
     \#\(
     ([^\.\#]+\.[^\)])*([^\.\#]+\.\))

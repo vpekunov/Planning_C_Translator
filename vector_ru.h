@@ -116,9 +116,9 @@
   @end
 };
 
-#def_module() vector_sentence(GID, TYPE, HEAD, OBJECT, OP, SUBJECT) {
+#def_module() vector_sentence(GID, TYPE, OBJECT, OP, SUBJECT) {
 @goal:-brackets_off.
-@goal:-asserta(vector_fact(GID,TYPE,HEAD,OBJECT,OP,SUBJECT)).
+@goal:-asserta(vector_fact(GID,TYPE,OBJECT,OP,SUBJECT)).
 };
 
 #def_module() vector_generate(GID) {
