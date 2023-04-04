@@ -2,7 +2,6 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <io.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -11,6 +10,17 @@
 #include <vector>
 #include <string>
 #include <chrono>
+
+#ifdef __linux__
+#include <unistd.h>
+#define _fileno fileno
+#define _dup dup
+#define _dup2 dup2
+#define EXPORT __attribute__((visibility("default")))
+#else
+#include <io.h>
+#define EXPORT __declspec(dllexport)
+#endif
 
 using namespace std;
 
@@ -25,7 +35,7 @@ static int saved_err;
 interpreter * _prolog = NULL;
 
 extern "C" {
-	__declspec(dllexport) int __cdecl init_gprolog7(char * gprolog_console_out) {
+	EXPORT int init_gprolog7(char * gprolog_console_out) {
 		static int argc = 1;
 		static char * argv[] = { ".\\Automodeling.exe" };
 
@@ -87,7 +97,7 @@ extern "C" {
 		return 0;
 	}
 
-	__declspec(dllexport) int __cdecl done_gprolog7(char * gprolog_console_out) {
+	EXPORT int done_gprolog7(char * gprolog_console_out) {
 		F = fopen(gprolog_console_out, "at");
 		saved_out = _dup(1);
 		saved_err = _dup(2);
@@ -203,7 +213,7 @@ extern "C" {
 		return result;
 	}
 	/**/
-	__declspec(dllexport) int __cdecl run_gprolog7(char * Dir, char * ConsultScript,
+	EXPORT int run_gprolog7(char * Dir, char * ConsultScript,
 			char * OutFName, char * MainGoal, char * gprolog_console_out,
 			char * DoneGoal, char * GID
 		) {
