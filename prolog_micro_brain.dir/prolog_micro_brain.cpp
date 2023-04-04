@@ -3832,6 +3832,64 @@ public:
 	}
 };
 
+class predicate_item_for : public predicate_item {
+	int first;
+	int last;
+	var * V;
+public:
+	predicate_item_for(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "for"; }
+
+	virtual frame_item * get_next_variant(frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
+		frame_item * result = NULL;
+
+		::value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
+
+		for (; !result && internal_variant < last - first + 1; internal_variant++) {
+			frame_item * r = f->copy();
+			int_number * N = new int_number(first + internal_variant);
+			if (V->unify(r, N))
+				result = r;
+			else
+				delete r;
+			N->free();
+		}
+
+		return result;
+	}
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << "for(V,From,To) incorrect call!" << endl;
+			exit(-3);
+		}
+		if (!positional_vals->at(1)->defined() || !positional_vals->at(2)->defined()) {
+			std::cout << "for(V,From,To) indeterminated!" << endl;
+			exit(-3);
+		}
+
+		V = dynamic_cast<::var *>(positional_vals->at(0));
+		int_number * FROM = dynamic_cast<::int_number *>(positional_vals->at(1));
+		int_number * TO = dynamic_cast<::int_number *>(positional_vals->at(2));
+
+		if (!V || !FROM || !TO) {
+			return NULL;
+		}
+
+		first = (int)(0.5 + FROM->get_value());
+		last = (int)(0.5 + TO->get_value());
+
+		int internal_ptr = 0;
+		frame_item * _first = get_next_variant(f, internal_ptr, positional_vals);
+
+		if (_first)
+			return new lazy_generated_vars(f, this, positional_vals, _first, internal_ptr, once ? 1 : 0xFFFFFFFF);
+		else
+			return NULL;
+	}
+};
+
 class predicate_item_length : public predicate_item {
 public:
 	predicate_item_length(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
@@ -6246,6 +6304,9 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				}
 				else if (iid == "reverse") {
 					pi = new predicate_item_reverse(neg, once, call, num, cl, this);
+				}
+				else if (iid == "for") {
+					pi = new predicate_item_for(neg, once, call, num, cl, this);
 				}
 				else if (iid == "length") {
 					pi = new predicate_item_length(neg, once, call, num, cl, this);

@@ -32,10 +32,10 @@
 		=..(Link, [ObjLinkID, _, _, _, _, _]),
 		retractall(Obj),
 		retractall(Link).
-	prepare_params(_, []).
-	prepare_params(S, [param(Name, Val)|T]):-
+	class_prepare_params(_, []).
+	class_prepare_params(S, [param(Name, Val)|T]):-
 		write(S, ' '), write(S, Name), write(S, '="'), write(S, Val), write(S,'"'),
-		prepare_params(S, T).
+		class_prepare_params(S, T).
 	write_ilinks(S, ID, ContID):-
 		g_read('$ObjLinkID', ObjLinkID),
 		=..(Link, [ObjLinkID, ID2, Cont2, ID, ContID, Informational]),
@@ -48,14 +48,14 @@
 		write(S, '<Link Code="'), write(S, Code), write(S, '" />'), nl(S),
 		fail.
 	write_ilinks(_, _, _).
-	prepare_ilinks(S, ID) :-
+	class_prepare_ilinks(S, ID) :-
 		icontacts(ID, IC),
 		member(contact(ContID, Ref), IC),
 		write(S, '<I ID="'), write(S, ContID), write(S, '" Ref="'), write(S, Ref), write(S, '">'), nl(S),
 		once(write_ilinks(S, ID, ContID)),
 		write(S, '</I>'), nl(S),
 		fail.
-	prepare_ilinks(_,_).
+	class_prepare_ilinks(_,_).
 	write_olinks(S, ID, ContID):-
 		g_read('$ObjLinkID', ObjLinkID),
 		=..(Link, [ObjLinkID, ID, ContID, ID2, Cont2, Informational]),
@@ -68,15 +68,15 @@
 		write(S, '<Link Code="'), write(S, Code), write(S, '" />'), nl(S),
 		fail.
 	write_olinks(_, _, _).
-	prepare_olinks(S, ID) :-
+	class_prepare_olinks(S, ID) :-
 		ocontacts(ID, OP),
 		member(contact(ContID, Ref), OP),
 		write(S, '<O ID="'), write(S, ContID), write(S, '" Ref="'), write(S, Ref), write(S, '">'), nl(S),
 		once(write_olinks(S, ID, ContID)),
 		write(S, '</O>'), nl(S),
 		fail.
-	prepare_olinks(_,_).
-	prepare_objs(S):-
+	class_prepare_olinks(_,_).
+	class_prepare_objs(S):-
 		g_read('$ObjFactID', ObjFactID),
 		asserta(counter(1)),
 		=..(Obj, [ObjFactID, ID, ClassID, ParamsList, Desc]),
@@ -86,16 +86,16 @@
 		write(S, '" WORDS="'),
 		atom_hexs(Desc, DescH), atom_concat(DescH, ' ', DescHH), write(S, DescHH),
 		write(S, '" ID="'), write(S, ID), write(S, '"'),
-		once(prepare_params(S, ParamsList)),
+		once(class_prepare_params(S, ParamsList)),
 		write(S, '>'), nl(S),
-		once(prepare_ilinks(S, ID)),
-		once(prepare_olinks(S, ID)),
+		once(class_prepare_ilinks(S, ID)),
+		once(class_prepare_olinks(S, ID)),
 		write(S, '</'), write(S, ClassID), write(S, '>'), nl(S),
 		NewGID is GID+1,
 		retractall(counter(_)),
 		asserta(counter(NewGID)),
 		fail.
-	prepare_objs(_) :- retractall(counter(_)).
+	class_prepare_objs(_) :- retractall(counter(_)).
 	create_refs :-
 		g_read('$ObjFactID', ObjFactID),
 		=..(Obj, [ObjFactID, ID, ClassID, _, _]),
@@ -129,6 +129,6 @@
 		asserta(Link), retractall(Link),
 		asserta(Obj), retractall(Obj),
 		once(create_refs),
-		once(prepare_objs(S)),
+		once(class_prepare_objs(S)),
 		write(S, '</OBJS>'), nl(S),
 		close(S).
