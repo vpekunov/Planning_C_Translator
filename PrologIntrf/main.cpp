@@ -57,7 +57,7 @@ extern "C" {
 		setlocale(LC_ALL, "en_US.UTF-8");
 
 		unsigned long long memavail = getTotalSystemMemory();
-		fast_memory_manager = memavail > (long long)32 * (long long) 1024 * (long long) 1024 * (long long) 1024;
+		fast_memory_manager = memavail > (long long)96 * (long long) 1024 * (long long) 1024 * (long long) 1024;
 		mem_block_size = memavail / 32768;
 		mem_block_size -= mem_block_size % 1024;
 

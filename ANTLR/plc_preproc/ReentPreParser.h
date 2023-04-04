@@ -1026,10 +1026,10 @@ public:
   public:
     DefModuleDescriptorsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    std::vector<DefModuleDescriptorContext *> defModuleDescriptor();
-    DefModuleDescriptorContext* defModuleDescriptor(size_t i);
+    DefModuleDescriptorContext *defModuleDescriptor();
     antlr4::tree::TerminalNode *RightBrace();
     antlr4::tree::TerminalNode *Semi();
+    DefModuleDescriptorsContext *defModuleDescriptors();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
     virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;

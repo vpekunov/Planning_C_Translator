@@ -3310,6 +3310,98 @@ public:
 	}
 };
 
+class predicate_item_atom_codes : public predicate_item {
+public:
+	predicate_item_atom_codes(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "atom_codes"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "atom_codes(A,B) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1 && !d2) {
+			std::cout << "atom_codes(A,B) indeterminated!" << endl;
+			exit(-3);
+		}
+
+		generated_vars * result = new generated_vars();
+		if (d1 && d2) {
+			::term * A1 = dynamic_cast<::term *>(positional_vals->at(0));
+			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+
+			string S2;
+			L2->iterate([&] (value * v) {
+				int_number * n = dynamic_cast<int_number *>(v);
+				if (n) S2 += (char) (0.5 + n->get_value());
+			});
+
+			frame_item * r = f->copy();
+			if (A1->make_str() == S2)
+				result->push_back(r);
+			else {
+				delete result;
+				result = NULL;
+				delete r;
+			}
+		}
+		if (d1 && !d2) {
+			::term * A1 = dynamic_cast<::term *>(positional_vals->at(0));
+			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+			value * L2 = dynamic_cast<::value *>(positional_vals->at(1));
+
+			frame_item * r = f->copy();
+
+			::list * L = new ::list(stack_container<value *>(), NULL);
+
+			if (L1 && L1->size() == 0) {
+				//
+			}
+			else {
+				string S = A1->make_str();
+				for (char c : S)
+					L->add(new int_number(c));
+			}
+
+			if (L2->unify(r, L))
+				result->push_back(r);
+			else {
+				delete result;
+				result = NULL;
+				delete r;
+			}
+			L->free();
+		}
+		if (!d1 && d2) {
+			value * A1 = dynamic_cast<::value *>(positional_vals->at(0));
+			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+
+			frame_item * r = f->copy();
+
+			string S;
+			L2->iterate([&](value * v) {
+				int_number * n = dynamic_cast<int_number *>(v);
+				if (n) S += (char)(0.5 + n->get_value());
+			});
+			term * tt = new ::term(S);
+
+			if (A1->unify(r, tt))
+				result->push_back(r);
+			else {
+				delete result;
+				result = NULL;
+				delete r;
+			}
+			tt->free();
+		}
+
+		return result;
+	}
+};
+
 class predicate_item_atom_hex : public predicate_item {
 private:
 	char SEP;
@@ -6323,6 +6415,9 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				else if (iid == "atom_chars") {
 					pi = new predicate_item_atom_chars(neg, once, call, num, cl, this);
 				}
+				else if (iid == "atom_codes") {
+					pi = new predicate_item_atom_codes(neg, once, call, num, cl, this);
+				}
 				else if (iid == "atom_hex") {
 					pi = new predicate_item_atom_hex(0, neg, once, call, num, cl, this);
 				}
@@ -6905,7 +7000,7 @@ int main(int argc, char ** argv) {
 	setlocale(LC_ALL, "en_US.UTF-8");
 
 	unsigned long long memavail = getTotalSystemMemory();
-	fast_memory_manager = memavail > (long long)32 * (long long) 1024 * (long long) 1024 * (long long) 1024;
+	fast_memory_manager = memavail > (long long)96 * (long long) 1024 * (long long) 1024 * (long long) 1024;
 	mem_block_size = memavail / 32768;
 	mem_block_size -= mem_block_size % 1024;
 

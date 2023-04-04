@@ -326,7 +326,7 @@ defModule:
 	Newline*;
 
 defModuleDescriptors:
-	defModuleDescriptor (RightBrace Semi | defModuleDescriptor);
+	defModuleDescriptor (RightBrace Semi | RightBrace? defModuleDescriptors);
 
 defModuleDescriptor:
 	At (prolog_goal | prolog_statement | { throw FailedPredicateException(this, "Corrupted Prolog statement in module definition"); } )
