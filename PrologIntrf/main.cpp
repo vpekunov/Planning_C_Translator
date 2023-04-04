@@ -10,6 +10,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <chrono>
 
 using namespace std;
 
@@ -45,7 +46,10 @@ extern "C" {
 
 		setlocale(LC_ALL, "en_US.UTF-8");
 
-		fast_memory_manager = getTotalSystemMemory() > (long long)8 * (long long)1024 * (long long)1024 * (long long)1024;
+		unsigned long long memavail = getTotalSystemMemory();
+		fast_memory_manager = memavail > (long long)32 * (long long) 1024 * (long long) 1024 * (long long) 1024;
+		mem_block_size = memavail / 32768;
+		mem_block_size -= mem_block_size % 1024;
 
 		_prolog = new interpreter("", "");
 		std::cout << "Prolog MicroBrain by V.V.Pekunov V0.21beta" << endl;
@@ -157,12 +161,15 @@ extern "C" {
 			}
 			_prolog->bind();
 
+			auto start = std::chrono::high_resolution_clock::now(); // Засекаем время
 			vector<value *> * args = new vector<value *>();
 			generated_vars * variants = new generated_vars();
 			variants->push_back(f);
 			predicate_item_user * pi = new predicate_item_user(false, false, false, 0, NULL, _prolog, "internal_goal");
 			pi->bind();
 			bool ret = pi->processing(false, 0, variants, &args, f);
+			auto end = std::chrono::high_resolution_clock::now(); // Засечка конечного времени
+			std::chrono::duration<double, std::ratio<1, 1>> elapsed = end - start; // Вычисляем длительность исполнения
 
 			int itv = 0;
 			while (itv < f->get_size()) {
@@ -176,6 +183,7 @@ extern "C" {
 			delete variants;
 
 			std::cout << endl;
+			std::cout << "Elapsed: " << elapsed.count() << " sec." << std::endl;
 			std::cout << (ret ? "true" : "false") << endl;
 
 			delete pi;

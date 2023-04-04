@@ -34,8 +34,13 @@ cd ..
 cd ..
 chmod +x *.sh   
 cd ./prolog_micro_brain
-g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++11 -O3 -lm -lboost_system -lboost_filesystem -ldl
+g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++11 -O4 -lm -lboost_system -lboost_filesystem -ldl
 cp ./prolog_micro_brain ../
+cd ..
+cd ./PrologIntrf
+g++ -o main.o -c main.cpp -fPIC -O4
+g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain/*.o -lm -lboost_system -lboost_filesystem -ldl
+cp libPrologIntrf.so ../
 cd ..
 cd ./xpathInduct.dir
 fpc -B -O3 -Mobjfpc -FcUTF-8 -fPIC ./xpathInduct.lpr

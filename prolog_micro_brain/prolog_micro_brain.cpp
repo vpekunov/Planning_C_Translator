@@ -19,6 +19,7 @@
 #include <queue>
 #include <algorithm>
 #include <functional>
+#include <chrono>
 
 #include <math.h>
 #include <string.h>
@@ -460,12 +461,12 @@ string unescape(const string & s) {
 	return result;
 }
 
-const unsigned int mem_block_size = 1024 * 1024;
+unsigned int mem_block_size = 1024 * 1024;
 
 typedef struct {
 	unsigned int available;
 	unsigned int top;
-	char mem[mem_block_size];
+	char mem[1];
 } mem_block;
 
 typedef struct {
@@ -510,7 +511,7 @@ void * __alloc(size_t size) {
 
 	if (freed.size() == 0) {
 		if (used.size() == 0 || used.back()->top + occupied > mem_block_size) {
-			mem_block * m = new mem_block;
+			mem_block * m = (mem_block *) malloc(sizeof(mem_block) + mem_block_size);
 			used.push(m);
 			return new_block(m);
 		}
@@ -535,7 +536,8 @@ void __free(void * ptr) {
 	if (m->available == mem_block_size) {
 		used.erase(find(used.begin(), used.end(), m));
 		m->top = 0;
-		freed.push(m);
+		if (freed.size() < 32)
+			freed.push(m);
 	}
 }
 
@@ -557,11 +559,11 @@ public:
 				if (table.size() == table.capacity()) {
 					table.reserve(table.size() + 2000);
 				}
-				hash[s] = 0;
-				it = hash.find(s);
-				table.push_back(&it->first);
-				it->second = 65536 + table.size() - 1;
-				return it->second;
+				pair<map<string, unsigned int>::iterator, bool> itt =
+					hash.insert(pair<string, unsigned int>(s, 0));
+				table.push_back(&itt.first->first);
+				itt.first->second = 65536 + table.size() - 1;
+				return itt.first->second;
 			}
 		}
 	}
@@ -871,6 +873,23 @@ public:
 		}
 		return result;
 	}
+
+	virtual string export_str(bool simple = false) {
+		string result = atomizer.get_string(name);
+		if (result.length() > 0 && !(result[0] >= 'a' && result[0] <= 'z') || result.find(' ') != string::npos)
+			if (result.length() < 2 || result[0] != '\'' || result[result.length() - 1] != '\'')
+				result = string("'") + result + string("'");
+		if (args.size() > 0) {
+			result += "(";
+			for (int i = 0; i < args.size() - 1; i++) {
+				result += args[i]->export_str(simple);
+				result += ",";
+			}
+			result += args[args.size() - 1]->export_str(simple);
+			result += ")";
+		}
+		return result;
+	}
 };
 
 class indicator : public value {
@@ -1090,6 +1109,30 @@ public:
 		}
 	}
 
+	void const_split(frame_item * f, int p, value * & L1, value * & L2) {
+		if (is_of_chars && !tag) {
+			string S1 = chars.substr(0, p);
+			string S2 = chars.substr(p);
+			L1 = new list(S1, NULL);
+			L2 = new list(S2, NULL);
+		}
+		else {
+			if (!defined()) return split(f, p, L1, L2);
+			stack_container<value *> S, S1, S2;
+			get(f, &S);
+
+			stack_container<value *>::iterator it = S.begin();
+			S1.reserve(p);
+			for (int i = 0; i < p; i++)
+				S1.push_back((*it++)->const_copy(f));
+			S2.reserve(S.size() - p);
+			for (int i = p; i < S.size(); i++)
+				S2.push_back((*it++)->const_copy(f));
+			L1 = new list(S1, NULL);
+			L2 = new list(S2, NULL);
+		}
+	}
+
 	list * from(frame_item * f, stack_container<value *>::iterator starting) {
 		list * result = new list(stack_container<value *>(), NULL);
 		while (starting != val.end())
@@ -1104,6 +1147,32 @@ public:
 	list * from(frame_item * f, string::iterator starting) {
 		list * result = new list(string(starting, chars.end()), NULL);
 		if (tag) result->set_tag(tag->copy(f));
+		return result;
+	}
+
+	list * const_from(frame_item * f, stack_container<value *>::iterator starting) {
+		if (!defined()) return from(f, starting);
+		list * result = new list(stack_container<value *>(), NULL);
+		while (starting != val.end())
+		{
+			(*starting)->use();
+			result->add(*starting);
+			starting++;
+		}
+		if (tag) {
+			tag->use();
+			result->set_tag(tag);
+		}
+		return result;
+	}
+
+	list * const_from(frame_item * f, string::iterator starting) {
+		if (!defined()) return from(f, starting);
+		list * result = new list(string(starting, chars.end()), NULL);
+		if (tag) {
+			tag->use();
+			result->set_tag(tag);
+		}
 		return result;
 	}
 
@@ -1266,9 +1335,9 @@ public:
 				if (dynamic_cast<var *>(_from))
 					if (dynamic_cast<list *>(_to))
 						if (((list *)_to)->of_chars())
-							return _from->unify(ff, ((list *)_to)->from(ff, _to_it_s));
+							return _from->unify(ff, ((list *)_to)->const_from(ff, _to_it_s));
 						else
-							return _from->unify(ff, ((list *)_to)->from(ff, _to_it));
+							return _from->unify(ff, ((list *)_to)->const_from(ff, _to_it));
 					else if (_to)
 						return _from->unify(ff, _to);
 					else
@@ -1276,9 +1345,9 @@ public:
 				if (dynamic_cast<var *>(_to))
 					if (dynamic_cast<list *>(_from))
 						if (((list *)_from)->of_chars())
-							return _to->unify(ff, ((list *)_from)->from(ff, _from_it_s));
+							return _to->unify(ff, ((list *)_from)->const_from(ff, _from_it_s));
 						else
-							return _to->unify(ff, ((list *)_from)->from(ff, _from_it));
+							return _to->unify(ff, ((list *)_from)->const_from(ff, _from_it));
 					else if (_from)
 						return _to->unify(ff, _from);
 					else
@@ -1367,6 +1436,35 @@ public:
 			}
 		if (tag) {
 			result += tag->to_str(true);
+		}
+		if (!simple) result += "]";
+
+		return result;
+	}
+
+	virtual string export_str(bool simple = false) {
+		string result;
+
+		int k = 0;
+
+		if (!simple) result += "[";
+		if (is_of_chars) {
+			for (char s : chars) {
+				result += string("'") + s + string("'");
+				k++;
+				if (k < chars.size() || tag && !(dynamic_cast<list *>(tag) && dynamic_cast<list *>(tag)->size() == 0))
+					result += ",";
+			}
+		}
+		else
+			for (value * v : val) {
+				result += v->export_str();
+				k++;
+				if (k < val.size() || tag && !(dynamic_cast<list *>(tag) && dynamic_cast<list *>(tag)->size() == 0))
+					result += ",";
+			}
+		if (tag) {
+			result += tag->export_str(true);
 		}
 		if (!simple) result += "]";
 
@@ -2328,7 +2426,8 @@ public:
 			try {
 				string ObjFactID = dynamic_cast<term *>(_ObjFactID)->get_name();
 				string LinkFactID = dynamic_cast<term *>(_LinkFactID)->get_name();
-				S->LoadFromXML(wstring(L""), utf8_to_wstring(FName));
+				wstring Lang;
+				S->LoadFromXML(Lang, utf8_to_wstring(FName));
 				if (prolog->DB.find(ObjFactID) != prolog->DB.end()) {
 					for (term * t : *prolog->DB[ObjFactID])
 						t->free();
@@ -2728,7 +2827,7 @@ public:
 				internal_variant = L1->size();
 				value * K1 = NULL;
 				value * K2 = NULL;
-				L3->split(f, internal_variant, K1, K2);
+				L3->const_split(f, internal_variant, K1, K2);
 
 				frame_item * r = f->copy();
 
@@ -2753,7 +2852,7 @@ public:
 				internal_variant = L3->size() - L2->size();
 				value * K1;
 				value * K2;
-				L3->split(f, internal_variant, K1, K2);
+				L3->const_split(f, internal_variant, K1, K2);
 
 				frame_item * r = f->copy();
 
@@ -2778,7 +2877,7 @@ public:
 				for (; !result && internal_variant <= L3->size(); internal_variant++) {
 					value * K1 = new ::list(stack_container<value*>(), NULL);
 					value * K2 = new ::list(stack_container<value*>(), NULL);
-					L3->split(f, internal_variant, K1, K2);
+					L3->const_split(f, internal_variant, K1, K2);
 
 					frame_item * r = f->copy();
 
@@ -3912,19 +4011,22 @@ public:
 	virtual const string get_id() { return "listing"; }
 
 	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
-		if (positional_vals->size() != 1) {
-			std::cout << "listing(A/n) incorrect call!" << endl;
+		if (positional_vals->size() > 1) {
+			std::cout << "listing/listing(A/n) incorrect call!" << endl;
 			exit(-3);
 		}
-		bool d1 = positional_vals->at(0)->defined();
-		indicator * t = dynamic_cast<indicator *>(positional_vals->at(0));
-		if (!d1) {
-			std::cout << "listing(A/n) indeterminated!" << endl;
-			exit(-3);
-		}
-		if (!t) {
-			std::cout << "listing(A/n) has incorrect parameter!" << endl;
-			exit(-3);
+		indicator * t = NULL;
+		if (positional_vals->size() == 1) {
+			bool d1 = positional_vals->at(0)->defined();
+			t = dynamic_cast<indicator *>(positional_vals->at(0));
+			if (!d1) {
+				std::cout << "listing(A/n) indeterminated!" << endl;
+				exit(-3);
+			}
+			if (!t) {
+				std::cout << "listing(A/n) has incorrect parameter!" << endl;
+				exit(-3);
+			}
 		}
 
 		generated_vars * result = new generated_vars();
@@ -3933,15 +4035,15 @@ public:
 
 		map< string, vector<term *> *>::iterator it = prolog->DB.begin();
 		while (it != prolog->DB.end()) {
-			if (it->first == t->get_name())
+			if (!t || it->first == t->get_name())
 				for (int i = 0; i < it->second->size(); i++)
-					if (it->second->at(i)->get_args().size() == t->get_arity()) {
+					if (!t || it->second->at(i)->get_args().size() == t->get_arity()) {
 						if (prolog->out_buf.size() == 0) {
-							it->second->at(i)->write(prolog->outs);
+							(*prolog->outs) << it->second->at(i)->export_str();
 							(*prolog->outs) << "." << endl;
 						}
 						else {
-							prolog->out_buf += it->second->at(i)->to_str();
+							prolog->out_buf += it->second->at(i)->export_str();
 							prolog->out_buf += ".\n";
 						}
 					}
@@ -4446,6 +4548,98 @@ public:
 	}
 };
 
+class predicate_item_file_exists : public predicate_item {
+public:
+	predicate_item_file_exists(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "file_exists"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 1) {
+			std::cout << "file_exists(F) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "file_exists(F) indeterminated!" << endl;
+			exit(-3);
+		}
+		term * t = dynamic_cast<term*>(positional_vals->at(0));
+		if (t && exists(t->get_name())) {
+			generated_vars * result = new generated_vars();
+
+			result->push_back(f->copy());
+
+			return result;
+		} else
+			return NULL;
+	}
+};
+
+class predicate_item_unlink : public predicate_item {
+public:
+	predicate_item_unlink(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "unlink"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 1) {
+			std::cout << "unlink(F) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "unlink(F) indeterminated!" << endl;
+			exit(-3);
+		}
+		term * t = dynamic_cast<term*>(positional_vals->at(0));
+		if (t && exists(t->get_name())) {
+			remove(t->get_name());
+		}
+
+		generated_vars * result = new generated_vars();
+
+		result->push_back(f->copy());
+
+		return result;
+	}
+};
+
+class predicate_item_rename_file : public predicate_item {
+public:
+	predicate_item_rename_file(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "rename_file"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "rename_file(Old,New) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1 || !d2) {
+			std::cout << "rename_file(Old,New) indeterminated!" << endl;
+			exit(-3);
+		}
+		term * t_old = dynamic_cast<term*>(positional_vals->at(0));
+		term * t_new = dynamic_cast<term*>(positional_vals->at(1));
+		if (t_old && exists(t_old->get_name())) {
+			remove(t_new->get_name());
+			rename(t_old->get_name(), t_new->get_name());
+		} else {
+			std::cout << "rename_file(Old,New) error!" << endl;
+			exit(-3);
+		}
+
+		generated_vars * result = new generated_vars();
+
+		result->push_back(f->copy());
+
+		return result;
+	}
+};
+
 class predicate_item_tell : public predicate_item {
 public:
 	predicate_item_tell(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
@@ -4674,31 +4868,125 @@ public:
 	}
 };
 
-class predicate_item_read_token : public predicate_item {
+class predicate_item_char_code : public predicate_item {
 	bool peek;
 public:
-	predicate_item_read_token(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
+	predicate_item_char_code(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
 		predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
-	virtual const string get_id() { return "read_token"; }
+	virtual const string get_id() { return "char_code"; }
 
 	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
-			std::cout << "read_token(S,A) incorrect call!" << endl;
+			std::cout << "char_code(S,C) incorrect call!" << endl;
 			exit(-3);
 		}
 		bool d1 = positional_vals->at(0)->defined();
 		bool d2 = positional_vals->at(1)->defined();
-		if (!d1) {
-			std::cout << "read_token(S,A) : S is indeterminated!" << endl;
+		if (!d1 && !d2) {
+			std::cout << "char_code(S,C) : indeterminated!" << endl;
 			exit(-3);
 		}
 
-		::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+		generated_vars * result = NULL;
+		frame_item * r = f->copy();
 
-		int fn;
-		std::basic_fstream<char> & ff = prolog->get_file(S->make_str(), fn);
+		if (d1) {
+			::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+			string SC = unescape(S->get_name());
+			if (SC.length() != 1) {
+				std::cout << "char_code(S,C) : S is not a char!" << endl;
+				exit(-4);
+			}
+			int_number * v = new int_number(SC[0]);
+			if (positional_vals->at(1)->unify(r, v)) {
+				result = new generated_vars();
+				result->push_back(r);
+			} else
+				delete r;
+			v->free();
+		}
+		else {
+			int_number * C = dynamic_cast<int_number *>(positional_vals->at(1));
+			if (!C) {
+				std::cout << "char_code(S,C) : C is not an integer!" << endl;
+				exit(-4);
+			}
+			term * v = new term(string(1, (char)(0.5 + C->get_value())));
+			if (positional_vals->at(0)->unify(r, v)) {
+				result = new generated_vars();
+				result->push_back(r);
+			}
+			else
+				delete r;
+			v->free();
+		}
 
+		return result;
+	}
+};
+
+class predicate_item_random : public predicate_item {
+public:
+	predicate_item_random(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "random"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 1 && positional_vals->size() != 3) {
+			std::cout << "random(R)/random(Base,Max,Number) incorrect call!" << endl;
+			exit(-3);
+		}
+		generated_vars * result = NULL;
+		if (positional_vals->size() == 1) {
+			value * a = dynamic_cast<value *>(positional_vals->at(0));
+			frame_item * ff = f->copy();
+			float_number * fv = new float_number(1.0*rand()/RAND_MAX);
+			if (a->unify(ff, fv)) {
+				result = new generated_vars();
+				result->push_back(ff);
+			} else {
+				delete ff;
+			}
+			fv->free();
+		}
+		else {
+			bool d1 = positional_vals->at(0)->defined();
+			bool d2 = positional_vals->at(1)->defined();
+			if (!d1 || !d2) {
+				std::cout << "random(Base,Max,Number) indeterminated!" << endl;
+				exit(-3);
+			}
+			int_number * base = dynamic_cast<int_number *>(positional_vals->at(0));
+			int_number * max = dynamic_cast<int_number *>(positional_vals->at(1));
+			value * a = positional_vals->at(2);
+			if (!base || !max) {
+				std::cout << "random(Base,Max,Number) error call!" << endl;
+				exit(-3);
+			}
+			frame_item * ff = f->copy();
+			int_number * iv = new int_number(((long long)base->get_value() + rand() % ((long long)max->get_value() - (long long)base->get_value())));
+			if (a->unify(ff, iv)) {
+				result = new generated_vars();
+				result->push_back(ff);
+			}
+			else {
+				delete ff;
+			}
+			iv->free();
+		}
+
+		return result;
+	}
+};
+
+class predicate_item_read_token_common : public predicate_item {
+	bool peek;
+public:
+	predicate_item_read_token_common(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
+		predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual generated_vars * get_token(frame_item * f, vector<value *> * & positional_vals, std::basic_istream<char> & ff) {
 		streampos beg;
 		string line;
 		int p = 0;
@@ -4776,6 +5064,63 @@ public:
 		v->free();
 
 		return result;
+	}
+};
+
+class predicate_item_read_token : public predicate_item_read_token_common {
+	bool peek;
+public:
+	predicate_item_read_token(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
+		predicate_item_read_token_common(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "read_token"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "read_token(S,A) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1) {
+			std::cout << "read_token(S,A) : S is indeterminated!" << endl;
+			exit(-3);
+		}
+
+		::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+
+		int fn;
+		std::basic_fstream<char> & ff = prolog->get_file(S->make_str(), fn);
+
+		return get_token(f, positional_vals, ff);
+	}
+};
+
+class predicate_item_read_token_from_atom : public predicate_item_read_token_common {
+	bool peek;
+public:
+	predicate_item_read_token_from_atom(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
+		predicate_item_read_token_common(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "read_token_from_atom"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "read_token_from_atom(A,T) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1) {
+			std::cout << "read_token_from_atom(A,T) : A is indeterminated!" << endl;
+			exit(-3);
+		}
+
+		::term * A = dynamic_cast<::term *>(positional_vals->at(0));
+
+		std::stringstream ff(A->make_str());
+
+		return get_token(f, positional_vals, ff);
 	}
 };
 
@@ -5200,7 +5545,7 @@ vector<value *> * interpreter::accept(frame_item * ff, predicate_item * current)
 		}
 	else {
 		for (value * v : *current->_get_args())
-			result->push_back(v->copy(ff));
+			result->push_back(v->const_copy(ff));
 	}
 
 	return result;
@@ -5229,7 +5574,7 @@ bool interpreter::retrieve(frame_item * ff, clause * current, vector<value *> * 
 		}
 	else {
 		for (value * proto : *current->_get_args()) {
-			value * _item = proto->copy(ff);
+			value * _item = proto->const_copy(ff);
 			if (!unify(ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
 				result = false;
 			_item->free();
@@ -5838,7 +6183,8 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				else {
 					int start = p;
 					value * dummy = parse(false, false, ff, s, p);
-					iid = s.substr(start, p - start);
+					term * t = dynamic_cast<term *>(dummy);
+					iid = t && t->get_args().size() == 0 ? t->get_name() : s.substr(start, p - start);
 					dummy->free();
 				}
 
@@ -5988,6 +6334,9 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				else if (iid == "read_token") {
 					pi = new predicate_item_read_token(neg, once, call, num, cl, this);
 				}
+				else if (iid == "read_token_from_atom") {
+					pi = new predicate_item_read_token_from_atom(neg, once, call, num, cl, this);
+				}
 				else if (iid == "mars") {
 					pi = new predicate_item_mars(neg, once, call, num, cl, this);
 				}
@@ -5999,6 +6348,15 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				}
 				else if (iid == "nl") {
 					pi = new predicate_item_nl(neg, once, call, num, cl, this);
+				}
+				else if (iid == "file_exists") {
+					pi = new predicate_item_file_exists(neg, once, call, num, cl, this);
+				}
+				else if (iid == "unlink") {
+					pi = new predicate_item_unlink(neg, once, call, num, cl, this);
+				}
+				else if (iid == "rename_file") {
+					pi = new predicate_item_rename_file(neg, once, call, num, cl, this);
 				}
 				else if (iid == "seeing") {
 					pi = new predicate_item_seeing(neg, once, call, num, cl, this);
@@ -6017,6 +6375,12 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				}
 				else if (iid == "tell") {
 					pi = new predicate_item_tell(neg, once, call, num, cl, this);
+				}
+				else if (iid == "random") {
+					pi = new predicate_item_random(neg, once, call, num, cl, this);
+				}
+				else if (iid == "char_code") {
+					pi = new predicate_item_char_code(neg, once, call, num, cl, this);
 				}
 				else if (iid == "open_url") {
 					pi = new predicate_item_open_url(neg, once, call, num, cl, this);
@@ -6479,7 +6843,10 @@ int main(int argc, char ** argv) {
 
 	setlocale(LC_ALL, "en_US.UTF-8");
 
-	fast_memory_manager = getTotalSystemMemory() > (long long)8 * (long long) 1024 * (long long) 1024 * (long long) 1024;
+	unsigned long long memavail = getTotalSystemMemory();
+	fast_memory_manager = memavail > (long long)32 * (long long) 1024 * (long long) 1024 * (long long) 1024;
+	mem_block_size = memavail / 32768;
+	mem_block_size -= mem_block_size % 1024;
 
 	int main_part = 1;
 	while (main_part < argc) {
@@ -6490,9 +6857,9 @@ int main(int argc, char ** argv) {
 		main_part++;
 	}
 
+	std::cout << "Prolog MicroBrain by V.V.Pekunov V0.21beta" << endl;
 	if (argc == main_part) {
 		interpreter prolog("", "");
-		std::cout << "Prolog MicroBrain by V.V.Pekunov V0.21beta" << endl;
 		std::cout << "  Enter 'halt.' or 'end_of_file' to exit." << endl << endl;
 		while (true) {
 			string line;
@@ -6501,7 +6868,7 @@ int main(int argc, char ** argv) {
 			std::cout << ">";
 			getline(cin, line);
 
-			if (line == "end_of_file")
+			if (line == "end_of_file" || line == "end_of_file.")
 				exit(0);
 
 			vector<string> renew;
@@ -6526,12 +6893,17 @@ int main(int argc, char ** argv) {
 			}
 			prolog.bind();
 
+			auto start = std::chrono::high_resolution_clock::now(); // Засекаем время
+
 			vector<value *> * args = new vector<value *>();
 			generated_vars * variants = new generated_vars();
 			variants->push_back(f);
 			predicate_item_user * pi = new predicate_item_user(false, false, false, 0, NULL, &prolog, "internal_goal");
 			pi->bind();
 			bool ret = pi->processing(false, 0, variants, &args, f);
+
+			auto end = std::chrono::high_resolution_clock::now(); // Засечка конечного времени
+			std::chrono::duration<double, std::ratio<1, 1>> elapsed = end - start; // Вычисляем длительность исполнения
 
 			int itv = 0;
 			while (itv < f->get_size()) {
@@ -6545,6 +6917,7 @@ int main(int argc, char ** argv) {
 			delete variants;
 
 			std::cout << endl;
+			std::cout << "Elapsed: " << elapsed.count() << " sec." << std::endl;
 			std::cout << (ret ? "true" : "false") << endl;
 			
 			delete pi;
@@ -6560,8 +6933,96 @@ int main(int argc, char ** argv) {
 		else
 			std::cout << "Goal absent!" << endl;
 	}
+	else if ((argc - main_part) % 2 == 0) {
+		interpreter * _prolog = new interpreter("", "");
+
+		vector<string> renew;
+		string body;
+		int p = 0;
+
+		frame_item * f = new frame_item();
+
+		map<string, predicate *>::iterator it = _prolog->PREDICATES.begin();
+		while (it != _prolog->PREDICATES.end()) {
+			renew.push_back(it->first);
+			it++;
+		}
+
+		_prolog->add_std_body(body);
+
+		bypass_spaces(body, p);
+		while (p < body.length()) {
+			_prolog->parse_clause(renew, f, body, p);
+			bypass_spaces(body, p);
+		}
+		_prolog->bind();
+
+		delete f;
+
+		while (main_part != argc && string(argv[main_part]) == "--query-goal") {
+			string line = argv[main_part + 1];
+			main_part += 2;
+
+			if (line.length() >= 2 && line[0] == '"' && line[line.length()-1] == '"')
+				line = line.substr(1, line.length()-2);
+
+			std::cout << ">" << line << "." << std::endl;
+
+			p = 0;
+
+			if (line == "end_of_file" || line == "end_of_file.")
+				break;
+
+			vector<string> renew;
+			frame_item * f = new frame_item();
+			string body;
+
+			renew.push_back("internal_goal");
+
+			body.append("internal_goal:-");
+			body.append(line + ".");
+			body.append("\n");
+			bypass_spaces(body, p);
+			while (p < body.length()) {
+				_prolog->parse_clause(renew, f, body, p);
+				bypass_spaces(body, p);
+			}
+			_prolog->bind();
+
+			auto start = std::chrono::high_resolution_clock::now(); // Засекаем время
+
+			vector<value *> * args = new vector<value *>();
+			generated_vars * variants = new generated_vars();
+			variants->push_back(f);
+			predicate_item_user * pi = new predicate_item_user(false, false, false, 0, NULL, _prolog, "internal_goal");
+			pi->bind();
+			bool ret = pi->processing(false, 0, variants, &args, f);
+
+			auto end = std::chrono::high_resolution_clock::now(); // Засечка конечного времени
+			std::chrono::duration<double, std::ratio<1, 1>> elapsed = end - start; // Вычисляем длительность исполнения
+
+			int itv = 0;
+			while (itv < f->get_size()) {
+				std::cout << "  " << f->atn(itv) << " = ";
+				f->at(itv)->write(&std::cout);
+				std::cout << endl;
+				itv++;
+			}
+
+			delete args;
+			delete variants;
+
+			std::cout << endl;
+			std::cout << "Elapsed: " << elapsed.count() << " sec." << std::endl;
+			std::cout << (ret ? "true" : "false") << endl;
+
+			delete pi;
+			delete f;
+		}
+		delete _prolog;
+	}
 	else {
-		std::cout << "Usage: prolog_micro_brain.exe [FLAGS] [-consult <file.pro> <goal_predicate_name>]" << endl;
+		std::cout << "Usage: prolog_micro_brain.exe [FLAGS] [--query-goal <goal> ... | -consult <file.pro> <goal_predicate_name>]" << endl;
 		std::cout << "   FLAGS:" << endl;
 		std::cout << "      --prefer-speed    -- Accelerates program but may consume a lot of memory" << endl;
 		std::cout << "      --prefer-memory   -- Uses a minimal amount of memory but is slower" << endl;

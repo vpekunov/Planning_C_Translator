@@ -10,6 +10,7 @@ using namespace std;
 #include "elements.h"
 
 extern bool fast_memory_manager;
+extern unsigned int mem_block_size;
 
 const int once_flag = 0x1;
 const int call_flag = 0x2;
@@ -195,6 +196,13 @@ public:
 
 	virtual value * fill(frame_item * vars) = 0;
 	virtual value * copy(frame_item * f) = 0;
+	virtual value * const_copy(frame_item * f) {
+		if (this->defined()) {
+			this->use();
+			return this;
+		} else
+			return copy(f);
+	}
 	virtual bool unify(frame_item * ff, value * from) = 0;
 	virtual bool defined() = 0;
 
@@ -203,6 +211,10 @@ public:
 	virtual void escape_vars(frame_item * ff) = 0;
 
 	virtual string make_str() {
+		return to_str();
+	}
+
+	virtual string export_str(bool simple = false) {
 		return to_str();
 	}
 
