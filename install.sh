@@ -8,7 +8,7 @@ cp ./libGrammar.so ../
 cd ..
 export CPPFLAGS="$PWD/link-grammar-5.3.0"
 cd ./link-grammar-5.3.0
-sudo ./configure
+sudo sh ./configure
 sudo make
 sudo make install
 sudo ldconfig

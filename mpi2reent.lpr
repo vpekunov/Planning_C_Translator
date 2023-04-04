@@ -132,10 +132,10 @@ Begin
          Result := Not Result
 End;
 
-Function HandleReturn(Var S: String; Const Word: String; Var Idx: Integer): String;
+Function HandleReturn(Var S: WideString; Const Word: String; Var Idx: Integer): WideString;
 
 Var L: TAnalyser;
-    Arg: String;
+    Arg: WideString;
 Begin
   If Word = 'return' Then
      Begin
@@ -194,7 +194,7 @@ end;
 Var Globs: TStringList;
     idNeeded: Boolean;
 
-Function HandleUseID(Var S: String; Const Word: String; Var Idx: Integer): String;
+Function HandleUseID(Var S: WideString; Const Word: String; Var Idx: Integer): WideString;
 Begin
   Result := Word + Copy(S, Idx, 0); // Чтобы не было сообщений о неиспользуемых параметрах
   If Not idNeeded Then
@@ -217,7 +217,7 @@ Var Inp, Out: TextFile;
     nProcs: Integer;
     Restrictions: TRestrictions;
     Defines: TStringList;
-    S, S1, S2: String;
+    S, S1, S2: WideString;
     ID, Prefix, Body: String;
     Before, After: String;
     Tp, V, Prms: String;
