@@ -24,7 +24,7 @@
 
 using namespace std;
 
-#include "../prolog_micro_brain/prolog_micro_brain.h"
+#include "../prolog_micro_brain.dir/prolog_micro_brain.h"
 
 #pragma comment(linker, "/STACK:100000000")
 
