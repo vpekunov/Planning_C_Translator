@@ -58,7 +58,7 @@ extern "C" {
 
 		unsigned long long memavail = getTotalSystemMemory();
 		fast_memory_manager = memavail > (long long)96 * (long long) 1024 * (long long) 1024 * (long long) 1024;
-		mem_block_size = memavail / 32768;
+		mem_block_size = memavail / 65536;
 		mem_block_size -= mem_block_size % 1024;
 
 		_prolog = new interpreter("", "");

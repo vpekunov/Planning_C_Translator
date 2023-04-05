@@ -874,11 +874,36 @@ public:
 		return result;
 	}
 
+	virtual string escape_specials(const string & src) {
+		string result;
+
+		int i = 0;
+		while (i < src.length()) {
+			switch (src[i]) {
+				case '\r': result += "\\\\r"; break;
+				case '\n': result += "\\\\n"; break;
+				case '\t': result += "\\\\t"; break;
+				case '\0': result += "\\\\0"; break;
+				default: result += src[i];
+			}
+			i++;
+		}
+
+		return result;
+	}
+
 	virtual string export_str(bool simple = false) {
-		string result = atomizer.get_string(name);
-		if (result.length() > 0 && !(result[0] >= 'a' && result[0] <= 'z') || result.find(' ') != string::npos)
-			if (result.length() < 2 || result[0] != '\'' || result[result.length() - 1] != '\'')
+		string result = escape_specials(atomizer.get_string(name));
+		if (result.length() == 0)
+			result = "''";
+		else {
+			bool valid_atom = islower(result[0]);
+			for (int i = 1; valid_atom && i < result.length(); i++)
+				if (!isalnum(result[i]) && result[i] != '_')
+					valid_atom = false;
+			if (!valid_atom)
 				result = string("'") + result + string("'");
+		}
 		if (args.size() > 0) {
 			result += "(";
 			for (int i = 0; i < args.size() - 1; i++) {
@@ -5846,6 +5871,11 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 						TRACEARGS.pop();
 						TRACERS.pop();
 
+						if (variants)
+							variants->delete_from(i);
+						else
+							delete ff;
+
 						delete variants;
 
 						return false;
@@ -7001,7 +7031,7 @@ int main(int argc, char ** argv) {
 
 	unsigned long long memavail = getTotalSystemMemory();
 	fast_memory_manager = memavail > (long long)96 * (long long) 1024 * (long long) 1024 * (long long) 1024;
-	mem_block_size = memavail / 32768;
+	mem_block_size = memavail / 65536;
 	mem_block_size -= mem_block_size % 1024;
 
 	int main_part = 1;

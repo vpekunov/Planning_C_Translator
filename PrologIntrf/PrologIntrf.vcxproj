@@ -98,15 +98,15 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\prolog_micro_brain\elements.cpp" />
-    <ClCompile Include="..\prolog_micro_brain\prolog_micro_brain.cpp" />
-    <ClCompile Include="..\prolog_micro_brain\tinyxml2.cpp" />
+    <ClCompile Include="..\prolog_micro_brain.dir\elements.cpp" />
+    <ClCompile Include="..\prolog_micro_brain.dir\prolog_micro_brain.cpp" />
+    <ClCompile Include="..\prolog_micro_brain.dir\tinyxml2.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\prolog_micro_brain\elements.h" />
-    <ClInclude Include="..\prolog_micro_brain\prolog_micro_brain.h" />
-    <ClInclude Include="..\prolog_micro_brain\tinyxml2.h" />
+    <ClInclude Include="..\prolog_micro_brain.dir\elements.h" />
+    <ClInclude Include="..\prolog_micro_brain.dir\prolog_micro_brain.h" />
+    <ClInclude Include="..\prolog_micro_brain.dir\tinyxml2.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

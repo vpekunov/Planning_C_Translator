@@ -288,7 +288,7 @@ public:
 		long long d = result->names.size() == 0 ? 0 : &result->names[0] - &names[0];
 		result->vars = vars;
 		for (mapper & m : result->vars) {
-			m.ptr = m.ptr->copy(this);
+			m.ptr = m.ptr->const_copy(this);
 			m._name += d;
 		}
 		return result;
