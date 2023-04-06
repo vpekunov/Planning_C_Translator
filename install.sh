@@ -50,4 +50,7 @@ cp ./libxpathInduct.so ../
 cd ..
 make
 make -f Makefile.mpi
+make -f Makefile.vectorized
+make -f Makefile.clustered
+make -f Makefile.cilk
 rm -f ./induct.log

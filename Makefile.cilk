@@ -1,0 +1,23 @@
+.SUFFIXES:
+
+SRC_DIR := ./Examples/Cilk
+LDFLAGS := -lm -lpthread -ldl -lcilkrts -lOpenCL
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -std=c++11 -fcilkplus 
+
+SRCS=$(wildcard $(SRC_DIR)/*.c)
+
+CCS=$(SRCS:.c=.cc)
+
+EXES=$(SRCS:.c=)
+
+all: $(EXES)
+
+%: %.cc
+	g++ $(CPPFLAGS) -o $@ -I../../ $< $(LDFLAGS)
+
+%.cc: %.c
+	./Reenterable -strict-pre-checks -strict-plc-checks $< $@
+
+clean:
+	rm -rf $(CCS)
+	rm -rf $(EXES)

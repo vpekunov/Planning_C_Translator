@@ -95,6 +95,18 @@ Char16: 'char16_t';
 
 Char32: 'char32_t';
 
+Cilk_for: 'cilk_for';
+
+Cilk_for_: '_Cilk_for';
+
+Cilk_spawn: 'cilk_spawn';
+
+Cilk_spawn_: '_Cilk_spawn';
+
+Cilk_sync: 'cilk_sync';
+
+Cilk_sync_: '_Cilk_sync';
+
 Class: 'class';
 
 Clear_plan: 'clear_plan';

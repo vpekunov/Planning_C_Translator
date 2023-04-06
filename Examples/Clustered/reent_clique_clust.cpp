@@ -45,7 +45,7 @@ chain A(input_proc Src, int N, int K) {
   */
   @inner_loop(_,0):-!.
   @inner_loop(I,J) :-
-    (I==J ->
+    (==(I,J) ->
       true;
       (
        number_atom(I,IND1),

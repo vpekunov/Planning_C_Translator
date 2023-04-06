@@ -3336,6 +3336,7 @@
 @clk_recreate_program(FName):-
   open(FName,write,S),
   global_trace(TR),
+  write(S, '#define split_private /* split-private */'), nl(S), nl(S),
   clk_write_program('',[''],S,TR),
   close(S).
 
@@ -6752,11 +6753,9 @@
   !,
   asserta(db_content('prog',1000000,[['preproc']])),
   asserta(db_content('args',1000000,[['body','#include "transact.h"']])),
-  asserta(db_content('prog',1000002,[['preproc']])),
-  asserta(db_content('args',1000002,[['body','#define split_private /* split-private */']])),
   once(global_trace(TR)),
   retractall(global_trace(_)),
-  asserta(global_trace([gid('clsPreproc',1000000),gid('clsPreproc',1000002)|TR])),
+  asserta(global_trace([gid('clsPreproc',1000000)|TR])),
   !.
 
 @atom_insert_transact_h:-

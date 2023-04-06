@@ -707,6 +707,7 @@ enumerations_point();
     !,
   write('}'), nl,
   telling(CurOut),
+  told,
   tell('_loop.txt'),
   (\=(OP,'')->make_seq([], CALLS, 0, N, OP, [], TYPE, []);( =(N,0),=(CALLS,[]) )),
   told,

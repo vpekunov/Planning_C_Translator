@@ -177,6 +177,9 @@ public:
   virtual void enterLabeledStatement(ReentParser::LabeledStatementContext *ctx) = 0;
   virtual void exitLabeledStatement(ReentParser::LabeledStatementContext *ctx) = 0;
 
+  virtual void enterCilk_sync(ReentParser::Cilk_syncContext *ctx) = 0;
+  virtual void exitCilk_sync(ReentParser::Cilk_syncContext *ctx) = 0;
+
   virtual void enterFill_into_plan(ReentParser::Fill_into_planContext *ctx) = 0;
   virtual void exitFill_into_plan(ReentParser::Fill_into_planContext *ctx) = 0;
 
@@ -311,6 +314,9 @@ public:
 
   virtual void enterQualified_call_statement(ReentParser::Qualified_call_statementContext *ctx) = 0;
   virtual void exitQualified_call_statement(ReentParser::Qualified_call_statementContext *ctx) = 0;
+
+  virtual void enterSpawned_call_statement(ReentParser::Spawned_call_statementContext *ctx) = 0;
+  virtual void exitSpawned_call_statement(ReentParser::Spawned_call_statementContext *ctx) = 0;
 
   virtual void enterExpressionStatement(ReentParser::ExpressionStatementContext *ctx) = 0;
   virtual void exitExpressionStatement(ReentParser::ExpressionStatementContext *ctx) = 0;

@@ -2920,21 +2920,37 @@ public:
 	}
 
 	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
-		if (positional_vals->size() != 3) {
-			std::cout << "append(A,B,C) incorrect call!" << endl;
+		if (positional_vals->size() != 3 && positional_vals->size() != 1) {
+			std::cout << "append(A,B,C)/append(F) incorrect call!" << endl;
 			exit(-3);
 		}
-		d1 = positional_vals->at(0)->defined();
-		d2 = positional_vals->at(1)->defined();
-		d3 = positional_vals->at(2)->defined();
+		if (positional_vals->size() == 3) {
+			d1 = positional_vals->at(0)->defined();
+			d2 = positional_vals->at(1)->defined();
+			d3 = positional_vals->at(2)->defined();
 
-		int internal_ptr = 0;
-		frame_item * first = get_next_variant(f, internal_ptr, positional_vals);
+			int internal_ptr = 0;
+			frame_item * first = get_next_variant(f, internal_ptr, positional_vals);
 		
-		if (first)
-			return new lazy_generated_vars(f, this, positional_vals, first, internal_ptr, once ? 1 : 0xFFFFFFFF);
-		else
-			return NULL;
+			if (first)
+				return new lazy_generated_vars(f, this, positional_vals, first, internal_ptr, once ? 1 : 0xFFFFFFFF);
+			else
+				return NULL;
+		} else {
+			if (!positional_vals->at(0)->defined()) {
+				std::cout << "append(F) indeterminated!" << endl;
+				exit(-3);
+			}
+
+			prolog->current_output = positional_vals->at(0)->make_str();
+			prolog->outs = new std::ofstream(prolog->current_output, ios::out | ios::app);
+
+			generated_vars * result = new generated_vars();
+
+			result->push_back(f->copy());
+
+			return result;
+		}
 	}
 };
 
@@ -5043,6 +5059,89 @@ public:
 	}
 };
 
+class predicate_item_at_end_of_stream : public predicate_item {
+public:
+	predicate_item_at_end_of_stream(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
+		predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "at_end_of_stream"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 1) {
+			std::cout << "at_end_of_stream(S) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "at_end_of_stream(S) : S is indeterminated!" << endl;
+			exit(-3);
+		}
+
+		::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+
+		int fn;
+		std::basic_fstream<char> & ff = prolog->get_file(S->make_str(), fn);
+
+		if (ff.peek() == EOF) {
+			generated_vars * result = new generated_vars();
+			frame_item * r = f->copy();
+
+			result->push_back(r);
+
+			return result;
+		}
+		else
+			return NULL;
+	}
+};
+
+class predicate_item_get_code : public predicate_item {
+public:
+	predicate_item_get_code(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
+		predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "get_code"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "get_code(S,N) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1) {
+			std::cout << "get_code(S,N) : S is indeterminated!" << endl;
+			exit(-3);
+		}
+
+		::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+
+		int fn;
+		std::basic_fstream<char> & ff = prolog->get_file(S->make_str(), fn);
+
+		char C;
+		value * v = NULL;
+		ff.get(C);
+		if (ff.eof()) v = new term("end_of_file");
+		else
+			v = new int_number(C);
+
+		generated_vars * result = new generated_vars();
+		frame_item * r = f->copy();
+
+		if (positional_vals->at(1)->unify(r, v))
+			result->push_back(r);
+		else {
+			delete result;
+			result = NULL;
+			delete r;
+		}
+		v->free();
+
+		return result;
+	}
+};
+
 class predicate_item_char_code : public predicate_item {
 	bool peek;
 public:
@@ -6567,6 +6666,12 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				}
 				else if (iid == "char_code") {
 					pi = new predicate_item_char_code(neg, once, call, num, cl, this);
+				}
+				else if (iid == "get_code") {
+					pi = new predicate_item_get_code(neg, once, call, num, cl, this);
+				}
+				else if (iid == "at_end_of_stream") {
+					pi = new predicate_item_at_end_of_stream(neg, once, call, num, cl, this);
 				}
 				else if (iid == "open_url") {
 					pi = new predicate_item_open_url(neg, once, call, num, cl, this);

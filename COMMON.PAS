@@ -99,7 +99,7 @@ function DecodeStr(Const S:String):String;
 procedure MakeErrorCommon(Const Msg: String);
 procedure MakeInfoCommon(Const Msg: String);
 
-procedure VerifyProgram(PreprocessingMode, Obligatoire: Boolean);
+procedure VerifyProgram(PreprocessingMode, Obligatoire, IsVectorized, IsClustered: Boolean);
 
 function RunExtCommand(Const App,Prm,OutFName: String):String;
 
@@ -531,7 +531,7 @@ begin
         Result:=''
 end;
 
-procedure VerifyProgram(PreprocessingMode, Obligatoire: Boolean);
+procedure VerifyProgram(PreprocessingMode, Obligatoire, IsVectorized, IsClustered: Boolean);
 
 Var Checker: String;
     LN: Integer; FS: String;
@@ -546,6 +546,10 @@ begin
         Begin
           With TStringList.Create Do
             Begin
+              If IsVectorized Then
+                 Add('#pragma plan vectorized');
+              If IsClustered Then
+                 Add('#pragma plan clustered');
               For G := 0 To Lines.Count-1 Do
                   If Not TLine(Lines.Objects[G]).Restricted Then
                      Begin

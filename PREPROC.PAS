@@ -26,7 +26,7 @@ procedure PreprocStage1(ApplyConds: Boolean;
                         Var IsClustered, IsVectorized: Boolean;
                         Var Restrictions: TRestrictions;
                         PreChecks: Boolean);
-procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks: Boolean);
+procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks, IsVectorized, IsClustered: Boolean);
 procedure PreprocStage2(Var Restrictions: TRestrictions);
 
 Type PatternModes = (pmNone, pmScan, pmParse);
@@ -289,7 +289,7 @@ begin
   ModeGPU := gpuNone;
 
   if (PreChecks) Then
-     VerifyProgram(True, False);
+     VerifyProgram(True, False, False, False);
 
   LCounter:=1;
   // First preprocessing stage
@@ -791,7 +791,7 @@ Begin
      End 
 End;
 
-procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks: Boolean);
+procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks, IsVectorized, IsClustered: Boolean);
 
 Type SmallINtArray = Array Of SmallInt;
 
@@ -1063,7 +1063,7 @@ begin
   Patterns := TStringList.Create;
 
   if (PreChecks) Then
-     VerifyProgram(True, True);
+     VerifyProgram(True, True, IsVectorized, IsClustered);
 
   ENV := TXPathEnvironment.Create;
   GID := 1;

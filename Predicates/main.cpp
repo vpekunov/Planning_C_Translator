@@ -201,7 +201,7 @@ extern "C" {
 		wchar_t * Args0 = walloc(Args[0]);
 		wchar_t * Args1 = walloc(Args[1]);
 		short int _Args2[20] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
-		wchar_t * Args2 = walloc(_Args2);
+		wchar_t * Args2 = (wchar_t *) _Args2;
 
 		stripLeading(Args0); // Удаляем начальные пробелы, если они есть
 
@@ -219,7 +219,8 @@ extern "C" {
 #endif
 		wfree(Args0, Args[0]);
 		wfree(Args1, Args[1]);
-		wfree(Args2, Args[2]);
+		wchar_t * dest = (wchar_t *)Args[2];
+		while (*dest++ = *Args2++);
 
 		return true;
 	}

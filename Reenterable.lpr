@@ -1532,7 +1532,7 @@ begin
 
                 PreprocStage1(FollowDefs, Defines, IsClustered, IsVectorized, Restrictions, PreChecks);
 
-                PreprocStage1a(Restrictions, PreChecks);
+                PreprocStage1a(Restrictions, PreChecks, IsVectorized, IsClustered);
 
                 If L.Error Then
                    Begin
@@ -1587,7 +1587,7 @@ begin
              End;
 
           If PlcChecks Then
-             VerifyProgram(False, True);
+             VerifyProgram(False, True, IsVectorized, IsClustered);
 
           // Restore primary lines from file (not from results of macromodules apply)
           CommentFlag := False;

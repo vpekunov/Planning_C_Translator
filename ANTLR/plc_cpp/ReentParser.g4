@@ -285,6 +285,7 @@ constantExpression: conditionalExpression;
 
 statement:
 	labeledStatement
+	| cilk_sync
 	| start_chain
 	| start_topology
 	| fill_into_plan
@@ -295,6 +296,7 @@ statement:
 	| reent_special_call
 	| atomic_block
 	| soft_atomic_block
+	| (Cilk_spawn | Cilk_spawn_) spawned_call_statement
 	| qualified_call_statement
 	| declarationStatement
 	| attributeSpecifierSeq? (
@@ -312,6 +314,9 @@ labeledStatement:
 		| Case constantExpression
 		| Default
 	) Colon statement;
+
+cilk_sync:
+	(Cilk_sync | Cilk_sync_) Semi;
 
 fill_into_plan:
 	Star ident=Identifier
@@ -518,6 +523,9 @@ chain_call:
 qualified_call_statement:
 	qualifiedId LeftParen expression? RightParen Semi;
 
+spawned_call_statement:
+	idExpression LeftParen expression? RightParen Semi;
+
 expressionStatement: expression? Semi;
 
 compoundStatement: LeftBrace statementSeq? RightBrace;
@@ -538,7 +546,7 @@ condition:
 iterationStatement:
 	While LeftParen condition RightParen statement
 	| Do statement While LeftParen expression RightParen Semi
-	| For LeftParen (
+	| (For | Cilk_for | Cilk_for_) LeftParen (
 		forInitStatement condition? Semi expression?
 		| forRangeDeclaration Colon forRangeInitializer
 	) RightParen statement;
@@ -1009,7 +1017,7 @@ reent_enumerator:
 
 loop_statement_header:
 	While LeftParen condition RightParen
-	| For LeftParen (
+	| (For | Cilk_for | Cilk_for_) LeftParen (
 		forInitStatement condition? Semi expression?
 		| forRangeDeclaration Colon forRangeInitializer
 	) RightParen;

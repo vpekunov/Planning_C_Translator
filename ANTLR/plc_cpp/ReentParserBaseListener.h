@@ -179,6 +179,9 @@ public:
   virtual void enterLabeledStatement(ReentParser::LabeledStatementContext * /*ctx*/) override { }
   virtual void exitLabeledStatement(ReentParser::LabeledStatementContext * /*ctx*/) override { }
 
+  virtual void enterCilk_sync(ReentParser::Cilk_syncContext * /*ctx*/) override { }
+  virtual void exitCilk_sync(ReentParser::Cilk_syncContext * /*ctx*/) override { }
+
   virtual void enterFill_into_plan(ReentParser::Fill_into_planContext * /*ctx*/) override { }
   virtual void exitFill_into_plan(ReentParser::Fill_into_planContext * /*ctx*/) override { }
 
@@ -313,6 +316,9 @@ public:
 
   virtual void enterQualified_call_statement(ReentParser::Qualified_call_statementContext * /*ctx*/) override { }
   virtual void exitQualified_call_statement(ReentParser::Qualified_call_statementContext * /*ctx*/) override { }
+
+  virtual void enterSpawned_call_statement(ReentParser::Spawned_call_statementContext * /*ctx*/) override { }
+  virtual void exitSpawned_call_statement(ReentParser::Spawned_call_statementContext * /*ctx*/) override { }
 
   virtual void enterExpressionStatement(ReentParser::ExpressionStatementContext * /*ctx*/) override { }
   virtual void exitExpressionStatement(ReentParser::ExpressionStatementContext * /*ctx*/) override { }

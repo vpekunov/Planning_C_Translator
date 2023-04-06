@@ -7,8 +7,10 @@
 #include <fcntl.h>
 
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
+#include <map>
 #include <chrono>
 
 #ifdef __linux__
@@ -144,6 +146,8 @@ extern "C" {
 		_dup2(_fileno(F), 1);
 		_dup2(_fileno(F), 2);
 
+		_prolog->outs = &std::cout;
+
 		int goal = 0;
 		while (goal < 8) {
 			string line;
@@ -206,6 +210,18 @@ extern "C" {
 		fflush(stderr);
 		fflush(stdout);
 		fclose(F);
+
+		while (_prolog->files.size()) {
+			char buf[128];
+			try {
+				sprintf(buf, "#%i", _prolog->files.begin()->first);
+				_prolog->close_file(string(buf));
+			}
+			catch (...) {
+				std::cout << "main: Problems with closing '" << string(buf) << "'" << endl;
+				break;
+			}
+		}
 
 		_dup2(saved_out, 1);
 		_dup2(saved_err, 2);

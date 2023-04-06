@@ -3007,6 +3007,9 @@
 @write_omp_interface(S, [loc(_,_,type([id('_global')|_],_))], ''):-
    !.
 
+@write_omp_interface(S, [loc(_,_,type([id('_pivot')|_],_))], ''):-
+   !.
+
 @write_omp_interface(S, [loc(_,Name,_)], ','):-
    write(S, Name),
    !.
