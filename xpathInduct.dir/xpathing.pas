@@ -9,7 +9,7 @@ unit XPathing;
 interface
 
 uses
-  Common, Classes, SysUtils, xpath, dom, xmlread, xmlwrite;
+  Common, Classes, SysUtils, xpath, dom, xmlread, xmlwrite, Process;
 
 Type CreateSysFun = function:Pointer; cdecl;
      ExistClassFun = function(Const ClsID: PChar):Boolean; cdecl;
@@ -98,6 +98,7 @@ Const NumThreads: Integer = 8;
 Var NumThrSemaphore: TSemaphore = Nil;
 
 Var VariantsCS: TRTLCriticalSection;
+    NActiveThreads: Integer = 0;
 
 Var Start: TDateTime;
 
@@ -178,16 +179,6 @@ Type
         Function Check(ENV: TXPathEnvironment; dom: TXMLDocument; Const sys: Pointer = Nil): TResultType; override;
      End;
 
-     { TTester }
-
-      TTester = class(TThread)
-             App, Params, OutFName, SignalStr: String;
-             Stopped: Boolean;
-
-             constructor Create(Const _App, _Params, _OutFName, _SignalStr: String);
-             procedure Execute; override;
-          End;
-
      { TWeakTest }
      TWeakTest = class(TWeakRestriction)
         InAttr, OutAttr: DOMString;
@@ -224,26 +215,6 @@ Var Probabilities: MatrixType;
 Var MetaResult: Pointer = Nil;
     MetaTrace: TTrace;
 
-{ TTester }
-
-constructor TTester.Create(const _App, _Params, _OutFName, _SignalStr: String);
-begin
-  Inherited Create(True);
-
-  App := _App;
-  Params := _Params;
-  OutFName := _OutFName;
-  SignalStr := _SignalStr;
-
-  Stopped := False
-end;
-
-procedure TTester.Execute;
-begin
-     Common.RunExtCommand(App, Params, OutFName, SignalStr, '_.result');
-     Stopped := True
-end;
-
 constructor TWeakTest.Create(const _Expr, _InAttr, _OutAttr: DOMString; _NoSpaces: Boolean; _Sign: Char);
 begin
      Inherited Create(_Expr, _Sign, 1.0);
@@ -259,23 +230,6 @@ end;
 
 function TWeakTest.Test(ENV: TXPathEnvironment; dom: TXMLDocument; sys: Pointer; var Compiled: Boolean;
   const Lang: String): Boolean;
-
-  procedure Run(Const App, Prm, OutFName, SignalStr: String);
-
-  Var T: TTester;
-      Time: TDateTime;
-  begin
-    T := TTester.Create(App, Prm, OutFName, SignalStr);
-    T.Resume;
-    Time := Now;
-    While (Not T.Stopped) And (MilliSecondsBetween(Time, Now) < 30*1000) Do
-       Sleep(100);
-    If Not T.Stopped Then
-       KillThread(T.Handle)
-    Else
-       T.WaitFor;
-    T.Free
-  end;
 
   function DelSpaces(Const S: WideString): WideString;
 
@@ -317,15 +271,15 @@ begin
             Rewrite(L);
             Write(L, inp);
             CloseFile(L);
-            AssignFile(L, '_.out');
-            Rewrite(L);
-            CloseFile(L);
+            // AssignFile(L, '_.out');
+            // Rewrite(L);
+            // CloseFile(L);
 
             If Compiled Then
-               Run({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'nocompile _.xout _.in','_.xout',CRLF+CRLF)
+               RunExtCommandAsAdmin({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'nocompile _.xout _.in','_.xout','$##$!','_.result')
             Else
                Begin
-                 Run({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'_.gen _.xout _.in','_.xout',CRLF+CRLF);
+                 RunExtCommandAsAdmin({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'_.' + Lang + ' _.xout _.in','_.xout','$##$!','_.result');
                  Compiled := True
                End;
 
@@ -1227,15 +1181,14 @@ Begin
                        Begin
                           CreateStrFile('_.php3',Prog);
                           {$IF DEFINED(LCL) OR DEFINED(VCL)}
-                          Gen := RunExtCommand(
+                          Gen := RunExtCommandAsAdmin(
                              {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
-                             '_.php3 _.gen','_.gen',CRLF+CRLF);
+                             '_.php3 _.gen','_.gen',CRLF+CRLF,'');
                           {$ELSE}
-                          Gen := RunExtCommand(
+                          Gen := RunExtCommandAsAdmin(
                              {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
-                             '_.php3 _.gen','_.gen',CRLF+CRLF);
+                             '_.php3 _.gen','_.gen',CRLF+CRLF,'');
                           {$ENDIF}
-                          CreateStrFile('_.gen',Gen);
                           If Pos(errPHP,Gen) <> 0 Then
                              Begin
                                _Free(Result);
@@ -1261,6 +1214,7 @@ Begin
                                If Assigned(T) Then T.Synchronize(T.Process);
                                Exit
                              End;
+                          CreateStrFile('_.'+StartLanguage,Gen);
                           DeleteFile(PChar('_.exe'));
                           Compiled := False;
                           For F := 0 To _Restrictions.Count - 1 Do
@@ -1514,6 +1468,7 @@ constructor TDeducer.Create(_OnlyInduceModel: Boolean; _ENV: TXPathEnvironment; 
   _in_stage: Integer; Const _in_tr: TTrace);
 begin
    Inherited Create(True);
+   InterLockedIncrement(NActiveThreads);
    dom := _dom;
 
    semaphored := _semaphored;
@@ -1533,6 +1488,7 @@ end;
 destructor TDeducer.Destroy;
 begin
    ENV.Free;
+   InterLockedDecrement(NActiveThreads);
    inherited Destroy;
 end;
 
@@ -2300,11 +2256,21 @@ begin
 
           SetLength(tr, 0);
           Start := Now;
+          NActiveThreads := 0;
           deducer := TDeducer.Create(OnlyInduceModel, ENV, dom, false, -1, tr, 0, MainLine);
           deducer.Resume;
           deducer.WaitFor;
           dom := deducer.dom;
           deducer.Free;
+
+          Repeat
+             EnterCriticalSection(VariantsCS);
+             If InterLockedDecrement(NActiveThreads) < 0 Then Break;
+             InterLockedIncrement(NActiveThreads);
+             LeaveCriticalSection(VariantsCS);
+             Sleep(100)
+          Until False;
+
           If MetaResult = Pointer($0FFFFFFFF) Then
              begin
                dom.Free;

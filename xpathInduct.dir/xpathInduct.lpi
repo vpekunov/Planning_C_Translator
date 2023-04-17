@@ -24,9 +24,20 @@
       <Version Value="2"/>
     </PublishOptions>
     <RunParams>
+      <local>
+        <HostApplicationFilename Value="E:\Work\Automodeling\_.exe"/>
+        <CommandLineParams Value="SimplestProg.txt _._ 200 6"/>
+        <WorkingDirectory Value="E:\Work\Automodeling"/>
+      </local>
       <FormatVersion Value="2"/>
       <Modes Count="1">
-        <Mode0 Name="default"/>
+        <Mode0 Name="default">
+          <local>
+            <HostApplicationFilename Value="E:\Work\Automodeling\_.exe"/>
+            <CommandLineParams Value="SimplestProg.txt _._ 200 6"/>
+            <WorkingDirectory Value="E:\Work\Automodeling"/>
+          </local>
+        </Mode0>
       </Modes>
     </RunParams>
     <RequiredPackages Count="1">

@@ -1,0 +1,67 @@
+@versions(Auto)
++{1.50} [/OBJS/clsSimpleProgram[@ID != #/@ID and @Name = "PROGRAM" and @ID = "PROG"]/O[@ID="Begin"]/Link[@Code = ##/@Ref]]=>[/OBJS/clsSimpleInput[@ID != ""]/I[@ID="Prev"]].
++{6.75} [/OBJS/clsSimpleScalar[@ID != #/@ID and @ID = #/@IVar]/O[@ID="Handle"]/Link[@Code = ##/@Ref]]=>[/OBJS/clsSimpleBlock[@ID != ""]/I[@ID="Arg"]].
++{6.75} [/OBJS/clsSimpleVector[@ID != #/@ID and @ID = #/@IVar]/O[@ID="Handle"]/Link[@Code = ##/@Ref]]=>[/OBJS/clsSimpleBlock[@ID != ""]/I[@ID="Arg"]].
++{5.25} [/OBJS/clsSimpleInput[@ID != #/@ID]/O[@ID="Next"]/Link[@Code = ##/@Ref]]=>[/OBJS/clsSimpleBlock[@ID != ""]/I[@ID="Prev"]].
++{5.25} [/OBJS/clsSimpleMat[@ID != #/@ID]/O[@ID="Next"]/Link[@Code = ##/@Ref]]=>[/OBJS/clsSimpleBlock[@ID != ""]/I[@ID="Prev"]].
++{5.25} [/OBJS/clsSimpleOut[@ID != #/@ID]/O[@ID="Next"]/Link[@Code = ##/@Ref]]=>[/OBJS/clsSimpleBlock[@ID != ""]/I[@ID="Prev"]].
++{2.25} [/OBJS/clsSimpleMat[@ID != ""]/O[@ID="Res"]]=>[/OBJS/clsSimpleScalar[@ID != #/@ID and @ID = #/@OVar]/I[@ID="Asgn"]/Link[@Code = ##/@Ref]].
++{1.50} [/OBJS/clsSimpleOut[@ID != ""]/O[@ID="Next"]]=>[/OBJS/clsSimpleTerminator[@ID != #/@ID and @ID = "END"]/I[@ID="End"]/Link[@Code = ##/@Ref]].
+
+* Mp1ii($i0,$i1): (count(/*/Link[Name/text()="Mp" and Left/Value/text()=$i0 and Right/Value/text()=$i1]) > 0).
+
+* MVIv1ii($i0,$i1): (count(/*/Link[Name/text()="MVIv" and Left/Value/text()=$i0 and Right/Value/text()=$i1]) > 0).
+
+* MVv1ii($i0,$i1): (count(/*/Link[Name/text()="MVv" and Left/Value/text()=$i0 and Right/Value/text()=$i1]) > 0).
+
+* MVv1io($i0,&$o1): (count(/*/Link[Name/text()="MVv" and Left/Value/text()=$i0 and set($o1,Right/Value/text())]) > 0).
+
+* MVv1oi(&$o0,$i1): (count(/*/Link[Name/text()="MVv" and set($o0,Left/Value/text()) and Right/Value/text()=$i1]) > 0).
+
+* NXv0io($i0,&$o1): (count(/*/Link[Name/text()="NXv" and Right/Value/text()=$i0 and set($o1,Left/Value/text())]) > 0).
+
+
+@versions(RussianGrammar)
+
++ [/OBJS/clsSimpleProgram] >> [/OBJS/clsSimpleBlock].
++ /OBJS/clsSimpleProgram[@ID = "PROG" and (@Name = "PROGRAM" or true())].
++ [/OBJS/clsSimpleProgram] = [1].
+
++ [/OBJS/clsSimpleBlock] >> [/OBJS/clsSimpleTerminator].
++ /OBJS/clsSimpleTerminator[@ID = "END"].
++ [/OBJS/clsSimpleTerminator] = [1].
+
++{3} [/OBJS/clsSimpleMat[@OVar != ""]/O[@ID="Res"]] => [/OBJS/clsSimpleScalar[@ID = #/@OVar]/I[@ID="Asgn"]/Link[@Code = ##/@Ref]].
+
++{3} [/OBJS/clsSimpleScalar[@ID = #/@IVar]/O[@ID="Handle"]/Link[@Code = ##/@Ref]] => [/OBJS/clsSimpleBlock[@IVar != ""]/I[@ID="Arg"]].
++{3} [/OBJS/clsSimpleVector[@ID = #/@IVar and (@Size != "")]/O[@ID="Handle"]/Link[@Code = ##/@Ref]] => [/OBJS/clsSimpleBlock[@IVar != ""]/I[@ID="Arg"]].
+
++{6} [/OBJS/clsSimpleBlock[@ID != ""]/O[@ID="Next"]] =>> [/OBJS/clsSimpleBlock[@ID != "" and @ID != #/@ID]/I[@ID="Prev"]/Link[@Code = ##/@Ref]].
+
++{1.5} [/OBJS/clsSimpleBlock[@ID != ""]/O[@ID="Next"]] => [/OBJS/clsSimpleTerminator/I[@ID="End"]/Link[@Code = ##/@Ref]].
+
++{1.5} [/OBJS/clsSimpleProgram/O[@ID="Begin"]/Link[@Code = ##/@Ref]] => [/OBJS/clsSimpleBlock[@ID != ""]/I[@ID="Prev"]].
+
++ [/OBJS/clsSimpleBlock] < [10].
+
++ [/OBJS/clsSimpleProgram[@ID = "PROG" and (@Name = "PROGRAM" or true())]/O[@ID="Begin"]/Link[@Code = ##/@Ref]] => [/OBJS/clsSimpleTerminator[@ID = "END"]/I[@ID="End"]].
+
++ [/OBJS/clsSimpleProgram] >> [/OBJS/clsSimpleTerminator].
+
++ [/OBJS/clsSimpleTest] :{Input, Output, NoSpaces}.
+
+* action(&$VERB,&$OBJ): /*/Link[Name/text()="MVv" and set($VERB,Left/Value/text()) and set($OBJ,Right/Value/text()) or
+                              Name/text()="MVIv" and set($OBJ,Left/Value/text()) and set($VERB,Right/Value/text())].
+
+* obj_attr($OBJ,&$ATTR): (
+                          count(/*/Link[Name/text()="Mp" and Left/Value/text()=$OBJ and set($JUNCT,Right/Value/text())])>0 or
+                          count(/*/Link[Name/text()="MIp" and Right/Value/text()=$OBJ and set($JUNCT,Left/Value/text())])>0
+                         ) and
+                         count(/*/Link[Name/text()="Jgp" and Left/Value/text()=$JUNCT and set($ATTR,Right/Value/text())])>0.
+
+* verb_dir($VERB,&$DIR): (
+                          count(/*/Link[starts-with(Name/text(),"EI") and Right/Value/text()=$VERB and set($JUNCT,Left/Value/text())])>0 or
+                          count(/*/Link[starts-with(Name/text(),"E") and Left/Value/text()=$VERB and set($JUNCT,Right/Value/text())])>0
+                         ) and
+                         count(/*/Link[Name/text()="Jv" and Left/Value/text()=$JUNCT and set($DIR,Right/Value/text())])>0.
+

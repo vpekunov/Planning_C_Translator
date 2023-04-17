@@ -1,0 +1,37 @@
+@versions(Auto)
+@fast(dbconsts0,"dbconsts0.csv").
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(MAIN,1):-
+   ()->{V0}
+   (([^\.]+\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+      xpathf(SENTENCE,'MVv1oi',$V0,'программу','true'),dbconsts0(V0)
+   }.
+ @auto:-"PROGRAM" => "Name","PROG" => "ID".
+ @goal:-assertz(simpleprogram('PROGRAM','PROG')),!.
+ @done:-clear_db.
+
+@versions(Programmatical)
+@global_unique(PROCESS,1):-
+  \#include\s*\<stdio\.h\>\\n\#include\s*\<stdlib\.h\>\\n(\\n)*(int\s*main\(\)\s*\{\\n)->{START}.
+@context(FINISH,1):-
+  }(\\n)*$.
+@versions(Russian)
+@global_unique(PROCESS,1):-
+  ((Составить|Написать)\s+(программу)->{START}\s*\.).
+@versions(RussianGrammar)
+@nearest(db_sostavit,3,"db_sostavit.csv").
+@nearest(db_program,3,"db_program.csv").
+@context(PREV,1):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(PROCESS,1):-
+   ()->{VERB}()->{OBJ}((([^.]+\.)->{Grammar.ru{SENTENCE}})?=>{xpathf(SENTENCE,'action',$VERB,$OBJ,_),db_sostavit(VERB),db_program(OBJ)})->{START}.
+@versions(Programmatical,Russian,RussianGrammar)
+handle:-xpath('PROCESS','/START',[_]),global_id(GID),asserta(simple_program(GID)).
+ @auto:- "PROG" => "ID", "PROGRAM" => "Name".
+ @goal:-
+  handle,!.
+ @done:-
+  clear_db.

@@ -1,0 +1,20 @@
+@versions(Auto)
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(MAIN,1):-
+   (([^\x22\x27\.]+[\x22\x27]([^\x22\x27]+)->{P0}[\x22\x27][^\x22\x27\.]+[\x22\x27]([^\x22\x27]+)->{P1}[\x22\x27][^\.]*\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+      xpathf(SENTENCE,'MVIv1ii','Тест','дает','true')
+   }.
+ @auto:-MAIN:"//P0/text()" => "Input",MAIN:"//P1/text()" => "Output","iolzcf" => "ID".
+ @goal:-xpath('MAIN','//P0/text()',[VInputText0]),xpath('MAIN','//P1/text()',[VOutputText1]),assertz(simpletest(VInputText0,VOutputText1,'iolzcf')),!.
+ @done:-clear_db.
+
+@versions(Russian,RussianGrammar)
+ @global_unique(TEST,infinity):-
+  (((т|Т)ест)\s*(\:)?\s*\x22(.*)->{INPUT}\x22\s*((дает\s+)|(\=\>))\s*\x22(.*)->{OUTPUT}\x22\.).
+@versions(Russian,RussianGrammar)
+ @auto:- TEST:"//INPUT/text()" => "Input", TEST:"//OUTPUT/text()" => "Output", randomid() => "ID".
+@versions(Russian,RussianGrammar)
+ @done:-
+  clear_db.

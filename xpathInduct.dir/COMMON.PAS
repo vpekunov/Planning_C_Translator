@@ -74,6 +74,7 @@ Procedure CreateStrFile(Const FName,Content: String);
 
 function RunExtCommand(Const App,Prm,OutFName: String):String; overload;
 function RunExtCommand(Const App,Prm,OutFName,SignalStr:String; Const WaitFile: String = ''):String; overload;
+function RunExtCommandAsAdmin(Const App,Prm,OutFName,SignalStr,WaitFile: String):String;
 
 function EncodeStr(Const S:String):String;
 function DecodeStr(Const S:String):String;
@@ -95,7 +96,8 @@ Var MSG: PChar; cvar; export;
 
 Implementation
 
-Uses SysUtils, Consts{$IF DEFINED(LCL) OR DEFINED(VCL)}, Dialogs{$ENDIF}, Process;
+Uses SysUtils, Consts{$IF DEFINED(LCL) OR DEFINED(VCL)}, Dialogs{$ENDIF},
+     Process {$IF NOT DEFINED(LINUX) AND NOT DEFINED(UNIX)}, ShellApi, Windows {$ENDIF};
 
 { TLine }
 
@@ -463,6 +465,58 @@ begin
         Result:=''
 end;
 
+function RunExtCommandAsAdmin(Const App,Prm,OutFName,SignalStr,WaitFile: String):String;
+{$IF NOT DEFINED(LINUX) AND NOT DEFINED(UNIX)}
+var
+  sei: TShellExecuteInfoA;
+  P: Integer;
+begin
+     While (Length(WaitFile) > 0) And FileExists(WaitFile) Do
+       Begin
+         FillChar(sei, SizeOf(sei), 0);
+         sei.cbSize := SizeOf(sei);
+         sei.Wnd := 0;
+         sei.fMask := SEE_MASK_NOCLOSEPROCESS;
+         sei.lpVerb := 'runas';
+         sei.lpFile := 'cmd';
+         sei.lpParameters := PAnsiChar('/c del /F /Q ' + WaitFile);
+         sei.nShow := SW_SHOWNORMAL;
+         ShellExecuteExA(@sei);
+         WaitForSingleObject(sei.hProcess, INFINITE);
+       End;
+     FillChar(sei, SizeOf(sei), 0);
+     sei.cbSize := SizeOf(sei);
+     sei.Wnd := 0;
+     sei.fMask := SEE_MASK_NOCLOSEPROCESS;
+     sei.lpVerb := 'runas';
+     sei.lpFile := PAnsiChar(App);
+     sei.lpParameters := PAnsiChar(Prm);
+     sei.nShow := SW_SHOWNORMAL;
+     ShellExecuteExA(@sei);
+     WaitForSingleObject(sei.hProcess, INFINITE);
+
+     While (Length(WaitFile) > 0) And Not FileExists(WaitFile) Do
+        Sleep(100);
+
+     Result:='';
+     If Length(OutFName)>0 Then
+        With TStringList.Create Do
+          begin
+            LoadFromFile(OutFName);
+            Result:=Text;
+            Free
+          end
+     Else
+        Result:='';
+     P:=Pos(SignalStr,Result);
+     If P>0 Then Delete(Result,1,P+Length(SignalStr)-1)
+end;
+{$ELSE}
+begin
+     Result := RunExtCommand(App,Prm,OutFName,SignalStr,WaitFile)
+end;
+{$ENDIF}
+
 function RunExtCommand(Const App,Prm,OutFName,SignalStr:String; Const WaitFile: String = ''):String;
 
 Var AProcess: TProcess;
@@ -473,7 +527,7 @@ begin
      If Length(WaitFile) = 0 Then
        AProcess.Options := AProcess.Options + [poWaitOnExit]
      Else
-       DeleteFile(WaitFile);
+       SysUtils.DeleteFile(WaitFile);
      AProcess.Execute;
      AProcess.Free;
 

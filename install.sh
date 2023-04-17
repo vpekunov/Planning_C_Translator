@@ -53,4 +53,5 @@ make -f Makefile.mpi
 make -f Makefile.vectorized
 make -f Makefile.clustered
 make -f Makefile.cilk
+make -f Makefile.russian
 rm -f ./induct.log

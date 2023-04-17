@@ -1,0 +1,38 @@
+@versions(Auto)
+@fast(dbconsts3,"dbconsts3.csv").
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(MAIN,1):-
+   ()->{V0}
+   (([^\w\.]+(\w+)->{P0}[^\.]*\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+      xpathf(SENTENCE,'MVv1oi',$V0,'скаляр','true'),dbconsts3(V0)
+   }.
+ @auto:-MAIN:"//P0/text()" => "ID".
+ @goal:-xpath('MAIN','//P0/text()',[VIDText0]),assertz(simplescalar(VIDText0)),!.
+ @done:-clear_db.
+
+@versions(Programmatical)
+@global_unique(DECL,infinity):-
+  (\s*double\s+(\w+)->{ID}\;\\n)->{LINE}.
+@versions(Russian,RussianGrammar)
+@nearest(db_vvedem,2,"db_vvedem.csv").
+@fast(db_var,"db_var.csv").
+@versions(Russian)
+@global_unique(DECL,infinity):-
+  (([А-Яа-я]+)?=>{db_vvedem($)}\s+([А-Яа-я]+)?=>{db_var($,1)}\s+(\w+)->{ID}\s*\.).
+@versions(RussianGrammar)
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(DECL,1):-
+  ()->{VERB}()->{OBJ}(([^.A-Za-z]+(\w+)->{ID}[^A-Za-z.]*\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+                         xpathf(SENTENCE,'action',$VERB,$OBJ,_),db_vvedem(VERB),db_var(OBJ,1),
+                         xpathf(SENTENCE,'verb_dir',VERB,_,'false')
+                       }.
+@versions(Programmatical,Russian,RussianGrammar)
+ @auto:- DECL:"//ID/text()" => "ID".
+ @goal:-
+  xpath('DECL','//ID/text()',[IDText]),global_id(GID),assertz(simple_scalar(GID,IDText)),!.
+ @done:-
+  clear_db.

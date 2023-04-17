@@ -1,0 +1,57 @@
+@versions(Auto)
+@fast(dbconsts2,"dbconsts2.csv").
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(MAIN,1):-
+   ()->{V0}
+   (([^\w\.]+(\w+)->{P0}[^\.]*\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+      xpathf(SENTENCE,'MVv1oi',$V0,'вектор','true'),dbconsts2(V0),
+      xpathf(SENTENCE,'Mp1ii','вектор','с','true')
+   }.
+ @auto:-MAIN:"//P0/text()" => "IVar","in"+MAIN:"//P0/text()" => "ID".
+ @goal:-xpath('MAIN','//P0/text()',[VIVarText0]),xpath('MAIN','//P0/text()',[VIDText0]),atom_concat('in',VIDText0,LHXBZH),assertz(simpleinput(VIVarText0,LHXBZH)),!.
+ @done:-clear_db.
+
+@versions(Programmatical)
+ @global_unique(PROCESS,infinity):-
+  (\s*for\s*\(i\s*\=\s*0\;\s*i\s*\<\s*(\d+)->{N}\;\s*i\+\+\)\s*\{\\n\s*printf\(\"(\w+)->{VECTOR}\[\%i\]\s*\=\s*\"\,\s*i\)\;\\n\s*scanf\(\"\%lf\"\,\s*\&(\w+)==>{VECTOR}\[i\]\)\;\\n\s*\}\\n)|(\s*printf\(\"(\w+)->{SCALAR}\s*\=\s*\"\)\;\\n\s*scanf\(\"\%lf\"\,\s*\&(\w+)==>{SCALAR}\)\;\\n).
+@versions(Russian,RussianGrammar)
+ @nearest(db_vvedem,2,"db_vvedem.csv").
+ @fast(db_var,"db_var.csv").
+@versions(Russian)
+ @global_unique(PROCESS,infinity):-
+  (()->{VAR}([А-Яа-я]+)?=>{db_vvedem($)}\s+((с\s+клавиатуры\s+)?)->{KEYB}
+   ([А-Яа-я]+)?=>{db_var($,$VAR)}\s+(\w+)->{ID}((\s+с\s+клавиатуры)?)!=>{KEYB}\s*\.).
+@versions(RussianGrammar)
+ @nearest(db_klav,2,"db_klav.csv").
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(PROCESS,1):-
+  ()->{VERB}()->{OBJ}()->{ATTR}()->{VAR}(([^.A-Za-z]+(\w+)->{ID}[^A-Za-z.]*\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+                         xpathf(SENTENCE,'action',$VERB,$OBJ,_),db_vvedem(VERB),db_var(OBJ,$VAR),
+                         xpathf(SENTENCE,'obj_attr',OBJ,$ATTR,_),db_klav(ATTR)
+                       }.
+@versions(Russian,RussianGrammar)
+ @auto:- PROCESS:"//ID/text()" => "IVar", "in"+PROCESS:"//ID/text()" => "ID".
+ handle:-xpath('PROCESS','//ID/text()',[VText]),
+  xpath('PROCESS','//VAR/text()',['0']),
+  simple_vector(_,VText,_),
+  global_id(GID),assertz(simple_act(GID,in,VText,'')),!.
+ handle:-xpath('PROCESS','//ID/text()',[SText]),
+  xpath('PROCESS','//VAR/text()',['1']),
+  global_id(GID),assertz(simple_act(GID,in,SText,'')),!.
+@versions(Programmatical)
+ handle:-xpath('PROCESS','//VECTOR/text()',[VText]),
+  xpath('PROCESS','//N/text()',[NText]),
+  simple_vector(_,VText,NText),
+  global_id(GID),assertz(simple_act(GID,in,VText,'')),!.
+ handle:-xpath('PROCESS','//SCALAR/text()',[SText]),
+  simple_scalar(_,SText),
+  global_id(GID),assertz(simple_act(GID,in,SText,'')),!.
+@versions(Programmatical,Russian,RussianGrammar)
+ @goal:-
+  handle,!.
+ @done:-
+  clear_db.

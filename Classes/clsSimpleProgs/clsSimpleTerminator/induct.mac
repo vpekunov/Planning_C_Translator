@@ -1,0 +1,248 @@
+@versions(Auto)
+@global_unique(PROCESS,1):-
+  ($)->{END}.
+ @auto:-"END" => "ID".
+ @goal:-assertz(simpleterminator('END')),!.
+ @done:-clear_db.
+
+@versions(Programmatical,Russian,RussianGrammar)
+@global_unique(PROCESS,1):-
+  ($)->{END}.
+@auto:- "END" => "ID".
+create_program:-
+  simple_program(_),
+  insert_element('Program','clsSimpleProgram','True','True','False',50,150,['Name'],['AutoProgram'],[],['Begin']),!,
+  true.
+create_main_line([GID|T],Left,Top):-
+  simple_act(GID,in,VAR,_),!,
+  atom_concat('in',VAR,ID0),
+  number_atom(GID,AGID),atom_concat(ID0,AGID,ID),
+  (simple_scalar(_,VAR);simple_vector(_,VAR,_)),!,
+  insert_element(ID,'clsSimpleInput','True','True','False',Left,Top,[],[],['Arg','Prev'],['Next']),!,
+  Left1 is Left + 150,
+  create_main_line(T,Left1,Top).
+create_main_line([GID|T],Left,Top):-
+  simple_act(GID,out,VAR,_),!,
+  atom_concat('out',VAR,ID0),
+  number_atom(GID,AGID),atom_concat(ID0,AGID,ID),
+  (simple_scalar(_,VAR);simple_vector(_,VAR,_)),!,
+  insert_element(ID,'clsSimpleOut','True','True','False',Left,Top,[],[],['Arg','Prev'],['Next']),!,
+  Left1 is Left + 150,
+  create_main_line(T,Left1,Top).
+create_main_line([GID|T],Left,Top):-
+  simple_act(GID,OP,VAR,RES),!,
+  member(OP,['Min','Max','Avr']),
+  !,
+  atom_concat(OP,VAR,ID0),
+  number_atom(GID,AGID),atom_concat(ID0,AGID,ID),
+  simple_scalar(_,RES),
+  simple_vector(_,VAR,_),!,
+  insert_element(ID,'clsSimpleMat','True','True','False',Left,Top,['Op'],[OP],['Arg','Prev'],['Next','Res']),!,
+  Left1 is Left + 150,
+  create_main_line(T,Left1,Top).
+create_main_line([_|T],Left,Top):-create_main_line(T,Left,Top),!.
+create_main_line([],_,_):-!.
+create_vars(_,Top):-
+  asserta(vtop(Top)),
+  fail.
+create_vars(Left,_):-
+  simple_scalar(GID,Name),
+  \+ =(GID,''),
+  vtop(Top),
+  insert_element(Name,'clsSimpleScalar','True','True','False',Left,Top,[],[],['Asgn'],['Handle']),
+  retractall(vtop(_)),
+  Top1 is Top + 100,
+  asserta(vtop(Top1)),
+  fail.
+create_vars(Left,_):-
+  simple_vector(GID,Name,N),
+  \+ =(GID,''),
+  vtop(Top),
+  insert_element(Name,'clsSimpleVector','True','True','False',Left,Top,['Size'],[N],['Asgn'],['Handle']),
+  retractall(vtop(_)),
+  Top1 is Top + 100,
+  asserta(vtop(Top1)),
+  fail.
+create_vars(_,_):-
+  retractall(vtop(_)),!.
+create_links:-
+  predicate_property(simple_link(_,_,_,_,_,_),'dynamic'),
+  simple_link(_,OID1,CID1,_,OID2,CID2),
+  insert_link(OID1,CID1,OID2,CID2,'clBlack'),
+  fail.
+create_links:-!.
+deduce_var_links([]):-
+  !.
+deduce_var_links([GID|T]):-
+  simple_act(GID,Mode,Var,_),
+  member(Mode,[in,out]),
+  (simple_scalar(VGID,Var);simple_vector(VGID,Var,_)),!,
+  atom_concat(Mode,Var,ID0),number_atom(GID,AGID),atom_concat(ID0,AGID,ID),
+  asserta(simple_link(VGID,Var,'Handle',GID,ID,'Arg')),
+  deduce_var_links(T),
+  !.
+deduce_var_links([GID|T]):-
+  simple_act(GID,Mode,Var,Res),
+  member(Mode,['Min','Max','Avr']),
+  simple_vector(VGID,Var,_),!,
+  simple_scalar(RGID,Res),!,
+  atom_concat(Mode,Var,ID0),number_atom(GID,AGID),atom_concat(ID0,AGID,ID),
+  asserta(simple_link(VGID,Var,'Handle',GID,ID,'Arg')),
+  asserta(simple_link(GID,ID,'Res',RGID,Res,'Asgn')),
+  deduce_var_links(T),
+  !.
+deduce_var_links([GID|T]):-
+  (simple_program(GID);simple_scalar(GID,_);simple_vector(GID,_,_)),
+  !,
+  deduce_var_links(T),
+  !.
+get_name(GID,ID):-
+  simple_act(GID,OP,VAR,_),!,
+  member(OP,[in,out,'Min','Max','Avr']),
+  !,
+  atom_concat(OP,VAR,ID0),
+  number_atom(GID,AGID),atom_concat(ID0,AGID,ID),!.
+deduce_main_links(_,_,_,[]):-
+  !.
+deduce_main_links(PrevGID,PrevName,PrevCon,[GID|T]):-
+  \+ (simple_scalar(GID,_);simple_vector(GID,_,_)),
+  get_name(GID,ThisName),
+  asserta(simple_link(PrevGID,PrevName,PrevCon,GID,ThisName,'Prev')),
+  !,
+  deduce_main_links(GID,ThisName,'Next',T).
+deduce_main_links(PrevGID,PrevName,PrevCon,[_|T]):-
+  deduce_main_links(PrevGID,PrevName,PrevCon,T),
+  !.
+@versions(Programmatical)
+handle:-
+  simple_program(PID),
+  global_trace([PID|T]),
+  deduce_var_links(T),
+  deduce_main_links(PID,'Program','Begin',T).
+@versions(Russian,RussianGrammar)
+handle_program([H|T],[H|T]):-
+  predicate_property(simple_program(_),'dynamic'),simple_program(H),!.
+handle_program(L,[H|T]):-
+  append(L1,[H|T1],L),
+  predicate_property(simple_program(_),'dynamic'),simple_program(H),
+  append(L1,T1,T),
+  !.
+handle_program(L,[32000|L]):-
+  asserta(simple_program(32000)),
+  !.
+handle_vars(NGID,L,A,LN):-
+  append(L1,[H|T1],A),
+  member(H,L),
+  simple_act(H,_,VAR,''),
+  simple_vector(_,VAR,_),
+  append(L1,T1,A1),
+  handle_vars(NGID,L,A1,LN),
+  !.
+handle_vars(NGID,L,A,LN):-
+  append(LA,[H|TA],A),
+  append(L1,[H|_],L),
+  simple_act(H,_,VAR,''),
+  simple_scalar(GID,VAR),
+  member(GID,L1),
+  append(LA,TA,A1),
+  handle_vars(NGID,L,A1,LN),
+  !.
+handle_vars(NGID,L,A,LN):-
+  append(LA,[H|TA],A),
+  append(L1,[H|T1],L),
+  simple_act(H,_,VAR,''),
+  simple_scalar(GID,VAR),
+  append(L2,[GID|T2],T1),
+  append(L2,T2,L3),
+  append(L1,[GID,H|L3],L4),
+  append(LA,TA,A1),
+  handle_vars(NGID,L4,A1,LN),
+  !.
+handle_vars(NGID,L,A,LN):-
+  append(LA,[H|TA],A),
+  append(L1,[H|T1],L),
+  simple_act(H,_,VAR,''),
+  asserta(simple_scalar(NGID,VAR)),
+  NGID1 is NGID+1,
+  append(L1,[NGID,H|T1],L4),
+  append(LA,TA,A1),
+  handle_vars(NGID1,L4,A1,LN),
+  !.
+handle_vars(NGID,L,A,LN):-
+  append(LA,[H|TA],A),
+  append(L1,[H|_],L),
+  simple_act(H,_,VECT,VAR),
+  simple_vector(_,VECT,_),
+  simple_scalar(GID,VAR),
+  member(GID,L1),
+  append(LA,TA,A1),
+  handle_vars(NGID,L,A1,LN),
+  !.
+handle_vars(NGID,L,A,LN):-
+  append(LA,[H|TA],A),
+  append(L1,[H|T1],L),
+  simple_act(H,_,VECT,VAR),
+  simple_vector(_,VECT,_),
+  simple_scalar(GID,VAR),
+  append(L2,[GID|T2],T1),
+  append(L2,T2,L3),
+  append(L1,[GID,H|L3],L4),
+  append(LA,TA,A1),
+  handle_vars(NGID,L4,A1,LN),
+  !.
+handle_vars(NGID,L,A,LN):-
+  append(LA,[H|TA],A),
+  append(L1,[H|T1],L),
+  simple_act(H,_,VECT,VAR),
+  simple_vector(_,VECT,_),
+  asserta(simple_scalar(NGID,VAR)),
+  NGID1 is NGID+1,
+  append(L1,[NGID,H|T1],L4),
+  append(LA,TA,A1),
+  handle_vars(NGID1,L4,A1,LN),
+  !.
+handle_vars(_,L,_,L).
+remove_empties([],[]):-!.
+remove_empties([H|T],[H|T1]):-
+  (simple_scalar(H,_);
+   simple_vector(H,_,_);
+   simple_act(H,_,_,_);
+   simple_program(H)
+  ),!,
+  remove_empties(T,T1).
+remove_empties([_|T],T1):-!,remove_empties(T,T1).
+deduce_trace(TR,TR1):-
+  handle_program(TR,TRR),
+  remove_empties(TRR,TR2),
+  handle_vars(30000,TR2,TR2,TR1),
+  !.
+handle:-
+  asserta(simple_scalar('','')),
+  asserta(simple_vector('','','')),
+  asserta(simple_act('','','','')),
+  global_trace(TR),
+  retract(global_trace(_)),
+  deduce_trace(TR,[PID|T]),
+  asserta(global_trace([PID|T])),
+  deduce_var_links(T),
+  deduce_main_links(PID,'Program','Begin',T).
+@versions(Programmatical,Russian,RussianGrammar)
+create_model:-
+  consult('autoutil.pl'),
+  asserta(pgen_system('')),
+  create_program,
+  create_vars(50,250),
+  global_trace(TR),
+  create_main_line(TR,200,150),
+  create_links,
+  telling(TELL),
+  told,
+  tell('model.xml'),
+  write_xml,
+  told,
+  tell(TELL),
+  clear_db.
+@goal:-
+  handle,!.
+@done:-
+  create_model.

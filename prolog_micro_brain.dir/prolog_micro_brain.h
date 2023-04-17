@@ -12,6 +12,9 @@ using namespace std;
 extern bool fast_memory_manager;
 extern unsigned int mem_block_size;
 
+extern const char * STD_INPUT;
+extern const char * STD_OUTPUT;
+
 const int once_flag = 0x1;
 const int call_flag = 0x2;
 

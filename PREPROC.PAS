@@ -1697,7 +1697,7 @@ begin
                                   S1 := FloatToStr(Rslt)
                             Else
                                Begin
-                                 WriteLn('"'+S1+'" -- can''t evauate to the numerical constant',TLine(Lines.Objects[LCounter-1]).GetDescription);
+                                 WriteLn('"'+S1+'" -- can''t evaluate to the numerical constant',TLine(Lines.Objects[LCounter-1]).GetDescription);
                                  Halt(-1)
                                End;
                             If Eval.Error Then

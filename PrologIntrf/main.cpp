@@ -15,12 +15,8 @@
 
 #ifdef __linux__
 #include <unistd.h>
-#define _fileno fileno
-#define _dup dup
-#define _dup2 dup2
 #define EXPORT __attribute__((visibility("default")))
 #else
-#include <io.h>
 #define EXPORT __declspec(dllexport)
 #endif
 
@@ -30,9 +26,9 @@ using namespace std;
 
 #pragma comment(linker, "/STACK:100000000")
 
-static FILE * F = NULL;
-static int saved_out;
-static int saved_err;
+std::ofstream F;
+std::streambuf * coutbuf;
+std::streambuf * cerrbuf;
 
 interpreter * _prolog = NULL;
 
@@ -41,11 +37,11 @@ extern "C" {
 		static int argc = 1;
 		static char * argv[] = { ".\\Automodeling.exe" };
 
-		F = fopen(gprolog_console_out, "wt");
-		saved_out = _dup(1);
-		saved_err = _dup(2);
-		_dup2(_fileno(F), 1);
-		_dup2(_fileno(F), 2);
+		F.open(gprolog_console_out, ios::out | ios::trunc);
+		std::streambuf * coutbuf = std::cout.rdbuf(); //save old buf
+		std::streambuf * cerrbuf = std::cerr.rdbuf(); //save old buf
+		std::cout.rdbuf(F.rdbuf()); //redirect std::cout!
+		std::cerr.rdbuf(F.rdbuf()); //redirect std::cerr!
 
 	#ifdef __linux__
 		struct rlimit rl = { RLIM_INFINITY, RLIM_INFINITY };
@@ -89,31 +85,17 @@ extern "C" {
 
 		delete f;
 
-		fflush(stderr);
-		fflush(stdout);
-		fclose(F);
-
-		_dup2(saved_out, 1);
-		_dup2(saved_err, 2);
+		F.flush();
 
 		return 0;
 	}
 
 	EXPORT int done_gprolog7(char * gprolog_console_out) {
-		F = fopen(gprolog_console_out, "at");
-		saved_out = _dup(1);
-		saved_err = _dup(2);
-		_dup2(_fileno(F), 1);
-		_dup2(_fileno(F), 2);
-
 		delete _prolog;
 
-		fflush(stderr);
-		fflush(stdout);
-		fclose(F);
-
-		_dup2(saved_out, 1);
-		_dup2(saved_err, 2);
+		std::cout.rdbuf(coutbuf);
+		std::cerr.rdbuf(cerrbuf);
+		F.close();
 
 		return 0;
 	}
@@ -129,7 +111,7 @@ extern "C" {
 		result = 5;
 
 		for (i = 0; i < 8; i++)
-			goals[i] = (char *) malloc(1024);
+			goals[i] = (char *) malloc(65536*2);
 
 		sprintf(goals[0], "change_directory('%s').", Dir);
 		sprintf(goals[1], "(consult('%s')->true;rename_file('%s','_erroneous.pl')).", ConsultScript, ConsultScript);
@@ -140,13 +122,25 @@ extern "C" {
 		sprintf(goals[6], "%s.", DoneGoal);
 		sprintf(goals[7], "end_of_file.");
 
-		F = fopen(gprolog_console_out, "at");
-		saved_out = _dup(1);
-		saved_err = _dup(2);
-		_dup2(_fileno(F), 1);
-		_dup2(_fileno(F), 2);
-
 		_prolog->outs = &std::cout;
+		_prolog->current_output = STD_OUTPUT;
+		_prolog->file_num = 0;
+		_prolog->current_input = STD_INPUT;
+		_prolog->ins = &cin;
+
+		_prolog->CALLS.resize(0);
+		_prolog->FRAMES.resize(0);
+		_prolog->NEGS.resize(0);
+		_prolog->_FLAGS.resize(0);
+		_prolog->PARENT_CALLS.resize(0);
+		_prolog->PARENT_CALL_VARIANT.resize(0);
+		_prolog->CLAUSES.resize(0);
+		// FLAGS;
+		_prolog->LEVELS.resize(0);
+		_prolog->TRACE.resize(0);
+		_prolog->TRACEARGS.resize(0);
+		_prolog->TRACERS.resize(0);
+		_prolog->ptrTRACE.resize(0);
 
 		int goal = 0;
 		while (goal < 8) {
@@ -163,7 +157,13 @@ extern "C" {
 			frame_item * f = new frame_item();
 			string body;
 
-			renew.push_back("internal_goal");
+			map<string, predicate *>::iterator it = _prolog->PREDICATES.begin();
+			while (it != _prolog->PREDICATES.end()) {
+				renew.push_back(it->first);
+				it++;
+			}
+
+			_prolog->add_std_body(body);
 
 			body.append("internal_goal:-");
 			body.append(line);
@@ -207,10 +207,6 @@ extern "C" {
 		for (i = 0; i < 8; i++)
 			free(goals[i]);
 
-		fflush(stderr);
-		fflush(stdout);
-		fclose(F);
-
 		while (_prolog->files.size()) {
 			char buf[128];
 			try {
@@ -222,9 +218,6 @@ extern "C" {
 				break;
 			}
 		}
-
-		_dup2(saved_out, 1);
-		_dup2(saved_err, 2);
 
 		return result;
 	}

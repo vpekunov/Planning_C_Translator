@@ -1003,6 +1003,7 @@ function pEscapeString(Const S: String): String;
 function EscapeProlog(Const S: String): String;
 
 function Levenshtein(Const string1, string2: String): Integer;
+function LevenshteinW(Const string1, string2: WideString): Integer;
 
 // true if string AInputString match regular expression ARegExpr
 // ! will raise exeption if syntax errors in ARegExpr
@@ -1259,6 +1260,33 @@ Begin
 End;
 
 function Levenshtein(const string1, string2: String): Integer;
+
+Var diff: integer;
+    m: Array Of Array Of Integer;
+    i, j: Integer;
+Begin
+ SetLength(m, Length(string1) + 1, Length(string2) + 1);
+
+ for i := 0 To Length(string1) do
+     m[i][0] := i;
+ for j := 0 To Length(string2) do
+     m[0][j] := j;
+
+ for i := 1 to Length(string1) do
+   begin
+     for j := 1 to Length(string2) do
+       begin
+         if string1[i] = string2[j] then diff := 0 else diff := 1;
+
+         m[i][j] := Min(Min(m[i - 1, j] + 1,
+                                  m[i, j - 1] + 1),
+                                  m[i - 1, j - 1] + diff);
+       end
+   end;
+   Result := m[Length(string1)][Length(string2)]
+end;
+
+function LevenshteinW(const string1, string2: WideString): Integer;
 
 Var diff: integer;
     m: Array Of Array Of Integer;
@@ -1861,7 +1889,7 @@ begin
        (Descriptor[2].Kind = fpBound) Then
        Try
           Threshold := StrToInt(Descriptor[2].Value);
-          Exit(Levenshtein(Descriptor[0].Value, Descriptor[1].Value) <= Threshold);
+          Exit(LevenshteinW(Descriptor[0].Value, Descriptor[1].Value) <= Threshold);
        Except
           Exit(False)
        End;

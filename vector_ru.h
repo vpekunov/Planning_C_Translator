@@ -3,6 +3,10 @@
 
 #include "meta.h"
 
+#scan(v1,v2,v3,v4,v5,vecTerminator,metaCleanup,metaIntroduce,metaStop)
+
+#preproc_passes(1,"_.c")
+
 #scan(vecProgram,vecScalar,vecVector,vecMat,vecInput,vecOut,vecTest,vecTerminator,metaCleanup,metaIntroduce,metaStop)
 
 #def_xpath Mp1ii($i0,$i1) {
@@ -45,7 +49,7 @@
    \#\(
    ()->{V0}
    (([^\w\.]+(\w+)->{P0}[^\.]*\.)->{Grammar.ru{SENTENCE}})?=>{
-      xpathf(SENTENCE,'MVv1oi',$V0,'скаляр','true'),(similar(V0,'Ввести',2);similar(V0,'Определить',2))
+      xpathf(SENTENCE,'MVv1oi',$V0,'скаляр','true'),(eq(V0,'Ввести');similar(V0,'Определить',2))
    }(*PRUNE)
    \)\\n
   @end
@@ -118,12 +122,48 @@
 
 #def_module() vector_sentence(GID, TYPE, OBJECT, OP, SUBJECT) {
 @goal:-brackets_off.
-@goal:-asserta(vector_fact(GID,TYPE,OBJECT,OP,SUBJECT)).
+@goal:-assertz(model_obj(GID, TYPE, OBJECT, OP, SUBJECT)).
 };
 
-#def_module() vector_generate(GID) {
+#def_module() vector_generate(GID_) {
 @goal:-brackets_off.
-@goal:-true.
+@create_vector_obj(_, 'Program', _, _, _).
+@create_vector_obj(_, 'Scalar', _, _, SUBJECT):-
+   add_object(SUBJECT,clsSimpleScalar,[], 'Введем скаляр').
+@create_vector_obj(_, 'Vector', _, OP, SUBJECT):-
+   add_object(SUBJECT,clsSimpleVector,[param('Size',OP)], 'Введем вектор').
+@create_vector_obj(_, 'Input', _, _, SUBJECT):-
+   atom_concat('in', SUBJECT, ID),
+   add_object(ID,clsSimpleInput,[param('IVar',SUBJECT)], 'Введем вектор с клавиатуры').
+@create_vector_obj(_, 'Mat', OBJECT, OP, SUBJECT):-
+   atom_concat(OP, OBJECT, A1), atom_concat(A1, SUBJECT, ID),
+   (=(OP, 'Max')->
+     =(VERBALLY, 'максимум');
+     =(VERBALLY, 'минимум')
+   ),
+   atom_concat('Найдем ', VERBALLY, SENT),
+   add_object(ID,clsSimpleMat,[param('IVar',OBJECT),param('OVar',SUBJECT),param('Op',OP)], SENT).
+@create_vector_obj(_, 'Out', _, _, SUBJECT):-
+   atom_concat('out', SUBJECT, ID),
+   add_object(ID,clsSimpleOut,[param('IVar',SUBJECT)], 'Вывести скаляр на экран').
+@create_vector_obj(GID, 'Test', OBJECT, _, SUBJECT):-
+   atom_concat('test', GID, ID),
+		add_object(ID,clsSimpleTest,[param('Input',OBJECT),param('Output',SUBJECT)], '').
+@goal:-
+  load_classes('Classes\\clsSimpleProgs','object','link'),
+  init_xpathing('RussianGrammar'),
+  !,
+  (
+   model_obj(GID, TYPE, OBJECT, OP, SUBJECT), create_vector_obj(GID, TYPE, OBJECT, OP, SUBJECT), fail;
+   true
+  ),
+  !,
+  add_object('END',clsSimpleTerminator,[], ''),
+  prepare_model_for_induct(A),
+  induct_xpathing(60, 6, A, '_.xml', t, f, f),
+  import_model_after_induct('_.xml'),
+  prepare_model_for_induct('__prepared.xml'),
+  unload_classes.
 };
 
 #endif

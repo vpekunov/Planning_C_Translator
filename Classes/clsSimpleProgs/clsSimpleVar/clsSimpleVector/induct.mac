@@ -1,0 +1,46 @@
+@versions(Auto)
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(MAIN,1):-
+   (([^\w\.]+(\w+)->{P0}[^\w\.]+(\w+)->{P1}[^\.]*\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+      xpathf(SENTENCE,'MVv1ii','Введем','вектор','true'),
+      xpathf(SENTENCE,'Mp1ii','вектор','из','true')
+   }.
+ @auto:-MAIN:"//P1/text()" => "Size",MAIN:"//P0/text()" => "ID".
+ @goal:-xpath('MAIN','//P1/text()',[VSizeText1]),xpath('MAIN','//P0/text()',[VIDText0]),assertz(simplevector(VSizeText1,VIDText0)),!.
+ @done:-clear_db.
+
+@versions(Programmatical)
+@global_unique(DECL,infinity):-
+  (\s*double\s+(\w+)->{ID}\[(\d+)->{N}\]\;\\n)->{LINE}.
+@versions(Russian,RussianGrammar)
+@nearest(db_vvedem,2,"db_vvedem.csv").
+@fast(db_var,"db_var.csv").
+@versions(Russian)
+@global_unique(DECL,infinity):-
+  (([А-Яа-я]+)?=>{db_vvedem($)}\s+([А-Яа-я]+)?=>{db_var($,0)}\s+(\w+)->{ID}\s*(\((\d+)->{N}\s+элементов\)|из\s+(\d+)->{NN}\s+элементов)\.).
+@versions(RussianGrammar)
+@nearest(db_elems,2,"db_elems.csv").
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(DECL,1):-
+  ()->{VERB}()->{OBJ}()->{ATTR}()->{ID}()->{N}(
+          (
+           ([^0-9.]+(\d+)->{N1}[^A-Za-z.]+(\w+)->{ID1}[^.]*\.)?=>{Predicates.set($N,N1),Predicates.set($ID,ID1)}|
+           ([^A-Za-z.]+(\w+)->{ID2}[^0-9.]+(\d+)->{N2}[^.]*\.)?=>{Predicates.set($N,N2),Predicates.set($ID,ID2)}
+          )->{Grammar.ru{SENTENCE}}
+          (*PRUNE)
+        )?=>{
+          xpathf(SENTENCE,'action',$VERB,$OBJ,_),db_vvedem(VERB),db_var(OBJ,0),
+          xpathf(SENTENCE,'obj_attr',OBJ,$ATTR,_),db_elems(ATTR)
+        }.
+@versions(Programmatical,Russian,RussianGrammar)
+ @auto:- DECL:"//ID/text()" => "ID", [DECL:"//N/text()" => "Size"], [DECL:"//NN/text()" => "Size"].
+ @goal:-
+  xpath('DECL','//ID/text()',[IDText]),(xpath('DECL','//N/text()',[NText]);
+                                        xpath('DECL','//NN/text()',[NText])
+                                       ),!,global_id(GID),assertz(simple_vector(GID,IDText,NText)),!.
+ @done:-
+  clear_db.

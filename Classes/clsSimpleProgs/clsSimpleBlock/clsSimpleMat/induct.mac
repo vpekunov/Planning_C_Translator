@@ -1,0 +1,64 @@
+@versions(Auto)
+@fast(dbconsts1,"dbconsts1.csv").
+@fast(dbtables0,"dbtables0.csv").
+@context(PREV,infinity):-
+  (((^)|(\.)+)(\s*\\n)*)\s*.
+@glue:-.
+@global_unique(MAIN,1):-
+   ()->{V0}()->{V3}()->{VRES0}
+   (([^\w\.]+(\w+)->{P0}[^\w\.]+(\w+)->{P1}[^\.]*\.)->{Grammar.ru{SENTENCE}}(*PRUNE))?=>{
+      xpathf(SENTENCE,'MVv1oi',$V0,'результат','true'),dbconsts1(V0),
+      xpathf(SENTENCE,'NXv0io','результат',$V3,'true'),dbtables0(V3,$VRES0)
+   }.
+ @auto:-MAIN:"//P0/text()" => "IVar",MAIN:"//VRES0/text()" => "Op",MAIN:"//P1/text()" => "OVar",MAIN:"//VRES0/text()"+MAIN:"//P0/text()"+MAIN:"//P1/text()" => "ID".
+ @goal:-xpath('MAIN','//P0/text()',[VIVarText0]),xpath('MAIN','//VRES0/text()',[VOpText0]),xpath('MAIN','//P1/text()',[VOVarText1]),xpath('MAIN','//VRES0/text()',[VIDText0]),xpath('MAIN','//P0/text()',[VIDText0]),xpath('MAIN','//P1/text()',[VIDText1]),atom_concat(VIDText0,VIDText0,OPSVPW),atom_concat(OPSVPW,VIDText1,OWLQQJ),assertz(simplemat(VIVarText0,VOpText0,VOVarText1,OWLQQJ)),!.
+ @done:-clear_db.
+
+@versions(Programmatical)
+ @context(ASSGN,infinity):-
+  (\s*(\w+)->{RESULT}\s*\=\s*([0-9+\-Ee.]+)->{INIT};\\n)->{LINE}.
+ @global_unique(PROCESS,1):-
+  \s*for\s*\(i\s*\=\s*0\;\s*i\s*\<\s*(\d+)->{N}\;\s*i\+\+\)\\n((\s*if\s*\((\w+)->{VECTOR}\[i\]\s*([<>])->{OPER}\s*(\w+)==>{ASSGN.RESULT}\)\\n\s*(\w+)==>{ASSGN.RESULT}\s*\=\s*(\w+)==>{VECTOR}\[i\];\\n)|(\s*(\w+)==>{ASSGN.RESULT}\s*\+\=\s*(\w+)->{VECTOR}\[i\];\\n)).
+@versions(Russian,RussianGrammar)
+ @nearest(db_calc,2,"db_calc.csv").
+ @nearest(db_op,2,"db_op.csv").
+ @nearest(db_result,2,"db_result.csv").
+ @nearest(db_var,2,"db_var.csv").
+ @global_unique(ACTION,infinity):-
+  (([А-Яа-я]+)?=>{db_calc($)}\s).
+ @global_unique(PROCESS,1):-
+  (()->{OPER}([А-Яа-я]+)?=>{db_op($,$OPER)}\s+вектора\s+(\w+)->{VECTOR}).
+ @global_unique(ASSGN,1):-
+  (([А-Яа-я]+)?=>{db_result($)}\s+в\s+([А-Яа-я]+)?=>{db_var($,1)}\s+(\w+)->{RESULT}\s*\.).
+@versions(Russian,RussianGrammar)
+ @auto:- PROCESS:"//OPER[text()!=\'\']/text()" => "Op", PROCESS:"//VECTOR/text()" => "IVar", ASSGN:"//RESULT/text()" => "OVar",
+         PROCESS:"//OPER[text()!=\'\']/text()" + PROCESS:"//VECTOR/text()" + ASSGN:"//RESULT/text()" => "ID".
+ handle:-xpath('PROCESS','//OPER[text()!='''']/text()',[OP]),
+  xpath('ASSGN','//RESULT/text()',[RText]),
+  xpath('PROCESS','//VECTOR/text()',[VText]),
+  simple_vector(_,VText,_),
+  global_id(GID),assertz(simple_act(GID,OP,VText,RText)),!.
+@versions(Programmatical)
+ handle:-xpath('PROCESS','//OPER[text()=''>'']',[_]),
+  xpath('ASSGN','//RESULT/text()',[RText]),
+  xpath('PROCESS','//VECTOR/text()',[VText]),
+  xpath('PROCESS','//N/text()',[NText]),
+  simple_scalar(_,RText),simple_vector(_,VText,NText),
+  global_id(GID),assertz(simple_act(GID,'Max',VText,RText)),!.
+ handle:-xpath('PROCESS','//OPER[text()=''<'']',[_]),
+  xpath('ASSGN','//RESULT/text()',[RText]),
+  xpath('PROCESS','//VECTOR/text()',[VText]),
+  xpath('PROCESS','//N/text()',[NText]),
+  simple_scalar(_,RText),simple_vector(_,VText,NText),
+  global_id(GID),assertz(simple_act(GID,'Min',VText,RText)),!.
+ handle:-
+  xpath('ASSGN','//RESULT/text()',[RText]),
+  xpath('PROCESS','//VECTOR/text()',[VText]),
+  xpath('PROCESS','//N/text()',[NText]),
+  simple_scalar(_,RText),simple_vector(_,VText,NText),
+  global_id(GID),assertz(simple_act(GID,'Avr',VText,RText)),!.
+@versions(Programmatical,Russian,RussianGrammar)
+ @goal:-
+  handle,!.
+ @done:-
+  clear_db.

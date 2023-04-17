@@ -7045,7 +7045,8 @@ string interpreter::open_file(const string & fname, const string & mode) {
 
 void interpreter::close_file(const string & obj) {
 	int fn = -1;
-	get_file(obj, fn).close();
+	std::basic_fstream<char> & ff = get_file(obj, fn);
+	if (ff.is_open()) ff.close();
 	files.erase(fn);
 }
 
