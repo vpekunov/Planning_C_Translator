@@ -1183,11 +1183,11 @@ Begin
                           {$IF DEFINED(LCL) OR DEFINED(VCL)}
                           Gen := RunExtCommandAsAdmin(
                              {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
-                             '_.php3 _.gen','_.gen',CRLF+CRLF,'');
+                             '_.php3 _.gen','_.gen',DBLLINE,'');
                           {$ELSE}
                           Gen := RunExtCommandAsAdmin(
                              {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
-                             '_.php3 _.gen','_.gen',CRLF+CRLF,'');
+                             '_.php3 _.gen','_.gen',DBLLINE,'');
                           {$ENDIF}
                           If Pos(errPHP,Gen) <> 0 Then
                              Begin

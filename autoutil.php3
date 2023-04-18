@@ -1,9 +1,9 @@
 <?php
 
-define(stResource,0);
-define(stInit,1);
-define(stCall,2);
-define(stDone,3);
+define('stResource',0);
+define('stInit',1);
+define('stCall',2);
+define('stDone',3);
 
 $Events     = array(stResource,stInit,stCall,stDone);
 $NumEvents  = 4;

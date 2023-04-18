@@ -3,9 +3,7 @@
 
 #include "meta.h"
 
-#scan(v1,v2,v3,v4,v5,vecTerminator,metaCleanup,metaIntroduce,metaStop)
-
-#preproc_passes(1,"_.c")
+#preproc_passes(1,"_.C")
 
 #scan(vecProgram,vecScalar,vecVector,vecMat,vecInput,vecOut,vecTest,vecTerminator,metaCleanup,metaIntroduce,metaStop)
 
@@ -49,7 +47,7 @@
    \#\(
    ()->{V0}
    (([^\w\.]+(\w+)->{P0}[^\.]*\.)->{Grammar.ru{SENTENCE}})?=>{
-      xpathf(SENTENCE,'MVv1oi',$V0,'скаляр','true'),(eq(V0,'Ввести');similar(V0,'Определить',2))
+      xpathf(SENTENCE,'MVv1oi',$V0,'скаляр','true'),(eq(V0,'ввести');eq(V0,'Ввести');similar(V0,'Определить',2))
    }(*PRUNE)
    \)\\n
   @end
@@ -59,7 +57,7 @@
   @begin
    \#\(
    (([^\w\.]+(\w+)->{P0}[^\w\.]+(\w+)->{P1}[^\.]*\.)->{Grammar.ru{SENTENCE}})?=>{
-      xpathf(SENTENCE,'MVv1ii','Введем','вектор','true'),
+      (xpathf(SENTENCE,'MVv1ii','Введем','вектор','true');xpathf(SENTENCE,'MVv1ii','введем','вектор','true')),
       xpathf(SENTENCE,'Mp1ii','вектор','из','true')
    }(*PRUNE)
    \)\\n
@@ -98,7 +96,8 @@
    \#\(
    ()->{V1}
    (([^\w\.]+(\w+)->{P0}[^\.]*\.)->{Grammar.ru{SENTENCE}})?=>{
-      xpathf(SENTENCE,'MVv1io','Вывести',$V1,'true'),(similar(V1,'вектор',2);similar(V1,'скаляр',2))
+      (xpathf(SENTENCE,'MVv1io','Вывести',$V1,'true');xpathf(SENTENCE,'MVv1io','вывести',$V1,'true')),
+      (similar(V1,'вектор',2);similar(V1,'скаляр',2))
    }(*PRUNE)
    \)\\n
   @end
@@ -108,7 +107,7 @@
   @begin
     \#\(
     (([^\x22\x27\.]+[\x22\x27]([^\x22\x27]+)->{P0}[\x22\x27][^\x22\x27\.]+[\x22\x27]([^\x22\x27]+)->{P1}[\x22\x27][^\.]*\.)->{Grammar.ru{SENTENCE}})?=>{
-      xpathf(SENTENCE,'MVIv1ii','Тест','дает','true')
+      (xpathf(SENTENCE,'MVIv1ii','Тест','дает','true');xpathf(SENTENCE,'MVIv1ii','тест','дает','true'))
     }(*PRUNE)
     \)\\n
   @end
@@ -150,7 +149,7 @@
    atom_concat('test', GID, ID),
 		add_object(ID,clsSimpleTest,[param('Input',OBJECT),param('Output',SUBJECT)], '').
 @goal:-
-  load_classes('Classes\\clsSimpleProgs','object','link'),
+  load_classes('./Classes/clsSimpleProgs','object','link'),
   init_xpathing('RussianGrammar'),
   !,
   (
@@ -160,7 +159,7 @@
   !,
   add_object('END',clsSimpleTerminator,[], ''),
   prepare_model_for_induct(A),
-  induct_xpathing(60, 6, A, '_.xml', t, f, f),
+  induct_xpathing(60, 4, A, '_.xml', t, f, f),
   import_model_after_induct('_.xml'),
   prepare_model_for_induct('__prepared.xml'),
   unload_classes.

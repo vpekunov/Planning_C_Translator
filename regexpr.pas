@@ -994,8 +994,8 @@ const
   // default for InvertCase property:
   RegExprInvertCaseFunction : TRegExprInvertCaseFunction = {$IFDEF FPC} nil {$ELSE} TRegExpr.InvertCaseFunction{$ENDIF};
 
-function EscapeString(Const S: String): String;
-function UnescapeString(Const S: String): String;
+function EscapeString(Const S: WideString): WideString;
+function UnescapeString(Const S: WideString): WideString;
 function EscapeText(Const S: String): String;
 
 function pEscapeString(Const S: String): String;
@@ -1207,26 +1207,61 @@ function StrScan (Str: PRegExprChar; Chr: WideChar): PRegExprChar;
 {===================== Global functions ======================}
 {=============================================================}
 
-Const Specials: Array[1..5] Of String = ('\', #$0D#$0A, #$0D, #$0A, #09);
-Const Escaped:  Array[1..5] Of String = ('\\', '\n', '\r', '\r', '\t');
+function MyWideStringReplace(const S, OldPattern, NewPattern: WideString; Flags: TReplaceFlags): WideString;
+var
+  Srch, OldP, RemS: WideString; // Srch and Oldp can contain uppercase versions of S,OldPattern
+  P: Integer;
+begin
+  Srch := S;
+  OldP := OldPattern;
+  if rfIgnoreCase in Flags then
+     Raise Exception.Create('Ignore case has not been realized');
+  RemS := S;
+  Result := '';
+  while (Length(Srch) <> 0) do
+  begin
+    P := Pos(OldP, Srch);
+    if P = 0 then
+    begin
+      Result := Result + RemS;
+      Srch := '';
+    end
+    else
+    begin
+      Result := Result + Copy(RemS, 1, P - 1) + NewPattern;
+      P := P + Length(OldP);
+      RemS := Copy(RemS, P, Length(RemS) - P + 1);
+      if not (rfReplaceAll in Flags) then
+      begin
+        Result := Result + RemS;
+        Srch := '';
+      end
+      else
+        Srch := Copy(Srch, P, Length(Srch) - P + 1);
+    end;
+  end;
+end;
 
-function EscapeString(const S: String): String;
+Const Specials: Array[1..5] Of WideString = ('\', #$0D#$0A, #$0D, #$0A, #09);
+Const Escaped:  Array[1..5] Of WideString = ('\\', '\n', '\r', '\r', '\t');
+
+function EscapeString(const S: WideString): WideString;
 
 var i: Integer;
 begin
    Result := S;
    For i := Low(Specials) To High(Specials) Do
-       Result := StringReplace(Result, Specials[i], Escaped[i], [rfReplaceAll])
+       Result := MyWideStringReplace(Result, Specials[i], Escaped[i], [rfReplaceAll])
 end;
 
-function UnescapeString(const S: String): String;
+function UnescapeString(const S: WideString): WideString;
 
 var i: Integer;
 begin
-   Result := StringReplace(S, Escaped[Low(Escaped)], #0, [rfReplaceAll]);
+   Result := MyWideStringReplace(S, Escaped[Low(Escaped)], #0, [rfReplaceAll]);
    For i := Low(Specials) + 1 To High(Specials) Do
-       Result := StringReplace(Result, Escaped[i], Specials[i], [rfReplaceAll]);
-   Result := StringReplace(Result, #0, '\', [rfReplaceAll])
+       Result := MyWideStringReplace(Result, Escaped[i], Specials[i], [rfReplaceAll]);
+   Result := MyWideStringReplace(Result, #0, '\', [rfReplaceAll])
 end;
 
 function EscapeText(const S: String): String;
@@ -1889,7 +1924,7 @@ begin
        (Descriptor[2].Kind = fpBound) Then
        Try
           Threshold := StrToInt(Descriptor[2].Value);
-          Exit(LevenshteinW(Descriptor[0].Value, Descriptor[1].Value) <= Threshold);
+          Exit(LevenshteinW(UTF8Decode(Descriptor[0].Value), UTF8Decode(Descriptor[1].Value)) <= Threshold);
        Except
           Exit(False)
        End;
@@ -1965,7 +2000,7 @@ function TFastXPathF.Unify(R: TRegExpr; ENV: TXPathEnvironment;
 Var parser: TDOMParser;
     src: TXMLInputSource;
     dom: TXMLDocument;
-    expr: String;
+    expr: WideString;
     LST: TDOMNodeList;
     S, S1, Rel: String;
     F, G: Integer;
@@ -1980,7 +2015,7 @@ begin
           parser.Options.PreserveWhitespace := True;
           parser.Options.Namespaces := True;
 
-          src := TXMLInputSource.Create('<root>' + {!!!}UTF8Encode(Descriptor[0].Value) + '</root>');
+          src := TXMLInputSource.Create('<root>' + {***}{UTF8Encode}(Descriptor[0].Value) + '</root>');
           Result := False;
           try
              parser.Parse(src, dom);
@@ -1988,25 +2023,25 @@ begin
                 expr := Descriptor[1].Value + LeftBracket;
                 For F := 2 To Length(Descriptor) - 2 Do
                     If Descriptor[F].Kind = fpBound Then
-                       AppendStr(expr, '"'+ WideString(Descriptor[F].Value) + '",')
+                       expr := expr + '"'+ {***}{WideString}UTF8Decode(Descriptor[F].Value) + '",'
                     Else
-                       AppendStr(expr, '$RETURN' + IntToStr(F) + ',');
+                       expr := expr + '$RETURN' + IntToStr(F) + ',';
                 If expr[Length(expr)] = Comma Then
                    expr[Length(expr)] := RightBracket
                 Else
-                   AppendStr(expr, RightBracket);
+                   expr := expr + RightBracket;
                 res := EvaluateXPathExpression(expr, dom.DocumentElement, ENV.NodeNameTester, [Nil, Nil, dom.DocumentElement], Nil, Nil, ENV);
                 For F := 2 To Length(Descriptor) - 2 Do
                     If Descriptor[F].Kind <> fpBound Then
                        begin
-                         Descriptor[F].Value := {UTF8Decode}(ENV.VariablesByName['RETURN' + IntToStr(F)].AsText);
+                         Descriptor[F].Value := {***}UTF8Encode(ENV.VariablesByName['RETURN' + IntToStr(F)].AsText);
                          ENV.RemoveVariable('RETURN' + IntToStr(F))
                        end;
                 If Descriptor[Length(Descriptor) - 1].Kind = fpBound Then
                    Result := res.AsText = Descriptor[Length(Descriptor) - 1].Value
                 Else
                    begin
-                     Descriptor[Length(Descriptor) - 1].Value := {UTF8Decode}(res.AsText);
+                     Descriptor[Length(Descriptor) - 1].Value := {***}{UTF8Decode}UTF8Encode(res.AsText);
                      Result := True
                    end;
                 res.Free;
@@ -4612,6 +4647,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
   pcall: TFastCall;
   pmaincalls: TFastCalls;
   pcalls: TList;
+  V: TFastCalls;
   dollarsign: Boolean;
   L: TAnalyser;
   i, j, refno : integer;
@@ -4786,8 +4822,9 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                      L.MakeError('Only ?=> predicates can contain groups (p1,p2,p3...) : ' + RegExprString(VarNames[parno]));
                                      Break
                                    End;
-                                TFastCalls(pcalls[pcalls.Count - 1]).Add(TFastCalls.Create);
-                                pcalls.Add(pcalls[pcalls.Count - 1]);
+                                V := TFastCalls.Create;
+                                TFastCalls(pcalls[pcalls.Count - 1]).Add(V);
+                                pcalls.Add(V);
                                 Continue
                               end
                            Else If L.IsNext(RightBracket) Then
@@ -4903,7 +4940,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                                   if Length(ST) >= 2 Then
                                                      If ((ST[1] = '''') And (ST[Length(ST)] = '''')) Or ((ST[1] = '"') And (ST[Length(ST)] = '"')) Then
                                                         ST := Copy(ST, 2, Length(ST)-2);
-                                                  pcall.Descriptor[High(pcall.Descriptor)].Value := ST;
+                                                  pcall.Descriptor[High(pcall.Descriptor)].Value := UTF8Encode(ST); {***}
                                                   pcall.References[High(pcall.References)] := -1
                                                 end
                                            end

@@ -10,6 +10,8 @@ Unit Lexique;
 
 Interface
 
+{$CODEPAGE UTF8}
+
 Uses SysUtils, {$IFNDEF FPC} Graphics, Dialogs, {$ENDIF} Classes;
 
 Const Space      = ' ';
@@ -97,7 +99,7 @@ Type TermSet    = Set Of Char;
                  Function    GetIdent(Const Up: Boolean):String;
                  Function    GetBefore(DelSpc:Boolean;Term:TermSet):String;
                  Function    GetListItem(Term:TermSet):String;
-                 Function    GetBalancedListItem(ExcludeLast:Boolean; Terms: TermSet; Const Src: LineSource = Nil):String;
+                 Function    GetBalancedListItem(ExcludeLast:Boolean; Terms: TermSet; Const Src: LineSource = Nil):WideString;
                  Function    GetString(TermL,TermR:Char):String;
                  {$IFNDEF FPC}
                  Function    GetColor(Var Clr:LongInt):Boolean;
@@ -122,25 +124,13 @@ Function    Implode(S:TStrings; Const Delimiter:String):String;
 
 Implementation
 
-Function UpRuss(S:Char):Char;
-
-Const Rus :String[33] ='ÀÁÂÃÄÅ¨ÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÛÜİŞß';
-      Rus1:String[33] ='àáâãäå¸æçèéêëìíîïğñòóôõö÷øùúûüışÿ';
-
-Var K:Byte;
-Begin
-     K:=Pos(S,Rus1);
-     If K=0 Then UpRuss:=S
-     Else UpRuss:=Rus[K]
-End;
-
 Function UpStr(Const S:String):String;
 
 Var F:Integer;
 begin
      SetLength(Result,Length(S));
      For F:=1 To Length(S) Do
-         Result[F]:=UpRuss(UpCase(S[F]))
+         Result[F]:=UpCase(S[F])
 end;
 
 Procedure DeleteLeadingSymbols(Var S:WideString; Const Spaces:TermSet);
@@ -365,7 +355,7 @@ Begin
          If Flag Then
             Begin
               If Up Then
-                 Result[Count]:=UpRuss(UpCase(T));
+                 Result[Count]:=UpCase(T);
               Inc(Count)
             End
        End;
@@ -465,7 +455,7 @@ Begin
        Begin
          Result:=IdentToColor(ID,Clr);
          If Not Result Then
-            MakeError('Íåêîğğåêòíûé èäåíòèôèêàòîğ öâåòà "'+ID+'"')
+            MakeError('ĞĞµĞºĞ¾Ñ€Ñ€ĞµĞºÑ‚Ğ½Ñ‹Ğ¹ Ğ¸Ğ´ĞµĞ½Ñ‚Ğ¸Ñ„Ğ¸ĞºĞ°Ñ‚Ğ¾Ñ€ Ñ†Ğ²ĞµÑ‚Ğ° "'+ID+'"')
        End
 End;
 {$ENDIF}
@@ -549,7 +539,7 @@ begin
         end
 end;
 
-function TAnalyser.GetBalancedListItem(ExcludeLast:Boolean; Terms: TermSet; Const Src: LineSource = Nil): String;
+function TAnalyser.GetBalancedListItem(ExcludeLast:Boolean; Terms: TermSet; Const Src: LineSource = Nil): WideString;
 
 Const qtNone   = 0;
       qtSingle = 1;
@@ -570,7 +560,7 @@ End;
 
 Var _Quote:Byte;
     NN: Integer;
-    C:Char;
+    C:WideChar;
 Begin
      Result:=True;
      _Quote:=qtNone;
@@ -629,7 +619,7 @@ Begin
 End;
 
 Var Count:Integer;
-    S1: String;
+    S1: WideString;
     F: Integer;
 Begin
      DelSpaces;

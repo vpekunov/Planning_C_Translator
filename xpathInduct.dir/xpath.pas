@@ -4085,7 +4085,7 @@ Var F: Integer;
     S: String;
 Begin
    EnterCriticalSection(CS);
-   S := Scanner.ExpressionString;
+   S := UTF8Encode(WideString(Scanner.ExpressionString));
    F := Cache.IndexOf(S);
    Created := F < 0;
    If Not Created Then

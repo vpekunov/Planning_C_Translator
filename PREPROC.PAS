@@ -104,7 +104,7 @@ begin
    Params := ModParams;
 
    L := TStringList.Create;
-   L.Text := Body;
+   L.Text := UTF8Encode(Body);
 
    Context1 := '';
    Needle := '';
@@ -144,7 +144,10 @@ begin
             Inc(F)
           end;
       end;
-   L.Free
+   L.Free;
+   Context1 := UTF8Decode(Context1);
+   Needle := UTF8Decode(Needle);
+   Context2 := UTF8Decode(Context2);
 end;
 
 function TPattern.GetReplacement(ENV: TXPathEnvironment; const S: RawByteString): WideString;
@@ -524,18 +527,16 @@ begin
                         End
                      Else
                         Begin
-                          AssignFile(FF, S);
                           FL := TStringList.Create;
                           Try
-                             Reset(FF);
+                             FL.LoadFromFile(S);
                              CommentFlag := False;
-                             While Not Eof(FF) Do
+                             For K := 0 To FL.Count-1 Do
                                Begin
-                                 ReadLn(FF, FS);
+                                 FS := UTF8Decode(FL.Strings[K]);
                                  StripComments(FS, CommentFlag);
-                                 FL.Add(UTF8Decode(FS))
-                               End;
-                             CloseFile(FF)
+                                 FL.Strings[K] := UTF8Encode(FS)
+                               End
                           Except
                              WriteLn('Error: can''t open file "'+S+'"',TLine(Lines.Objects[LCounter-1]).GetDescription);
                              Halt(-1);

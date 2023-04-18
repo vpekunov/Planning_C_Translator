@@ -16,8 +16,10 @@ Const CR = #$0D;
 
 {$IF DEFINED(UNIX) OR DEFINED(LINUX)}
 Const SuperSlash = '/';
+Const DBLLINE = LF+LF;
 {$ELSE}
 Const SuperSlash = '\';
+Const DBLLINE = CRLF+CRLF;
 {$ENDIF}
 
 Const cnidAny    = '$*any';
