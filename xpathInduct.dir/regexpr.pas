@@ -2105,7 +2105,7 @@ begin
           parser.Options.PreserveWhitespace := True;
           parser.Options.Namespaces := True;
 
-          src := TXMLInputSource.Create('<root>' + {!!!}UTF8Encode(Descriptor[0].Value) + '</root>');
+          src := TXMLInputSource.Create('<root>' + {!!!}{UTF8Encode}(Descriptor[0].Value) + '</root>');
           Result := False;
           try
              parser.Parse(src, dom);
@@ -2115,7 +2115,7 @@ begin
                    Result := res.AsText = Descriptor[2].Value
                 Else
                    begin
-                     Descriptor[2].Value := {UTF8Decode}(res.AsText);
+                     Descriptor[2].Value := {UTF8Decode}UTF8Encode(res.AsText);
                      Result := True
                    end;
                 res.Free;

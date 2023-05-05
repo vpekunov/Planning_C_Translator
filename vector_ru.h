@@ -159,7 +159,7 @@
   !,
   add_object('END',clsSimpleTerminator,[], ''),
   prepare_model_for_induct(A),
-  induct_xpathing(60, 4, A, '_.xml', t, f, f),
+  induct_xpathing(60, 6, A, '_.xml', t, f, f),
   import_model_after_induct('_.xml'),
   prepare_model_for_induct('__prepared.xml'),
   unload_classes.

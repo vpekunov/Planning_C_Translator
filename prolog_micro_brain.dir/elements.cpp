@@ -758,8 +758,8 @@ TLink * TSystem::AddLink(TContact * _From, TContact * _To, bool Inf) {
 		_To->Links.push_back(result);
 		return result;
 	}
- else
-	throw logic_error("AddLink: One of the contacts does not exist!");
+	else
+		return NULL;
 }
 
 bool TSystem::LoadFromXML(wstring & Lang, const wstring & inFileName) {
@@ -1097,7 +1097,7 @@ bool TSystem::Cycled(vector<TElement *> & ObjList, TElement * Obj, TElement * Li
 }
 
 void TSystem::AnalyzeLinkStatus(TLink * L) {
-	if (!L->Inform) {
+	if (L && !L->Inform) {
 		vector<TElement *> C;
 		L->Inform = Cycled(C, L->_To->Owner, L->_From->Owner);
 	}
@@ -1198,7 +1198,7 @@ void SaveToXMLF(void * Sys, char * FName) {
 }
 
 void _FreeF(void * Obj) {
-	delete (TElement *)Obj;
+	delete (TObject *)Obj;
 }
 
 bool NodeNameTester(char * NodeName, char * NodeTestString) {

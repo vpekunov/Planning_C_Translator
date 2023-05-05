@@ -6,6 +6,8 @@ unit XPathing;
 
 {$CODEPAGE UTF8}
 
+{$OPTIMIZATION OFF}
+
 interface
 
 uses
@@ -69,8 +71,6 @@ implementation
 Uses {$IF DEFINED(UNIX) OR DEFINED(LINUX)}cthreads{$ELSE}Windows{$ENDIF}, Math, Lexique, RegExpr,
      DateUtils, uSemaphore, AutoConsts
      {$IF DEFINED(VCL) OR DEFINED(LCL)}, Forms{$ENDIF};
-
-{$OPTIMIZATION OFF}
 
 Var Interval: Cardinal;
     DeduceLogFile: String;
@@ -1019,7 +1019,7 @@ Begin
    res := EvaluateXPathExpression('/OBJS/*', dom.DocumentElement, Nil, [], Nil, Nil, ENV);
    ENV.commitUndo(0);
    If res is TXPathNodeSetVariable Then
-      Begin
+      Try
         Result := CreateSys();
         objs := res.AsNodeSet;
         X := 50;
@@ -1036,6 +1036,11 @@ Begin
                            Exit(Nil)
                          End;
                       el := AddElement(Result, PChar(String(obj.TagName)), PChar(ID), Integer(flShowClass + flShowName));
+                      If Not Assigned(el) Then
+                         Begin
+                           _Free(Result);
+                           Exit(Nil)
+                         End;
                       For G := 0 To obj.Attributes.Length - 1 Do
                           SetParameterIfExists(el, PChar(String(obj.Attributes[G].NodeName)), PChar(String(obj.Attributes[G].NodeValue)));
                       XPathing.Move(el, X, 50);
@@ -1070,6 +1075,9 @@ Begin
                      Free
                    End
                End
+      Except
+         _Free(Result);
+         Result := Nil
       End
 end;
 
@@ -1124,8 +1132,8 @@ Var res: TXPathVariable;
     S: String;
     F, G, K: Integer;
 Begin
-   if semaphored then
-      NumThrSemaphore.Wait;
+//   if semaphored then
+//      NumThrSemaphore.Wait;
 
    SetLength(tr, Length(tr) + 1);
    tr[High(tr)] := parent;
@@ -1134,7 +1142,7 @@ Begin
      Result := ExtractSystemFromDOM(dom, res, ENV);
      res.Free;
 
-     If Assigned(T) Then T.Synchronize(T.Process);
+     If Assigned(T) Then {T.Synchronize(}T.Process{)};
      If Assigned(Result) Then
         Begin
           CRes := TResultType(CheckSys(Result));
@@ -1168,7 +1176,7 @@ Begin
           If CRes = rsOk Then
              Begin
                Prog:='';
-               If Assigned(T) Then T.Synchronize(T.Process);
+               If Assigned(T) Then {T.Synchronize(}T.Process{)};
                EnterCriticalSection(VariantsCS);
                Buffer := GetMem(8*65536*SizeOf(WideChar));
                GenerateCode(Result, Buffer);
@@ -1194,7 +1202,7 @@ Begin
                                _Free(Result);
                                Result := Nil;
                                LeaveCriticalSection(VariantsCS);
-                               If Assigned(T) Then T.Synchronize(T.Process);
+                               If Assigned(T) Then {T.Synchronize(}T.Process{)};
                                Exit
                              End;
                           StartLanguage := '';
@@ -1211,7 +1219,7 @@ Begin
                                _Free(Result);
                                Result := Nil;
                                LeaveCriticalSection(VariantsCS);
-                               If Assigned(T) Then T.Synchronize(T.Process);
+                               If Assigned(T) Then {T.Synchronize(}T.Process{)};
                                Exit
                              End;
                           CreateStrFile('_.'+StartLanguage,Gen);
@@ -1224,7 +1232,7 @@ Begin
                                       _Free(Result);
                                       Result := Nil;
                                       LeaveCriticalSection(VariantsCS);
-                                      If Assigned(T) Then T.Synchronize(T.Process);
+                                      If Assigned(T) Then {T.Synchronize(}T.Process{)};
                                       Exit
                                     End
                        End;
@@ -1234,7 +1242,7 @@ Begin
                          Result := Nil
                        End;
                     LeaveCriticalSection(VariantsCS);
-                    If Assigned(T) Then T.Synchronize(T.Process);
+                    If Assigned(T) Then {T.Synchronize(}T.Process{)};
                     SetLength(outtr, Length(tr));
                     If Length(tr) > 0 Then
                        System.Move(tr[0], outtr[0], Length(tr)*SizeOf(Integer));
@@ -1270,7 +1278,7 @@ Begin
                   end;
                LeaveCriticalSection(VariantsCS);
 
-               If Assigned(T) Then T.Synchronize(T.Process);
+               If Assigned(T) Then {T.Synchronize(}T.Process{)};
                TotalP := 0.0;
                ones := 0;
                SetLength(NonStricts, 0);
@@ -1307,7 +1315,7 @@ Begin
                Result := Nil;
                If AllOk Then // No non-strict weak violations but the strong violations present
                   Exit;
-               If Assigned(T) Then T.Synchronize(T.Process);
+               If Assigned(T) Then {T.Synchronize(}T.Process{)};
                EnterCriticalSection(VariantsCS);
                If Assigned(MetaResult) Then
                   begin
@@ -1370,7 +1378,7 @@ Begin
                               End
                         End
                    End;
-                If Assigned(T) Then T.Synchronize(T.Process);
+                If Assigned(T) Then {T.Synchronize(}T.Process{)};
                 EnterCriticalSection(VariantsCS);
                 If Assigned(MetaResult) Then
                    begin
@@ -1382,14 +1390,14 @@ Begin
                 SetLength(started, Length(vars));
                 If Length(vars) > 0 Then
                    FillChar(started[0], Length(vars)*SizeOf(Boolean), 0);
-                For F := Low(vars) To High(vars) Do
+                For F := 0 To Length(vars)-1 Do
                     Begin
                       started[F] := NumThrSemaphore.AttemptWait;
                       if started[F] Then
                          begin
                            threads[F] := TDeducer.Create(OnlyInduceModel, ENV, vars[F], true, nums[F], tr, _in_stage+1, _in_tr);
                            threads[F].Resume;
-                           NumThrSemaphore.Post;
+                           // NumThrSemaphore.Post;
                          end
                       else
                          begin
@@ -1399,7 +1407,7 @@ Begin
                            Result := Deduce(OnlyInduceModel, ENV, vars[F], false, T, nums[F], ttrs, outtr, _in_stage+1, _in_tr);
                            FreeAndNil(vars[F]);
 
-                           If Assigned(T) Then T.Synchronize(T.Process);
+                           If Assigned(T) Then {T.Synchronize(}T.Process{)};
                            EnterCriticalSection(VariantsCS);
                            If Assigned(MetaResult) Or Assigned(Result) Then
                               Begin
@@ -1423,7 +1431,7 @@ Begin
                            LeaveCriticalSection(VariantsCS);
                          end
                     End;
-                For F := Low(vars) To High(vars) Do
+                For F := 0 To Length(vars)-1 Do
                   If started[F] then
                     Begin
                       threads[F].WaitFor;
@@ -1447,8 +1455,8 @@ Begin
                                    Result := Nil
                                  End;
                            LeaveCriticalSection(VariantsCS);
-                           If Assigned(T) Then T.Synchronize(T.Process);
                          End;
+                      If Assigned(T) Then {T.Synchronize(}T.Process{)};
                       FreeAndNil(threads[F]);
                     End
                   Else If Assigned(vars[F]) Then
@@ -1468,7 +1476,10 @@ constructor TDeducer.Create(_OnlyInduceModel: Boolean; _ENV: TXPathEnvironment; 
   _in_stage: Integer; Const _in_tr: TTrace);
 begin
    Inherited Create(True);
-   InterLockedIncrement(NActiveThreads);
+   FreeOnTErminate := False;
+   EnterCriticalSection(VariantsCS);
+   Inc(NActiveThreads);
+   LeaveCriticalSection(VariantsCS);
    dom := _dom;
 
    semaphored := _semaphored;
@@ -1488,7 +1499,9 @@ end;
 destructor TDeducer.Destroy;
 begin
    ENV.Free;
-   InterLockedDecrement(NActiveThreads);
+   EnterCriticalSection(VariantsCS);
+   Dec(NActiveThreads);
+   LeaveCriticalSection(VariantsCS);
    inherited Destroy;
 end;
 
@@ -1501,14 +1514,14 @@ procedure TDeducer.Process;
 begin
   If Interval > 0 Then
      begin
+       EnterCriticalSection(VariantsCS);
        If MilliSecondsBetween(XPathing.Start, Now) >= Interval Then
           begin
-            EnterCriticalSection(VariantsCS);
             If Not Assigned(MetaResult) Then
                MetaResult := Pointer($0FFFFFFFF);
-            LeaveCriticalSection(VariantsCS);
             XPathing.Start := Now
-          end
+          end;
+       LeaveCriticalSection(VariantsCS)
      end
 end;
 
@@ -2265,11 +2278,11 @@ begin
 
           Repeat
              EnterCriticalSection(VariantsCS);
-             If InterLockedDecrement(NActiveThreads) < 0 Then Break;
-             InterLockedIncrement(NActiveThreads);
+             If NActiveThreads = 0 Then Break;
              LeaveCriticalSection(VariantsCS);
              Sleep(100)
           Until False;
+          LeaveCriticalSection(VariantsCS);
 
           If MetaResult = Pointer($0FFFFFFFF) Then
              begin
