@@ -14,6 +14,21 @@
 //       автоматический для простого конвейера или по plan_topology_quit() для топологии.
 //   p - параллельный ли режим.
 
+{ 01.07.2023 Release V0.95beta1 (Planning C)                                   }
+{ - Lot of bugs fixed                                                          }
+{ + Теперь все примеры в Linux компилируются инсталлятором автоматически       }
+{ + Разработана концепция автоматической генерации конечной программы или ее   }
+{   фрагментов по описанию (содержащемуся в программе) на русском или,         }
+{   потенциально, на любом искусственном или естественном языке, или           }
+{   непосредственно по графовой модели задачи, отображенной в набор специальных}
+{   фактов Prolog-подсистемы. Концепция реализована на базе применения         }
+{   порождающих классов системы АМАЛЬГАМА.                                     }
+{   Пример построен в предметной области "элементы работы с векторами".        }
+{ * Вспомогательный транслятор Prolog: вместо GNU Prolog теперь используется   }
+{   Prolog Micro Brain собственного сочинения (работает с подмножеством        }
+{   предикатов, характерных для GNU Prolog), это должно устранить возможные    }
+{   проблемы с лицензированием в будущем.                                      }
+
 { 10.03.2023 Release V0.945beta2 (Planning C)                                  }
 { - Some bugs fixed and some added                                             }
 
@@ -1390,9 +1405,9 @@ begin
      SetMultiByteRTLFileSystemCodePage(CP_UTF8);
      If ParamCount=0 Then
         Begin
-          WriteLn('Planning C (R) Translator V0.945beta2');
+          WriteLn('Planning C (R) Translator V0.95beta1');
           WriteLn('free for any purposes. Original author: V.V.Pekunov, 2008-2017, 2019-2023');
-          WriteLn('Usage: Reenterable.exe [-nosourcelines] [-extensionsonly] [-followdefines] [-Dmacro[=val]] <inputfile.cpp> [outputfile]');
+          WriteLn('Usage: Reenterable [-nosourcelines] [-extensionsonly] [-followdefines] [-Dmacro[=val]] <inputfile.cpp> [outputfile]');
           WriteLn('  -nosourcelines     Removes references to source line numbers, therefore');
           WriteLn('                     C++ compiler will use the line numbers from the generated file,');
           WriteLn('                     not from the source file. Useful in Planning C Translator debugging!');

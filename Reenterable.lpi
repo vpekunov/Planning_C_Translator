@@ -38,9 +38,10 @@
       <Unit0>
         <Filename Value="Reenterable.lpr"/>
         <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="1491"/>
-        <CursorPos X="49" Y="1505"/>
+        <TopLine Value="12"/>
+        <CursorPos X="23" Y="23"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit0>
@@ -50,6 +51,7 @@
         <UnitName Value="Lexique"/>
         <EditorIndex Value="12"/>
         <WindowIndex Value="1"/>
+        <CursorPos X="33" Y="135"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit1>
@@ -89,7 +91,6 @@
         <UnitName Value="Common"/>
         <EditorIndex Value="6"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="8"/>
         <CursorPos X="43" Y="552"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
@@ -177,11 +178,10 @@
       <Unit14>
         <Filename Value="xpath.pas"/>
         <UnitName Value="XPath"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="7"/>
         <WindowIndex Value="1"/>
         <TopLine Value="4077"/>
-        <CursorPos X="57" Y="4088"/>
+        <CursorPos X="41" Y="4083"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit14>
@@ -231,118 +231,118 @@
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
         <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="638" Column="13" TopLine="626"/>
+        <Caret Line="173" Column="17" TopLine="155"/>
       </Position1>
       <Position2>
         <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="542" Column="118" TopLine="532"/>
+        <Caret Line="174" Column="18" TopLine="157"/>
       </Position2>
       <Position3>
-        <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="11" Column="26" TopLine="2"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="4" Column="52"/>
       </Position3>
       <Position4>
-        <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="121" Column="17" TopLine="103"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2018" Column="67" TopLine="2001"/>
       </Position4>
       <Position5>
-        <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="173" Column="17" TopLine="155"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2108" Column="67" TopLine="2091"/>
       </Position5>
       <Position6>
-        <Filename Value="LEXIQUE.PAS"/>
-        <Caret Line="174" Column="18" TopLine="157"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2944" Column="16" TopLine="2923"/>
       </Position6>
       <Position7>
         <Filename Value="regexpr.pas"/>
-        <Caret Line="4" Column="52"/>
+        <Caret Line="3557" Column="36" TopLine="3540"/>
       </Position7>
       <Position8>
         <Filename Value="regexpr.pas"/>
-        <Caret Line="2018" Column="67" TopLine="2001"/>
+        <Caret Line="3696" Column="66" TopLine="3679"/>
       </Position8>
       <Position9>
         <Filename Value="regexpr.pas"/>
-        <Caret Line="2108" Column="67" TopLine="2091"/>
+        <Caret Line="3775" Column="67" TopLine="3759"/>
       </Position9>
       <Position10>
         <Filename Value="regexpr.pas"/>
-        <Caret Line="2944" Column="16" TopLine="2923"/>
       </Position10>
       <Position11>
         <Filename Value="regexpr.pas"/>
-        <Caret Line="3557" Column="36" TopLine="3540"/>
+        <Caret Line="1270" Column="59" TopLine="1252"/>
       </Position11>
       <Position12>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="3696" Column="66" TopLine="3679"/>
+        <Filename Value="xpath.pas"/>
       </Position12>
       <Position13>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="3775" Column="67" TopLine="3759"/>
+        <Filename Value="xpath.pas"/>
+        <Caret Line="64" Column="92" TopLine="46"/>
       </Position13>
       <Position14>
-        <Filename Value="regexpr.pas"/>
+        <Filename Value="xpath.pas"/>
+        <Caret Line="104" TopLine="83"/>
       </Position14>
       <Position15>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="1270" Column="59" TopLine="1252"/>
+        <Filename Value="xpath.pas"/>
+        <Caret Line="237" Column="18" TopLine="225"/>
       </Position15>
       <Position16>
         <Filename Value="xpath.pas"/>
+        <Caret Line="1275" Column="14" TopLine="1253"/>
       </Position16>
       <Position17>
         <Filename Value="xpath.pas"/>
-        <Caret Line="64" Column="92" TopLine="46"/>
       </Position17>
       <Position18>
         <Filename Value="xpath.pas"/>
-        <Caret Line="104" TopLine="83"/>
       </Position18>
       <Position19>
         <Filename Value="xpath.pas"/>
-        <Caret Line="237" Column="18" TopLine="225"/>
+        <Caret Line="1108" Column="21" TopLine="1103"/>
       </Position19>
       <Position20>
-        <Filename Value="xpath.pas"/>
-        <Caret Line="1275" Column="14" TopLine="1253"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="1920" Column="6" TopLine="1914"/>
       </Position20>
       <Position21>
-        <Filename Value="xpath.pas"/>
+        <Filename Value="regexpr.pas"/>
       </Position21>
       <Position22>
-        <Filename Value="xpath.pas"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2025" Column="68" TopLine="2016"/>
       </Position22>
       <Position23>
         <Filename Value="xpath.pas"/>
-        <Caret Line="1108" Column="21" TopLine="1103"/>
+        <Caret Line="26" Column="26" TopLine="16"/>
       </Position23>
       <Position24>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="1920" Column="6" TopLine="1914"/>
+        <Filename Value="xpath.pas"/>
+        <Caret Line="4087" Column="9" TopLine="4077"/>
       </Position24>
       <Position25>
         <Filename Value="regexpr.pas"/>
+        <Caret Line="143" TopLine="122"/>
       </Position25>
       <Position26>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="2025" Column="68" TopLine="2016"/>
-      </Position26>
-      <Position27>
-        <Filename Value="xpath.pas"/>
-        <Caret Line="26" Column="26" TopLine="16"/>
-      </Position27>
-      <Position28>
-        <Filename Value="xpath.pas"/>
-        <Caret Line="4087" Column="9" TopLine="4077"/>
-      </Position28>
-      <Position29>
-        <Filename Value="regexpr.pas"/>
-        <Caret Line="143" TopLine="122"/>
-      </Position29>
-      <Position30>
         <Filename Value="xpath.pas"/>
         <Caret Line="26" Column="16" TopLine="13"/>
+      </Position26>
+      <Position27>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="18" Column="32" TopLine="15"/>
+      </Position27>
+      <Position28>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="32" Column="28" TopLine="15"/>
+      </Position28>
+      <Position29>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="35" Column="28" TopLine="17"/>
+      </Position29>
+      <Position30>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="1406" Column="11" TopLine="1406"/>
       </Position30>
     </JumpHistory>
   </ProjectOptions>
