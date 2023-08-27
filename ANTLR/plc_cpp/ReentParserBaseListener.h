@@ -77,6 +77,18 @@ public:
   virtual void enterLambdaDeclarator(ReentParser::LambdaDeclaratorContext * /*ctx*/) override { }
   virtual void exitLambdaDeclarator(ReentParser::LambdaDeclaratorContext * /*ctx*/) override { }
 
+  virtual void enterObjCilkSpawnArg(ReentParser::ObjCilkSpawnArgContext * /*ctx*/) override { }
+  virtual void exitObjCilkSpawnArg(ReentParser::ObjCilkSpawnArgContext * /*ctx*/) override { }
+
+  virtual void enterObjCilkSpawnParams(ReentParser::ObjCilkSpawnParamsContext * /*ctx*/) override { }
+  virtual void exitObjCilkSpawnParams(ReentParser::ObjCilkSpawnParamsContext * /*ctx*/) override { }
+
+  virtual void enterObjCilkDesignator(ReentParser::ObjCilkDesignatorContext * /*ctx*/) override { }
+  virtual void exitObjCilkDesignator(ReentParser::ObjCilkDesignatorContext * /*ctx*/) override { }
+
+  virtual void enterObjCilk(ReentParser::ObjCilkContext * /*ctx*/) override { }
+  virtual void exitObjCilk(ReentParser::ObjCilkContext * /*ctx*/) override { }
+
   virtual void enterPostfixExpression(ReentParser::PostfixExpressionContext * /*ctx*/) override { }
   virtual void exitPostfixExpression(ReentParser::PostfixExpressionContext * /*ctx*/) override { }
 

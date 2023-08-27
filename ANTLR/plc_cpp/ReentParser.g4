@@ -127,6 +127,21 @@ lambdaDeclarator:
 	LeftParen parameterDeclarationClause? RightParen Mutable? exceptionSpecification?
 		attributeSpecifierSeq? trailingReturnType?;
 
+objCilkSpawnArg:
+	Assign idExpression
+	| assignmentExpression;
+
+objCilkSpawnParams:
+	LeftParen assignmentExpression Comma assignmentExpression RightParen;
+
+objCilkDesignator:
+	primaryExpression
+	| objCilkDesignator LeftBracket (expression | bracedInitList) RightBracket;
+
+objCilk:
+	objCilkDesignator
+	(Dot | Arrow);
+
 postfixExpression:
 	primaryExpression
 	| postfixExpression LeftBracket (expression | bracedInitList) RightBracket
@@ -261,7 +276,10 @@ conditionalExpression:
 	)?;
 
 assignmentExpression:
-	conditionalExpression
+	objCilk*? Cilk_spawn objCilkSpawnParams?
+		objCilk*? idExpression
+		LeftParen (objCilkSpawnArg (Comma objCilkSpawnArg)*)? RightParen
+	| conditionalExpression
 	| logicalOrExpression assignmentOperator initializerClause
 	| throwExpression;
 
@@ -316,7 +334,8 @@ labeledStatement:
 	) Colon statement;
 
 cilk_sync:
-	(Cilk_sync | Cilk_sync_) Semi;
+	objCilk*? Cilk_sync (LeftParen assignmentExpression? RightParen)? Semi
+	| Cilk_sync_ Semi;
 
 fill_into_plan:
 	Star ident=Identifier
