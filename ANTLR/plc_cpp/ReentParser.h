@@ -73,98 +73,96 @@ public:
     RuleUnqualifiedId = 6, RuleQualifiedId = 7, RuleNestedNameSpecifier = 8, 
     RuleLambdaExpression = 9, RuleLambdaIntroducer = 10, RuleLambdaCapture = 11, 
     RuleCaptureDefault = 12, RuleCaptureList = 13, RuleCapture = 14, RuleSimpleCapture = 15, 
-    RuleInitcapture = 16, RuleLambdaDeclarator = 17, RuleObjCilkSpawnArg = 18, 
-    RuleObjCilkSpawnParams = 19, RuleObjCilkDesignator = 20, RuleObjCilk = 21, 
-    RulePostfixExpression = 22, RuleTypeIdOfTheTypeId = 23, RuleExpressionList = 24, 
-    RulePseudoDestructorName = 25, RuleUnaryExpression = 26, RuleUnaryOperator = 27, 
-    RuleNewExpression = 28, RuleNewPlacement = 29, RuleNewTypeId = 30, RuleNewDeclarator = 31, 
-    RuleNoPointerNewDeclarator = 32, RuleNewInitializer = 33, RuleDeleteExpression = 34, 
-    RuleNoExceptExpression = 35, RuleCastExpression = 36, RulePointerMemberExpression = 37, 
-    RuleMultiplicativeExpression = 38, RuleAdditiveExpression = 39, RuleShiftExpression = 40, 
-    RuleShiftOperator = 41, RuleRelationalExpression = 42, RuleEqualityExpression = 43, 
-    RuleAndExpression = 44, RuleExclusiveOrExpression = 45, RuleInclusiveOrExpression = 46, 
-    RuleLogicalAndExpression = 47, RuleLogicalOrExpression = 48, RuleConditionalExpression = 49, 
-    RuleObjCilkSpawnExpression = 50, RuleAssignmentExpression = 51, RuleAssignmentOperator = 52, 
-    RuleExpression = 53, RuleConstantExpression = 54, RuleStatement = 55, 
-    RuleLabeledStatement = 56, RuleCilk_sync = 57, RuleFill_into_plan = 58, 
-    RuleFill_from_plan = 59, RuleReent_filler = 60, RuleReent_reader = 61, 
-    RuleReent_filler_array = 62, RuleReent_statement = 63, RuleChain_statement = 64, 
-    RuleAtomic_block = 65, RuleSoft_atomic_block = 66, RulePlan_first = 67, 
-    RulePlan_get_first = 68, RulePlan_last = 69, RulePlan_get_last = 70, 
-    RulePlan_register = 71, RulePlan_registered_barrier = 72, RulePlan_critical = 73, 
-    RulePlan_stop = 74, RuleClear_plan = 75, RulePlan_group_first = 76, 
-    RulePlan_group_last = 77, RulePlan_group_parallelize = 78, RulePlan_group_atomize = 79, 
-    RulePlan_group_soft_atomize = 80, RulePlan_group_vectorize = 81, RuleThrow_first = 82, 
-    RuleThrow_last = 83, RulePlanning_params = 84, RuleReent_parameter_cut = 85, 
-    RuleReent_special_call = 86, RuleReent_continue_any_call = 87, RuleReent_compact_continue = 88, 
-    RuleReent_np_call = 89, RuleStart_chain = 90, RuleStart_single_proc_chain = 91, 
-    RuleStart_multi_proc_chain = 92, RuleChain_descriptor = 93, RuleVector_chain_descriptor = 94, 
-    RuleList_chain_descriptor = 95, RuleStart_topology = 96, RuleTopology_item = 97, 
-    RuleTopology_line = 98, RuleTopology_reverse = 99, RuleTopology_node = 100, 
-    RuleChain_call = 101, RuleQualified_call_statement = 102, RuleSpawned_call_statement = 103, 
-    RuleExpressionStatement = 104, RuleCompoundStatement = 105, RuleStatementSeq = 106, 
-    RuleSelectionStatement = 107, RuleCondition = 108, RuleIterationStatement = 109, 
-    RuleForInitStatement = 110, RuleForRangeDeclaration = 111, RuleForRangeInitializer = 112, 
-    RuleJumpStatement = 113, RuleDeclarationStatement = 114, RuleDeclarationseq = 115, 
-    RuleDeclaration = 116, RuleBlockDeclaration = 117, RuleAliasDeclaration = 118, 
-    RuleSimpleDeclaration = 119, RuleStaticAssertDeclaration = 120, RuleEmptyDeclaration = 121, 
-    RuleAttributeDeclaration = 122, RuleDeclSpecifier = 123, RuleDeclSpecifierSeq = 124, 
-    RuleReent_special_type = 125, RuleReent_funnel_type = 126, RuleReent_cfunnel_type = 127, 
-    RuleReent_cvar_type = 128, RuleReent_csem_type = 129, RuleReent_soft_transact_array = 130, 
-    RuleReent_soft_transact_var = 131, RuleReent_soft_transact_in = 132, 
-    RuleReent_soft_transact_out = 133, RuleReent_plan_type = 134, RuleReent_plan_item_type = 135, 
-    RuleStorageClassSpecifier = 136, RuleFunctionSpecifier = 137, RuleTypedefName = 138, 
-    RuleTypeSpecifier = 139, RuleTrailingTypeSpecifier = 140, RuleTypeSpecifierSeq = 141, 
-    RuleTrailingTypeSpecifierSeq = 142, RuleSimpleTypeLengthModifier = 143, 
-    RuleSimpleTypeSignednessModifier = 144, RuleSimpleTypeSpecifier = 145, 
-    RuleTheTypeName = 146, RuleDecltypeSpecifier = 147, RuleElaboratedTypeSpecifier = 148, 
-    RuleEnumName = 149, RuleEnumSpecifier = 150, RuleEnumHead = 151, RuleOpaqueEnumDeclaration = 152, 
-    RuleEnumkey = 153, RuleEnumbase = 154, RuleEnumeratorList = 155, RuleEnumeratorDefinition = 156, 
-    RuleEnumerator = 157, RuleNamespaceName = 158, RuleOriginalNamespaceName = 159, 
-    RuleNamespaceDefinition = 160, RuleNamespaceAlias = 161, RuleNamespaceAliasDefinition = 162, 
-    RuleQualifiednamespacespecifier = 163, RuleUsingDeclaration = 164, RuleUsingDirective = 165, 
-    RuleAsmDefinition = 166, RuleLinkageSpecification = 167, RuleAttributeSpecifierSeq = 168, 
-    RuleAttributeSpecifier = 169, RuleAlignmentspecifier = 170, RuleAttributeList = 171, 
-    RuleAttribute = 172, RuleAttributeNamespace = 173, RuleAttributeArgumentClause = 174, 
-    RuleBalancedTokenSeq = 175, RuleBalancedtoken = 176, RuleInitDeclaratorList = 177, 
-    RuleInitDeclarator = 178, RuleDeclarator = 179, RulePointerDeclarator = 180, 
-    RuleNoPointerDeclarator = 181, RuleParametersAndQualifiers = 182, RuleTrailingReturnType = 183, 
-    RulePointerOperator = 184, RuleCvqualifierseq = 185, RuleCvQualifier = 186, 
-    RuleRefqualifier = 187, RuleDeclaratorid = 188, RuleTheTypeId = 189, 
-    RuleAbstractDeclarator = 190, RulePointerAbstractDeclarator = 191, RuleNoPointerAbstractDeclarator = 192, 
-    RuleAbstractPackDeclarator = 193, RuleNoPointerAbstractPackDeclarator = 194, 
-    RuleParameterDeclarationClause = 195, RuleParameterDeclarationList = 196, 
-    RuleParameterDeclaration = 197, RuleReenterableDefinition = 198, RuleReenterableDeclaration = 199, 
-    RuleReenterableHead = 200, RuleReent_chain_header = 201, RuleReent_chain_params = 202, 
-    RuleReent_chain_param = 203, RuleReent_recursive_type = 204, RuleReent_reduction = 205, 
-    RuleReent_gpu_global = 206, RuleReent_gpu_local = 207, RuleReduction_symbol = 208, 
-    RuleReent_chain_predicate = 209, RuleReent_predicate_set = 210, RuleReent_predicate_reset = 211, 
-    RuleReent_predicate_depends = 212, RuleReent_predicate_if = 213, RuleReent_dependents = 214, 
-    RuleReent_enumerator = 215, RuleLoop_statement_header = 216, RuleReent_single_dependent = 217, 
-    RuleChain_interface = 218, RuleChainDefinition = 219, RuleChainDeclaration = 220, 
-    RuleChainHead = 221, RuleFunctionDefinition = 222, RuleSpecial_method_name = 223, 
-    RuleFunctionBody = 224, RuleInitializer = 225, RuleBraceOrEqualInitializer = 226, 
-    RuleInitializerClause = 227, RuleInitializerList = 228, RuleBracedInitList = 229, 
-    RuleClassName = 230, RuleClassSpecifier = 231, RuleClassHead = 232, 
-    RuleClassHeadName = 233, RuleClassVirtSpecifier = 234, RuleClassKey = 235, 
-    RuleMemberSpecification = 236, RuleMarkedmemberdeclaration = 237, RuleMemberdeclaration = 238, 
-    RuleMemberDeclaratorList = 239, RuleMemberDeclarator = 240, RuleVirtualSpecifierSeq = 241, 
-    RuleVirtualSpecifier = 242, RulePureSpecifier = 243, RuleBaseClause = 244, 
-    RuleBaseSpecifierList = 245, RuleBaseSpecifier = 246, RuleClassOrDeclType = 247, 
-    RuleBaseTypeSpecifier = 248, RuleAccessSpecifier = 249, RuleConversionFunctionId = 250, 
-    RuleConversionTypeId = 251, RuleConversionDeclarator = 252, RuleConstructorInitializer = 253, 
-    RuleMemInitializerList = 254, RuleMemInitializer = 255, RuleMeminitializerid = 256, 
-    RuleOperatorFunctionId = 257, RuleLiteralOperatorId = 258, RuleTemplateDeclaration = 259, 
-    RuleTemplateparameterList = 260, RuleTemplateParameter = 261, RuleTypeParameter = 262, 
-    RuleSimpleTemplateId = 263, RuleTemplateId = 264, RuleTemplateName = 265, 
-    RuleTemplateArgumentList = 266, RuleTemplateArgument = 267, RuleTypeNameSpecifier = 268, 
-    RuleExplicitInstantiation = 269, RuleExplicitSpecialization = 270, RuleTryBlock = 271, 
-    RuleFunctionTryBlock = 272, RuleHandlerSeq = 273, RuleHandler = 274, 
-    RuleExceptionDeclaration = 275, RuleThrowExpression = 276, RuleExceptionSpecification = 277, 
-    RuleDynamicExceptionSpecification = 278, RuleTypeIdList = 279, RuleNoeExceptSpecification = 280, 
-    RulePlan_pragma = 281, RulePlan_directive = 282, RulePlan_dir_vectorized = 283, 
-    RulePlan_dir_clustered = 284, RulePlan_common = 285, RulePlan_gpu = 286, 
-    RuleTheOperator = 287, RuleLiteral = 288
+    RuleInitcapture = 16, RuleLambdaDeclarator = 17, RulePostfixExpression = 18, 
+    RuleTypeIdOfTheTypeId = 19, RuleExpressionList = 20, RulePseudoDestructorName = 21, 
+    RuleUnaryExpression = 22, RuleUnaryOperator = 23, RuleNewExpression = 24, 
+    RuleNewPlacement = 25, RuleNewTypeId = 26, RuleNewDeclarator = 27, RuleNoPointerNewDeclarator = 28, 
+    RuleNewInitializer = 29, RuleDeleteExpression = 30, RuleNoExceptExpression = 31, 
+    RuleCastExpression = 32, RulePointerMemberExpression = 33, RuleMultiplicativeExpression = 34, 
+    RuleAdditiveExpression = 35, RuleShiftExpression = 36, RuleShiftOperator = 37, 
+    RuleRelationalExpression = 38, RuleEqualityExpression = 39, RuleAndExpression = 40, 
+    RuleExclusiveOrExpression = 41, RuleInclusiveOrExpression = 42, RuleLogicalAndExpression = 43, 
+    RuleLogicalOrExpression = 44, RuleConditionalExpression = 45, RuleAssignmentExpression = 46, 
+    RuleAssignmentOperator = 47, RuleExpression = 48, RuleConstantExpression = 49, 
+    RuleStatement = 50, RuleLabeledStatement = 51, RuleCilk_sync = 52, RuleFill_into_plan = 53, 
+    RuleFill_from_plan = 54, RuleReent_filler = 55, RuleReent_reader = 56, 
+    RuleReent_filler_array = 57, RuleReent_statement = 58, RuleChain_statement = 59, 
+    RuleAtomic_block = 60, RuleSoft_atomic_block = 61, RulePlan_first = 62, 
+    RulePlan_get_first = 63, RulePlan_last = 64, RulePlan_get_last = 65, 
+    RulePlan_register = 66, RulePlan_registered_barrier = 67, RulePlan_critical = 68, 
+    RulePlan_stop = 69, RuleClear_plan = 70, RulePlan_group_first = 71, 
+    RulePlan_group_last = 72, RulePlan_group_parallelize = 73, RulePlan_group_atomize = 74, 
+    RulePlan_group_soft_atomize = 75, RulePlan_group_vectorize = 76, RuleThrow_first = 77, 
+    RuleThrow_last = 78, RulePlanning_params = 79, RuleReent_parameter_cut = 80, 
+    RuleReent_special_call = 81, RuleReent_continue_any_call = 82, RuleReent_compact_continue = 83, 
+    RuleReent_np_call = 84, RuleStart_chain = 85, RuleStart_single_proc_chain = 86, 
+    RuleStart_multi_proc_chain = 87, RuleChain_descriptor = 88, RuleVector_chain_descriptor = 89, 
+    RuleList_chain_descriptor = 90, RuleStart_topology = 91, RuleTopology_item = 92, 
+    RuleTopology_line = 93, RuleTopology_reverse = 94, RuleTopology_node = 95, 
+    RuleChain_call = 96, RuleQualified_call_statement = 97, RuleSpawned_call_statement = 98, 
+    RuleExpressionStatement = 99, RuleCompoundStatement = 100, RuleStatementSeq = 101, 
+    RuleSelectionStatement = 102, RuleCondition = 103, RuleIterationStatement = 104, 
+    RuleForInitStatement = 105, RuleForRangeDeclaration = 106, RuleForRangeInitializer = 107, 
+    RuleJumpStatement = 108, RuleDeclarationStatement = 109, RuleDeclarationseq = 110, 
+    RuleDeclaration = 111, RuleBlockDeclaration = 112, RuleAliasDeclaration = 113, 
+    RuleSimpleDeclaration = 114, RuleStaticAssertDeclaration = 115, RuleEmptyDeclaration = 116, 
+    RuleAttributeDeclaration = 117, RuleDeclSpecifier = 118, RuleDeclSpecifierSeq = 119, 
+    RuleReent_special_type = 120, RuleReent_funnel_type = 121, RuleReent_cfunnel_type = 122, 
+    RuleReent_cvar_type = 123, RuleReent_csem_type = 124, RuleReent_soft_transact_array = 125, 
+    RuleReent_soft_transact_var = 126, RuleReent_soft_transact_in = 127, 
+    RuleReent_soft_transact_out = 128, RuleReent_plan_type = 129, RuleReent_plan_item_type = 130, 
+    RuleStorageClassSpecifier = 131, RuleFunctionSpecifier = 132, RuleTypedefName = 133, 
+    RuleTypeSpecifier = 134, RuleTrailingTypeSpecifier = 135, RuleTypeSpecifierSeq = 136, 
+    RuleTrailingTypeSpecifierSeq = 137, RuleSimpleTypeLengthModifier = 138, 
+    RuleSimpleTypeSignednessModifier = 139, RuleSimpleTypeSpecifier = 140, 
+    RuleTheTypeName = 141, RuleDecltypeSpecifier = 142, RuleElaboratedTypeSpecifier = 143, 
+    RuleEnumName = 144, RuleEnumSpecifier = 145, RuleEnumHead = 146, RuleOpaqueEnumDeclaration = 147, 
+    RuleEnumkey = 148, RuleEnumbase = 149, RuleEnumeratorList = 150, RuleEnumeratorDefinition = 151, 
+    RuleEnumerator = 152, RuleNamespaceName = 153, RuleOriginalNamespaceName = 154, 
+    RuleNamespaceDefinition = 155, RuleNamespaceAlias = 156, RuleNamespaceAliasDefinition = 157, 
+    RuleQualifiednamespacespecifier = 158, RuleUsingDeclaration = 159, RuleUsingDirective = 160, 
+    RuleAsmDefinition = 161, RuleLinkageSpecification = 162, RuleAttributeSpecifierSeq = 163, 
+    RuleAttributeSpecifier = 164, RuleAlignmentspecifier = 165, RuleAttributeList = 166, 
+    RuleAttribute = 167, RuleAttributeNamespace = 168, RuleAttributeArgumentClause = 169, 
+    RuleBalancedTokenSeq = 170, RuleBalancedtoken = 171, RuleInitDeclaratorList = 172, 
+    RuleInitDeclarator = 173, RuleDeclarator = 174, RulePointerDeclarator = 175, 
+    RuleNoPointerDeclarator = 176, RuleParametersAndQualifiers = 177, RuleTrailingReturnType = 178, 
+    RulePointerOperator = 179, RuleCvqualifierseq = 180, RuleCvQualifier = 181, 
+    RuleRefqualifier = 182, RuleDeclaratorid = 183, RuleTheTypeId = 184, 
+    RuleAbstractDeclarator = 185, RulePointerAbstractDeclarator = 186, RuleNoPointerAbstractDeclarator = 187, 
+    RuleAbstractPackDeclarator = 188, RuleNoPointerAbstractPackDeclarator = 189, 
+    RuleParameterDeclarationClause = 190, RuleParameterDeclarationList = 191, 
+    RuleParameterDeclaration = 192, RuleReenterableDefinition = 193, RuleReenterableDeclaration = 194, 
+    RuleReenterableHead = 195, RuleReent_chain_header = 196, RuleReent_chain_params = 197, 
+    RuleReent_chain_param = 198, RuleReent_recursive_type = 199, RuleReent_reduction = 200, 
+    RuleReent_gpu_global = 201, RuleReent_gpu_local = 202, RuleReduction_symbol = 203, 
+    RuleReent_chain_predicate = 204, RuleReent_predicate_set = 205, RuleReent_predicate_reset = 206, 
+    RuleReent_predicate_depends = 207, RuleReent_predicate_if = 208, RuleReent_dependents = 209, 
+    RuleReent_enumerator = 210, RuleLoop_statement_header = 211, RuleReent_single_dependent = 212, 
+    RuleChain_interface = 213, RuleChainDefinition = 214, RuleChainDeclaration = 215, 
+    RuleChainHead = 216, RuleFunctionDefinition = 217, RuleSpecial_method_name = 218, 
+    RuleFunctionBody = 219, RuleInitializer = 220, RuleBraceOrEqualInitializer = 221, 
+    RuleInitializerClause = 222, RuleInitializerList = 223, RuleBracedInitList = 224, 
+    RuleClassName = 225, RuleClassSpecifier = 226, RuleClassHead = 227, 
+    RuleClassHeadName = 228, RuleClassVirtSpecifier = 229, RuleClassKey = 230, 
+    RuleMemberSpecification = 231, RuleMarkedmemberdeclaration = 232, RuleMemberdeclaration = 233, 
+    RuleMemberDeclaratorList = 234, RuleMemberDeclarator = 235, RuleVirtualSpecifierSeq = 236, 
+    RuleVirtualSpecifier = 237, RulePureSpecifier = 238, RuleBaseClause = 239, 
+    RuleBaseSpecifierList = 240, RuleBaseSpecifier = 241, RuleClassOrDeclType = 242, 
+    RuleBaseTypeSpecifier = 243, RuleAccessSpecifier = 244, RuleConversionFunctionId = 245, 
+    RuleConversionTypeId = 246, RuleConversionDeclarator = 247, RuleConstructorInitializer = 248, 
+    RuleMemInitializerList = 249, RuleMemInitializer = 250, RuleMeminitializerid = 251, 
+    RuleOperatorFunctionId = 252, RuleLiteralOperatorId = 253, RuleTemplateDeclaration = 254, 
+    RuleTemplateparameterList = 255, RuleTemplateParameter = 256, RuleTypeParameter = 257, 
+    RuleSimpleTemplateId = 258, RuleTemplateId = 259, RuleTemplateName = 260, 
+    RuleTemplateArgumentList = 261, RuleTemplateArgument = 262, RuleTypeNameSpecifier = 263, 
+    RuleExplicitInstantiation = 264, RuleExplicitSpecialization = 265, RuleTryBlock = 266, 
+    RuleFunctionTryBlock = 267, RuleHandlerSeq = 268, RuleHandler = 269, 
+    RuleExceptionDeclaration = 270, RuleThrowExpression = 271, RuleExceptionSpecification = 272, 
+    RuleDynamicExceptionSpecification = 273, RuleTypeIdList = 274, RuleNoeExceptSpecification = 275, 
+    RulePlan_pragma = 276, RulePlan_directive = 277, RulePlan_dir_vectorized = 278, 
+    RulePlan_dir_clustered = 279, RulePlan_common = 280, RulePlan_gpu = 281, 
+    RuleTheOperator = 282, RuleLiteral = 283
   };
 
   explicit ReentParser(antlr4::TokenStream *input);
@@ -212,10 +210,6 @@ public:
   class SimpleCaptureContext;
   class InitcaptureContext;
   class LambdaDeclaratorContext;
-  class ObjCilkSpawnArgContext;
-  class ObjCilkSpawnParamsContext;
-  class ObjCilkDesignatorContext;
-  class ObjCilkContext;
   class PostfixExpressionContext;
   class TypeIdOfTheTypeIdContext;
   class ExpressionListContext;
@@ -244,7 +238,6 @@ public:
   class LogicalAndExpressionContext;
   class LogicalOrExpressionContext;
   class ConditionalExpressionContext;
-  class ObjCilkSpawnExpressionContext;
   class AssignmentExpressionContext;
   class AssignmentOperatorContext;
   class ExpressionContext;
@@ -796,71 +789,6 @@ public:
 
   LambdaDeclaratorContext* lambdaDeclarator();
 
-  class  ObjCilkSpawnArgContext : public antlr4::ParserRuleContext {
-  public:
-    ObjCilkSpawnArgContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *Assign();
-    IdExpressionContext *idExpression();
-    AssignmentExpressionContext *assignmentExpression();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-   
-  };
-
-  ObjCilkSpawnArgContext* objCilkSpawnArg();
-
-  class  ObjCilkSpawnParamsContext : public antlr4::ParserRuleContext {
-  public:
-    ObjCilkSpawnParamsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *LeftParen();
-    std::vector<AssignmentExpressionContext *> assignmentExpression();
-    AssignmentExpressionContext* assignmentExpression(size_t i);
-    antlr4::tree::TerminalNode *Comma();
-    antlr4::tree::TerminalNode *RightParen();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-   
-  };
-
-  ObjCilkSpawnParamsContext* objCilkSpawnParams();
-
-  class  ObjCilkDesignatorContext : public antlr4::ParserRuleContext {
-  public:
-    ObjCilkDesignatorContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    PrimaryExpressionContext *primaryExpression();
-    ObjCilkDesignatorContext *objCilkDesignator();
-    antlr4::tree::TerminalNode *LeftBracket();
-    antlr4::tree::TerminalNode *RightBracket();
-    ExpressionContext *expression();
-    BracedInitListContext *bracedInitList();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-   
-  };
-
-  ObjCilkDesignatorContext* objCilkDesignator();
-  ObjCilkDesignatorContext* objCilkDesignator(int precedence);
-  class  ObjCilkContext : public antlr4::ParserRuleContext {
-  public:
-    ObjCilkContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    ObjCilkDesignatorContext *objCilkDesignator();
-    antlr4::tree::TerminalNode *Dot();
-    antlr4::tree::TerminalNode *Arrow();
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-   
-  };
-
-  ObjCilkContext* objCilk();
-
   class  PostfixExpressionContext : public antlr4::ParserRuleContext {
   public:
     ReentParser::PostfixExpressionContext *planned = nullptr;
@@ -1367,34 +1295,10 @@ public:
 
   ConditionalExpressionContext* conditionalExpression();
 
-  class  ObjCilkSpawnExpressionContext : public antlr4::ParserRuleContext {
-  public:
-    ObjCilkSpawnExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *Cilk_spawn();
-    IdExpressionContext *idExpression();
-    antlr4::tree::TerminalNode *LeftParen();
-    antlr4::tree::TerminalNode *RightParen();
-    std::vector<ObjCilkContext *> objCilk();
-    ObjCilkContext* objCilk(size_t i);
-    ObjCilkSpawnParamsContext *objCilkSpawnParams();
-    std::vector<ObjCilkSpawnArgContext *> objCilkSpawnArg();
-    ObjCilkSpawnArgContext* objCilkSpawnArg(size_t i);
-    std::vector<antlr4::tree::TerminalNode *> Comma();
-    antlr4::tree::TerminalNode* Comma(size_t i);
-
-    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
-    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
-   
-  };
-
-  ObjCilkSpawnExpressionContext* objCilkSpawnExpression();
-
   class  AssignmentExpressionContext : public antlr4::ParserRuleContext {
   public:
     AssignmentExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    ObjCilkSpawnExpressionContext *objCilkSpawnExpression();
     ConditionalExpressionContext *conditionalExpression();
     LogicalOrExpressionContext *logicalOrExpression();
     AssignmentOperatorContext *assignmentOperator();
@@ -1476,8 +1380,9 @@ public:
     Reent_special_callContext *reent_special_call();
     Atomic_blockContext *atomic_block();
     Soft_atomic_blockContext *soft_atomic_block();
-    antlr4::tree::TerminalNode *Cilk_spawn_();
     Spawned_call_statementContext *spawned_call_statement();
+    antlr4::tree::TerminalNode *Cilk_spawn();
+    antlr4::tree::TerminalNode *Cilk_spawn_();
     Qualified_call_statementContext *qualified_call_statement();
     DeclarationStatementContext *declarationStatement();
     ExpressionStatementContext *expressionStatement();
@@ -1518,13 +1423,8 @@ public:
   public:
     Cilk_syncContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *Cilk_sync();
     antlr4::tree::TerminalNode *Semi();
-    std::vector<ObjCilkContext *> objCilk();
-    ObjCilkContext* objCilk(size_t i);
-    antlr4::tree::TerminalNode *LeftParen();
-    antlr4::tree::TerminalNode *RightParen();
-    AssignmentExpressionContext *assignmentExpression();
+    antlr4::tree::TerminalNode *Cilk_sync();
     antlr4::tree::TerminalNode *Cilk_sync_();
 
     virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
@@ -5409,7 +5309,6 @@ public:
   bool reent_funs_idSempred(Reent_funs_idContext *_localctx, size_t predicateIndex);
   bool chain_funs_idSempred(Chain_funs_idContext *_localctx, size_t predicateIndex);
   bool nestedNameSpecifierSempred(NestedNameSpecifierContext *_localctx, size_t predicateIndex);
-  bool objCilkDesignatorSempred(ObjCilkDesignatorContext *_localctx, size_t predicateIndex);
   bool postfixExpressionSempred(PostfixExpressionContext *_localctx, size_t predicateIndex);
   bool noPointerNewDeclaratorSempred(NoPointerNewDeclaratorContext *_localctx, size_t predicateIndex);
   bool reent_statementSempred(Reent_statementContext *_localctx, size_t predicateIndex);

@@ -108,6 +108,10 @@ Directive: { getCharPositionInLine() == 0 }? [ \t]* Pound ('define' | 'undef' | 
 
 AtValue: '@Value';
 
+Cilk_spawn: 'cilk_spawn';
+
+Cilk_sync: 'cilk_sync';
+
 Conditions: 'conditions';
 
 Controlled: 'controlled';

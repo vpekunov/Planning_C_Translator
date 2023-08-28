@@ -75,18 +75,6 @@ public:
   virtual void enterLambdaDeclarator(ReentParser::LambdaDeclaratorContext *ctx) = 0;
   virtual void exitLambdaDeclarator(ReentParser::LambdaDeclaratorContext *ctx) = 0;
 
-  virtual void enterObjCilkSpawnArg(ReentParser::ObjCilkSpawnArgContext *ctx) = 0;
-  virtual void exitObjCilkSpawnArg(ReentParser::ObjCilkSpawnArgContext *ctx) = 0;
-
-  virtual void enterObjCilkSpawnParams(ReentParser::ObjCilkSpawnParamsContext *ctx) = 0;
-  virtual void exitObjCilkSpawnParams(ReentParser::ObjCilkSpawnParamsContext *ctx) = 0;
-
-  virtual void enterObjCilkDesignator(ReentParser::ObjCilkDesignatorContext *ctx) = 0;
-  virtual void exitObjCilkDesignator(ReentParser::ObjCilkDesignatorContext *ctx) = 0;
-
-  virtual void enterObjCilk(ReentParser::ObjCilkContext *ctx) = 0;
-  virtual void exitObjCilk(ReentParser::ObjCilkContext *ctx) = 0;
-
   virtual void enterPostfixExpression(ReentParser::PostfixExpressionContext *ctx) = 0;
   virtual void exitPostfixExpression(ReentParser::PostfixExpressionContext *ctx) = 0;
 
@@ -170,9 +158,6 @@ public:
 
   virtual void enterConditionalExpression(ReentParser::ConditionalExpressionContext *ctx) = 0;
   virtual void exitConditionalExpression(ReentParser::ConditionalExpressionContext *ctx) = 0;
-
-  virtual void enterObjCilkSpawnExpression(ReentParser::ObjCilkSpawnExpressionContext *ctx) = 0;
-  virtual void exitObjCilkSpawnExpression(ReentParser::ObjCilkSpawnExpressionContext *ctx) = 0;
 
   virtual void enterAssignmentExpression(ReentParser::AssignmentExpressionContext *ctx) = 0;
   virtual void exitAssignmentExpression(ReentParser::AssignmentExpressionContext *ctx) = 0;

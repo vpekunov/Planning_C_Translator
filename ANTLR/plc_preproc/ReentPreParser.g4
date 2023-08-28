@@ -82,6 +82,10 @@ statement:
 	| DefXPath {
 		throw FailedPredicateException(this, "Something wrong with '#def_xpath'");
 	}
+	| objCilkSpawn
+	| objCilkDesignator*? Cilk_spawn { throw FailedPredicateException(this, "Obj-cilk_spawn expression is incorrect!"); }
+	| objCilkSync
+	| objCilkDesignator*? Cilk_sync { throw FailedPredicateException(this, "Obj-cilk_sync expression is incorrect!"); }
 	| otherLine;
 
 def_pattern:
@@ -395,7 +399,7 @@ cpp_balanced_expression:
 	 ~(Comma | LeftParen | RightParen | LeftBracket | RightBracket)+
 	 | LeftParen cpp_balanced_expression RightParen
 	 | LeftBracket cpp_balanced_expression RightBracket
-	) cpp_balanced_expression;
+	) cpp_balanced_expression?;
 
 memoizationStyle:
 	(mgua | nnet | extrapolator) controlPredicate?;
@@ -582,6 +586,31 @@ prolog_predicate_id:
 
 cpp_code_without_at:
 	~(At | RightBrace)+;
+
+objCilkSpawnArg:
+	Assign Identifier
+	| cpp_balanced_expression;
+
+objCilkSpawnParams:
+	LeftParen cpp_balanced_expression Comma cpp_balanced_expression RightParen;
+
+objCilkDesignator:
+	Identifier (LeftBracket cpp_balanced_expression RightBracket)* (Dot | Arrow);
+
+objCilkSpawn:
+	objCilkDesignator*? Cilk_spawn
+	(
+	 objCilkSpawnParams?
+		objCilkDesignator*? Identifier
+		LeftParen (objCilkSpawnArg (Comma objCilkSpawnArg)*)? RightParen
+	 Semi (~Newline)* Newline
+	);
+
+objCilkSync:
+	objCilkDesignator*? Cilk_sync
+	(
+	 (LeftParen cpp_balanced_expression? RightParen)? Semi (~Newline)* Newline
+	);
 
 otherLine:
 	{ _input->LT(-1) == NULL || _input->LT(-1)->getText() == "\n" }? (~Newline)* Newline;

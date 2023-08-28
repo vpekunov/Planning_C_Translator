@@ -308,6 +308,21 @@ public:
   virtual void enterCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext *ctx) = 0;
   virtual void exitCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext *ctx) = 0;
 
+  virtual void enterObjCilkSpawnArg(ReentPreParser::ObjCilkSpawnArgContext *ctx) = 0;
+  virtual void exitObjCilkSpawnArg(ReentPreParser::ObjCilkSpawnArgContext *ctx) = 0;
+
+  virtual void enterObjCilkSpawnParams(ReentPreParser::ObjCilkSpawnParamsContext *ctx) = 0;
+  virtual void exitObjCilkSpawnParams(ReentPreParser::ObjCilkSpawnParamsContext *ctx) = 0;
+
+  virtual void enterObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext *ctx) = 0;
+  virtual void exitObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext *ctx) = 0;
+
+  virtual void enterObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext *ctx) = 0;
+  virtual void exitObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext *ctx) = 0;
+
+  virtual void enterObjCilkSync(ReentPreParser::ObjCilkSyncContext *ctx) = 0;
+  virtual void exitObjCilkSync(ReentPreParser::ObjCilkSyncContext *ctx) = 0;
+
   virtual void enterOtherLine(ReentPreParser::OtherLineContext *ctx) = 0;
   virtual void exitOtherLine(ReentPreParser::OtherLineContext *ctx) = 0;
 

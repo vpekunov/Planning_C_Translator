@@ -310,6 +310,21 @@ public:
   virtual void enterCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext * /*ctx*/) override { }
   virtual void exitCpp_code_without_at(ReentPreParser::Cpp_code_without_atContext * /*ctx*/) override { }
 
+  virtual void enterObjCilkSpawnArg(ReentPreParser::ObjCilkSpawnArgContext * /*ctx*/) override { }
+  virtual void exitObjCilkSpawnArg(ReentPreParser::ObjCilkSpawnArgContext * /*ctx*/) override { }
+
+  virtual void enterObjCilkSpawnParams(ReentPreParser::ObjCilkSpawnParamsContext * /*ctx*/) override { }
+  virtual void exitObjCilkSpawnParams(ReentPreParser::ObjCilkSpawnParamsContext * /*ctx*/) override { }
+
+  virtual void enterObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext * /*ctx*/) override { }
+  virtual void exitObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext * /*ctx*/) override { }
+
+  virtual void enterObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext * /*ctx*/) override { }
+  virtual void exitObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext * /*ctx*/) override { }
+
+  virtual void enterObjCilkSync(ReentPreParser::ObjCilkSyncContext * /*ctx*/) override { }
+  virtual void exitObjCilkSync(ReentPreParser::ObjCilkSyncContext * /*ctx*/) override { }
+
   virtual void enterOtherLine(ReentPreParser::OtherLineContext * /*ctx*/) override { }
   virtual void exitOtherLine(ReentPreParser::OtherLineContext * /*ctx*/) override { }
 

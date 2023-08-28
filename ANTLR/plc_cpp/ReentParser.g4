@@ -127,21 +127,6 @@ lambdaDeclarator:
 	LeftParen parameterDeclarationClause? RightParen Mutable? exceptionSpecification?
 		attributeSpecifierSeq? trailingReturnType?;
 
-objCilkSpawnArg:
-	Assign idExpression
-	| assignmentExpression;
-
-objCilkSpawnParams:
-	LeftParen assignmentExpression Comma assignmentExpression RightParen;
-
-objCilkDesignator:
-	primaryExpression
-	| objCilkDesignator LeftBracket (expression | bracedInitList) RightBracket;
-
-objCilk:
-	objCilkDesignator
-	(Dot | Arrow);
-
 postfixExpression:
 	primaryExpression
 	| postfixExpression LeftBracket (expression | bracedInitList) RightBracket
@@ -275,14 +260,8 @@ conditionalExpression:
 		Question expression Colon assignmentExpression
 	)?;
 
-objCilkSpawnExpression:
-	objCilk*? Cilk_spawn objCilkSpawnParams?
-		objCilk*? idExpression
-		LeftParen (objCilkSpawnArg (Comma objCilkSpawnArg)*)? RightParen;
-
 assignmentExpression:
-	objCilkSpawnExpression
-	| conditionalExpression
+	conditionalExpression
 	| logicalOrExpression assignmentOperator initializerClause
 	| throwExpression;
 
@@ -317,7 +296,7 @@ statement:
 	| reent_special_call
 	| atomic_block
 	| soft_atomic_block
-	| Cilk_spawn_ spawned_call_statement
+	| (Cilk_spawn | Cilk_spawn_) spawned_call_statement
 	| qualified_call_statement
 	| declarationStatement
 	| attributeSpecifierSeq? (
@@ -337,8 +316,7 @@ labeledStatement:
 	) Colon statement;
 
 cilk_sync:
-	objCilk*? Cilk_sync (LeftParen assignmentExpression? RightParen)? Semi
-	| Cilk_sync_ Semi;
+	(Cilk_sync | Cilk_sync_) Semi;
 
 fill_into_plan:
 	Star ident=Identifier
