@@ -171,6 +171,9 @@ public:
   virtual void enterConditionalExpression(ReentParser::ConditionalExpressionContext *ctx) = 0;
   virtual void exitConditionalExpression(ReentParser::ConditionalExpressionContext *ctx) = 0;
 
+  virtual void enterObjCilkSpawnExpression(ReentParser::ObjCilkSpawnExpressionContext *ctx) = 0;
+  virtual void exitObjCilkSpawnExpression(ReentParser::ObjCilkSpawnExpressionContext *ctx) = 0;
+
   virtual void enterAssignmentExpression(ReentParser::AssignmentExpressionContext *ctx) = 0;
   virtual void exitAssignmentExpression(ReentParser::AssignmentExpressionContext *ctx) = 0;
 

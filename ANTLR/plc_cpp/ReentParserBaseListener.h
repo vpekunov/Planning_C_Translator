@@ -173,6 +173,9 @@ public:
   virtual void enterConditionalExpression(ReentParser::ConditionalExpressionContext * /*ctx*/) override { }
   virtual void exitConditionalExpression(ReentParser::ConditionalExpressionContext * /*ctx*/) override { }
 
+  virtual void enterObjCilkSpawnExpression(ReentParser::ObjCilkSpawnExpressionContext * /*ctx*/) override { }
+  virtual void exitObjCilkSpawnExpression(ReentParser::ObjCilkSpawnExpressionContext * /*ctx*/) override { }
+
   virtual void enterAssignmentExpression(ReentParser::AssignmentExpressionContext * /*ctx*/) override { }
   virtual void exitAssignmentExpression(ReentParser::AssignmentExpressionContext * /*ctx*/) override { }
 

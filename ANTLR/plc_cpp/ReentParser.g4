@@ -275,10 +275,13 @@ conditionalExpression:
 		Question expression Colon assignmentExpression
 	)?;
 
-assignmentExpression:
+objCilkSpawnExpression:
 	objCilk*? Cilk_spawn objCilkSpawnParams?
 		objCilk*? idExpression
-		LeftParen (objCilkSpawnArg (Comma objCilkSpawnArg)*)? RightParen
+		LeftParen (objCilkSpawnArg (Comma objCilkSpawnArg)*)? RightParen;
+
+assignmentExpression:
+	objCilkSpawnExpression
 	| conditionalExpression
 	| logicalOrExpression assignmentOperator initializerClause
 	| throwExpression;
@@ -314,7 +317,7 @@ statement:
 	| reent_special_call
 	| atomic_block
 	| soft_atomic_block
-	| (Cilk_spawn | Cilk_spawn_) spawned_call_statement
+	| Cilk_spawn_ spawned_call_statement
 	| qualified_call_statement
 	| declarationStatement
 	| attributeSpecifierSeq? (
