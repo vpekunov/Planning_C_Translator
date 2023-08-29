@@ -317,6 +317,9 @@ public:
   virtual void enterObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext *ctx) = 0;
   virtual void exitObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext *ctx) = 0;
 
+  virtual void enterObjCilkAssign(ReentPreParser::ObjCilkAssignContext *ctx) = 0;
+  virtual void exitObjCilkAssign(ReentPreParser::ObjCilkAssignContext *ctx) = 0;
+
   virtual void enterObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext *ctx) = 0;
   virtual void exitObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext *ctx) = 0;
 

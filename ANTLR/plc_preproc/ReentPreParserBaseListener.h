@@ -319,6 +319,9 @@ public:
   virtual void enterObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext * /*ctx*/) override { }
   virtual void exitObjCilkDesignator(ReentPreParser::ObjCilkDesignatorContext * /*ctx*/) override { }
 
+  virtual void enterObjCilkAssign(ReentPreParser::ObjCilkAssignContext * /*ctx*/) override { }
+  virtual void exitObjCilkAssign(ReentPreParser::ObjCilkAssignContext * /*ctx*/) override { }
+
   virtual void enterObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext * /*ctx*/) override { }
   virtual void exitObjCilkSpawn(ReentPreParser::ObjCilkSpawnContext * /*ctx*/) override { }
 

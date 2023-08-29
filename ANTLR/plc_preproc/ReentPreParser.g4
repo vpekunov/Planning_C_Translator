@@ -83,7 +83,7 @@ statement:
 		throw FailedPredicateException(this, "Something wrong with '#def_xpath'");
 	}
 	| objCilkSpawn
-	| objCilkDesignator*? Cilk_spawn { throw FailedPredicateException(this, "Obj-cilk_spawn expression is incorrect!"); }
+	| objCilkAssign? objCilkDesignator*? Cilk_spawn { throw FailedPredicateException(this, "Obj-cilk_spawn expression is incorrect!"); }
 	| objCilkSync
 	| objCilkDesignator*? Cilk_sync { throw FailedPredicateException(this, "Obj-cilk_sync expression is incorrect!"); }
 	| otherLine;
@@ -396,7 +396,8 @@ memoMapType:
 
 cpp_balanced_expression:
 	(
-	 ~(Comma | LeftParen | RightParen | LeftBracket | RightBracket)+
+	 Identifier (LeftParen (cpp_balanced_expression (Comma cpp_balanced_expression)*)? RightParen)?
+	 | ~(Comma | LeftParen | RightParen | LeftBracket | RightBracket | Identifier)+
 	 | LeftParen cpp_balanced_expression RightParen
 	 | LeftBracket cpp_balanced_expression RightBracket
 	) cpp_balanced_expression?;
@@ -597,7 +598,11 @@ objCilkSpawnParams:
 objCilkDesignator:
 	Identifier (LeftBracket cpp_balanced_expression RightBracket)* (Dot | Arrow);
 
+objCilkAssign:
+	Identifier+ (LeftBracket cpp_balanced_expression RightBracket)* Assign;
+
 objCilkSpawn:
+	objCilkAssign?
 	objCilkDesignator*? Cilk_spawn
 	(
 	 objCilkSpawnParams?

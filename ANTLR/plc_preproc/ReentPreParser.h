@@ -80,8 +80,8 @@ public:
     RuleProlog_plus_minus = 86, RuleUnary_expression = 87, RuleOperand = 88, 
     RuleOperandList = 89, RuleProlog_term = 90, RuleProlog_call = 91, RuleProlog_call_params = 92, 
     RuleProlog_predicate_id = 93, RuleCpp_code_without_at = 94, RuleObjCilkSpawnArg = 95, 
-    RuleObjCilkSpawnParams = 96, RuleObjCilkDesignator = 97, RuleObjCilkSpawn = 98, 
-    RuleObjCilkSync = 99, RuleOtherLine = 100, RuleLiteral = 101
+    RuleObjCilkSpawnParams = 96, RuleObjCilkDesignator = 97, RuleObjCilkAssign = 98, 
+    RuleObjCilkSpawn = 99, RuleObjCilkSync = 100, RuleOtherLine = 101, RuleLiteral = 102
   };
 
   explicit ReentPreParser(antlr4::TokenStream *input);
@@ -202,6 +202,7 @@ public:
   class ObjCilkSpawnArgContext;
   class ObjCilkSpawnParamsContext;
   class ObjCilkDesignatorContext;
+  class ObjCilkAssignContext;
   class ObjCilkSpawnContext;
   class ObjCilkSyncContext;
   class OtherLineContext;
@@ -259,6 +260,7 @@ public:
     antlr4::tree::TerminalNode *DefXPath();
     ObjCilkSpawnContext *objCilkSpawn();
     antlr4::tree::TerminalNode *Cilk_spawn();
+    ObjCilkAssignContext *objCilkAssign();
     std::vector<ObjCilkDesignatorContext *> objCilkDesignator();
     ObjCilkDesignatorContext* objCilkDesignator(size_t i);
     ObjCilkSyncContext *objCilkSync();
@@ -1221,6 +1223,8 @@ public:
   public:
     Cpp_balanced_expressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
+    std::vector<antlr4::tree::TerminalNode *> Identifier();
+    antlr4::tree::TerminalNode* Identifier(size_t i);
     std::vector<antlr4::tree::TerminalNode *> LeftParen();
     antlr4::tree::TerminalNode* LeftParen(size_t i);
     std::vector<Cpp_balanced_expressionContext *> cpp_balanced_expression();
@@ -2013,6 +2017,27 @@ public:
 
   ObjCilkDesignatorContext* objCilkDesignator();
 
+  class  ObjCilkAssignContext : public antlr4::ParserRuleContext {
+  public:
+    ObjCilkAssignContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *Assign();
+    std::vector<antlr4::tree::TerminalNode *> Identifier();
+    antlr4::tree::TerminalNode* Identifier(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> LeftBracket();
+    antlr4::tree::TerminalNode* LeftBracket(size_t i);
+    std::vector<Cpp_balanced_expressionContext *> cpp_balanced_expression();
+    Cpp_balanced_expressionContext* cpp_balanced_expression(size_t i);
+    std::vector<antlr4::tree::TerminalNode *> RightBracket();
+    antlr4::tree::TerminalNode* RightBracket(size_t i);
+
+    virtual void enterRule(antlr4::tree::ParseTreeListener *listener) override;
+    virtual void exitRule(antlr4::tree::ParseTreeListener *listener) override;
+   
+  };
+
+  ObjCilkAssignContext* objCilkAssign();
+
   class  ObjCilkSpawnContext : public antlr4::ParserRuleContext {
   public:
     ObjCilkSpawnContext(antlr4::ParserRuleContext *parent, size_t invokingState);
@@ -2024,6 +2049,7 @@ public:
     antlr4::tree::TerminalNode *Semi();
     std::vector<antlr4::tree::TerminalNode *> Newline();
     antlr4::tree::TerminalNode* Newline(size_t i);
+    ObjCilkAssignContext *objCilkAssign();
     std::vector<ObjCilkDesignatorContext *> objCilkDesignator();
     ObjCilkDesignatorContext* objCilkDesignator(size_t i);
     ObjCilkSpawnParamsContext *objCilkSpawnParams();
