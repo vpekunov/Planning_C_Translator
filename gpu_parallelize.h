@@ -135,31 +135,37 @@ enumerations_point();
           (
            (\(
             (
-             (\s|\\t|\\n)*
              (
-              ()->{KINDS}
-              (([A-Za-z0-9_\[\]\*]+((\\n|\s|\\t)*\*(\\n|\s|\\t)*|(\\n|\s|\\t)+))+)->{TYPES}
-              (\w+)->{NAMES}
-              (\s|\\t|\\n)*\,
-             )?=>{Predicates.TBAL($,',')}
-            )*
-            (
-             (\s|\\t|\\n)*
-             (
+              (\s|\\t|\\n)*
               (
                ()->{KINDS}
                (([A-Za-z0-9_\[\]\*]+((\\n|\s|\\t)*\*(\\n|\s|\\t)*|(\\n|\s|\\t)+))+)->{TYPES}
                (\w+)->{NAMES}
-               (\s|\\t|\\n)*
-              )?
-              \)
-             )?=>{Predicates.TBAL($,')')}
+               (\s|\\t|\\n)*\,
+              )?=>{Predicates.TBAL($,',')}
+             )*
+             (
+              (\s|\\t|\\n)*
+              (
+               (
+                ()->{KINDS}
+                void|
+                (
+                 (([A-Za-z0-9_\[\]\*]+((\\n|\s|\\t)*\*(\\n|\s|\\t)*|(\\n|\s|\\t)+))+)->{TYPES}
+                 (\w+)->{NAMES}
+                )
+                (\s|\\t|\\n)*
+               )?
+               \)
+              )?=>{Predicates.TBAL($,')')}
+             )
             )
            )->{PARAMS}
            (\s|\\t|\\n)*
           )
          )(\s|\\t|\\n)*)
-    (()->{MARGIN}\{((.*)$)?=>{Predicates.getBAL($,'}',$MARGIN), stop_fail(MARGIN)}|\{)
+    \{
+    (*PRUNE)
     (
      (
       (\s|\\t|\\n)*
@@ -193,23 +199,28 @@ enumerations_point();
           (
            (\(
             (
-             (\s|\\t|\\n)*
              (
-              (([A-Za-z0-9_\[\]\*]+((\\n|\s|\\t)*\*(\\n|\s|\\t)*|(\\n|\s|\\t)+))+)->{TYPES}
-              (\w+)->{NAMES}
-              (\s|\\t|\\n)*\,
-             )?=>{Predicates.TBAL($,',')}
-            )*
-            (
-             (\s|\\t|\\n)*
-             (
+              (\s|\\t|\\n)*
               (
                (([A-Za-z0-9_\[\]\*]+((\\n|\s|\\t)*\*(\\n|\s|\\t)*|(\\n|\s|\\t)+))+)->{TYPES}
                (\w+)->{NAMES}
-               (\s|\\t|\\n)*
-              )?
-              \)
-             )?=>{Predicates.TBAL($,')')}
+               (\s|\\t|\\n)*\,
+              )?=>{Predicates.TBAL($,',')}
+             )*
+             (
+              (\s|\\t|\\n)*
+              (
+               (
+                void|
+                (
+                 (([A-Za-z0-9_\[\]\*]+((\\n|\s|\\t)*\*(\\n|\s|\\t)*|(\\n|\s|\\t)+))+)->{TYPES}
+                 (\w+)->{NAMES}
+                )
+                (\s|\\t|\\n)*
+               )?
+               \)
+              )?=>{Predicates.TBAL($,')')}
+             )
             )
            )->{PARAMS}
            (\s|\\t|\\n)*

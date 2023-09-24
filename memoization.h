@@ -3,7 +3,7 @@
 
 #pragma syntax nocheck
 
-#scan(memoFun)
+#add_scan(memoFun)
 
 #include <vector>
 #include <map>

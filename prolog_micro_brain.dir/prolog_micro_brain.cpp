@@ -5683,9 +5683,7 @@ value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_i
 			if (s[p] == '|') {
 				p++;
 				value * t = parse(exit_on_error, true, ff, s, p);
-				if (p >= s.length() || t == NULL || dynamic_cast<int_number *>(t) != NULL ||
-					dynamic_cast<float_number *>(t) != NULL || dynamic_cast<term *>(t) != NULL ||
-					dynamic_cast<indicator *>(t) != NULL) {
+				if (p >= s.length() || t == NULL) {
 					if (exit_on_error) {
 						std::cout << "[" << s.substr(oldp, p - oldp) << "] : incorrect tag of list!" << endl;
 						exit(-1);
