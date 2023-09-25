@@ -15,6 +15,8 @@ Const gpuNone = 0;
       gpuOnly = 1;
       gpuBoth = 2;
 
+Const strGlue = '@glue@';
+
 Const lexer_preproc =
       {$IF NOT DEFINED(UNIX) AND NOT DEFINED(LINUX)}'run_lexer_preproc.bat'
       {$ELSE}'./run_lexer_preproc.sh'
@@ -91,6 +93,7 @@ Function _IndexOf(L: TStringList; Const What: String): Integer;
 Function DelBlanks(Const S: String): String;
 Function CRC(Const S: String): LongInt;
 Procedure WriteString(Var Out: TextFile; Const V: String; S: TStringList);
+Procedure WriteString(Var _Out: TStringList; Const V: String; S: TStringList);
 Function InQuotes(Const S: String; L:Integer; Quote:Char): Boolean;
 
 function EncodeStr(Const S:String):String;
@@ -102,6 +105,8 @@ procedure MakeInfoCommon(Const Msg: String);
 procedure VerifyProgram(PreprocessingMode, Obligatoire, IsVectorized, IsClustered: Boolean);
 
 function RunExtCommand(Const App,Prm,OutFName: String):String;
+
+procedure ProcessGlue(Var _Out: TStringList);
 
 Var LCounter: Integer;
     Files: TStringList;
@@ -531,6 +536,22 @@ begin
         Result:=''
 end;
 
+procedure ProcessGlue(var _Out: TStringList);
+
+Var F: Integer;
+begin
+     F := 0;
+     While F < _Out.Count Do
+       If (F > 0) And (_Out.Strings[F] = strGlue) Then
+          Begin
+            _Out.Strings[F - 1] := _Out.Strings[F - 1] + _Out.Strings[F + 1];
+            _Out.Delete(F);
+            _Out.Delete(F)
+          end
+       Else
+          Inc(F)
+end;
+
 procedure VerifyProgram(PreprocessingMode, Obligatoire, IsVectorized, IsClustered: Boolean);
 
 Var Checker: String;
@@ -593,6 +614,17 @@ begin
       WriteLn(Out, '"' + StringReplace(StringReplace(S.Strings[F],'\','\\',[rfReplaceAll]),'"','\"',[rfReplaceAll]) + '"', ',');
   WriteLn(Out, 'NULL');
   WriteLn(Out, '};')
+end;
+
+Procedure WriteString(Var _Out: TStringList; Const V: String; S: TStringList);
+
+Var F: Integer;
+begin
+  _Out.Add( 'const char * ' + V + '[] = {');
+  For F := 0 To S.Count-1 Do
+      _Out.Add( '"' + StringReplace(StringReplace(S.Strings[F],'\','\\',[rfReplaceAll]),'"','\"',[rfReplaceAll]) + '"' + ',');
+  _Out.Add( 'NULL');
+  _Out.Add( '};')
 end;
 
 {$IFDEF FPC}

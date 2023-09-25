@@ -865,7 +865,7 @@ begin
           end
 end;
 
-Function WriteStructDeclaration(Var Out: TextFile; IDList, DeclarationList: TStringList; Const PrmDeclaration, PrmStruct: String): String;
+Function WriteStructDeclaration(Var _Out: TStringList; IDList, DeclarationList: TStringList; Const PrmDeclaration, PrmStruct: String): String;
 
 Var Idx: Integer;
 Begin
@@ -873,18 +873,18 @@ Begin
   If Idx < 0 Then
      Begin
        DeclarationList.AddObject(PrmDeclaration, TObject(NewStr(PrmStruct)));
-       WriteLn(Out,StringReplace(PrmDeclaration, '$$$', PrmStruct, [rfReplaceAll]),' ',PrmStruct,';');
+       _Out.Add(StringReplace(PrmDeclaration, '$$$', PrmStruct, [rfReplaceAll])+' '+PrmStruct+';');
        IDList.AddObject(PrmStruct, IntegerToTObject(0));
        Result := PrmStruct
      End
   Else
      Begin
        Result := PString(DeclarationList.Objects[Idx])^;
-       WriteLn(Out,'#define ',PrmStruct,' ',Result)
+       _Out.Add('#define '+PrmStruct+' '+Result)
      End
 End;
 
-Procedure HandleChains(Var Out: TextFile; L, L1: TAnalyser; Var S: WideString;
+Procedure HandleChains(Var _Out: TStringList; L, L1: TAnalyser; Var S: WideString;
                        Var ClusteredArrID: String; Chain: TStringList);
 
 Var S1, S2, S3: WideString;
@@ -1010,7 +1010,7 @@ Begin
                   End;
               L.AnlzLine := S3;
               G:=Length(S)-Length(TrimLeft(S));
-              WriteLn(Out,Copy(S,1,F-1));
+              _Out.Add(Copy(S,1,F-1));
               NProcs := '';
               Flag:=L.IsNext(SemiColon);
               If Flag Then
@@ -1031,7 +1031,7 @@ Begin
 
               If Flag Then S1:=S1+SemiColon;
 
-              WriteLn(Out,S1);
+              _Out.Add(S1);
               S:=StringOfChar(' ',G)+S2;
               Start:=1
             End
@@ -1345,7 +1345,7 @@ Begin
      End
 End;
 
-Var Out: TextFile;
+Var _Out: TStringList;
     OldName, NewName: String;
     Defines: TStringList;
     NoSourceLines: Boolean;
@@ -1473,13 +1473,7 @@ begin
                    SysUtils.DeleteFile(S);
                    RenameFile(NewName, S)
                  End;
-              Assign(Out,NewName);
-              Try
-                 Rewrite(Out);
-              Except
-                 WriteLn('Can''t open output file ', NewName, ' for writing');
-                 Halt(-1)
-              End;
+              _Out := TStringList.Create;
 
               PassCount := 0;
               PreprocPasses := 1;
@@ -1525,9 +1519,9 @@ begin
                 Files := TStringList.Create;
                 For F := 1 To Lines.Count Do
                   Begin
-                    S := UTF8Decode(Lines[F-1]);
+                    S := {UTF8Decode}(Lines[F-1]);
                     StripComments(S, CommentFlag);
-                    Lines[F-1] := UTF8Encode(S);
+                    Lines[F-1] := {UTF8Encode}(S);
                     Lines.Objects[F-1] := TLine.Create(0, F, gpuNone)
                   End;
                 FL := TStringList.Create;
@@ -1594,7 +1588,14 @@ begin
 
               If Length(NewFileName) > 0 Then
                  Begin
-                   CloseFile(Out);
+                   Try
+                      ProcessGlue(_Out);
+                      _Out.SaveToFile(NewName);
+                   Except
+                      WriteLn('Can''t open output file ', NewName, ' for writing');
+                      Halt(-1)
+                   End;
+                   _Out.Clear;
                    OldName := NewFileName;
                    WriteLn('Input file has been changed to "', NewFileName, '"');
                  end
@@ -1603,10 +1604,10 @@ begin
           // Insert Prolog code
           If Not ExtensionsOnly Then
              Begin
-               WriteLn(Out, '#define __REENT__');
-               WriteProlog(Out, IsClustered, IsVectorized);
+               _Out.Add( '#define __REENT__');
+               WriteProlog(_Out, IsClustered, IsVectorized);
 
-               WriteString(Out, '__gpu_common', ProgGPU)
+               WriteString(_Out, '__gpu_common', ProgGPU)
              End;
 
           If PlcChecks Then
@@ -1617,7 +1618,7 @@ begin
           For F := 0 To Lines.Count-1 Do
             If Not TLine(Lines.Objects[F]).IsMacroResult Then
                Begin
-                 S := UTF8Decode(TLine(Lines.Objects[F]).GetOriginalLine);
+                 S := {UTF8Decode}(TLine(Lines.Objects[F]).GetOriginalLine);
                  StripComments(S, CommentFlag);
                  L.AnlzLine := S;
                  If L.IsNext(Pound) And L.Check(Pound) And L.IsNextIdent(idPragma, True) Then
@@ -1626,7 +1627,7 @@ begin
                       If L.IsNextIdent(idSyntax, True) Then
                          S := ''
                     End;
-                 Lines.Strings[F] := UTF8Encode(S);
+                 Lines.Strings[F] := {UTF8Encode}(S);
                End;
 
           Declared:=TStringList.Create;
@@ -1689,9 +1690,12 @@ begin
                    Continue
                  End;
               Flag := True;
-              S := UTF8Decode(Lines.Strings[LCounter-1]);
+              S := {UTF8Decode}(Lines.Strings[LCounter-1]);
               If Not (PolyDef Or NoSourceLines) Then
-                 Write(Out, TLine(Lines.Objects[LCounter-1]).GetLineNumbers);
+                 Begin
+                   _Out.Add(TLine(Lines.Objects[LCounter-1]).GetLineNumbers);
+                   _Out.Add(strGlue)
+                 End;
               StripComments(S, CommentFlag);
               L.AnlzLine := S;
               If PolyDef And (Not L.Empty) And (L.AnlzLine[Length(L.AnlzLine)] <> '\') Then
@@ -1740,8 +1744,8 @@ begin
                         FunctionText := FunctionText + CRLF + PureAutos + CRLF + S;
                         SoftFunctionText := SoftFunctionText + CRLF + PureAutos + CRLF + S;
                         GPUFunctionText := GPUFunctionText + CRLF + PureDummies + CRLF + gpuInit + CRLF + gpuStart + CRLF + S;
-                        WriteLn(Out, PlanAutos);
-                        WriteLn(Out);
+                        _Out.Add( PlanAutos);
+                        _Out.Add('');
                         AutosInserted := True
                       end
                    Else
@@ -1796,8 +1800,8 @@ begin
                    Else
                       S := '';
                    L.Check(SemiColon);
-                   CreateTopology(Out, ClusteredArrID, Chain, Topology, S);
-                   WriteLn(Out,';');
+                   CreateTopology(_Out, ClusteredArrID, Chain, Topology, S);
+                   _Out.Add(';');
                    S:=L.AnlzLine;
                    ID:=L.FindIdent(True)
                  End
@@ -1806,92 +1810,92 @@ begin
                    L.GetIdent(True);
                    L.Check(LeftBracket);
 
-                   WriteLn(Out,'#ifdef _OPENMP');
-                   WriteLn(Out,'do {');
+                   _Out.Add('#ifdef _OPENMP');
+                   _Out.Add('do {');
 
                    If ID = idreent_registered_barrier Then
                       Begin
-                        WriteLn(Out,'  int topo = ', L.GetBalancedListItem(False,[Comma]), ';');
+                        _Out.Add('  int topo = ' + L.GetBalancedListItem(False,[Comma]) + ';');
                         L.Check(Comma)
                       End
                    Else
-                      WriteLn(Out,'  int topo = plan_topology_num();');
+                      _Out.Add('  int topo = plan_topology_num();');
                    S := ID;
 
                    ID := L.GetIdent(False);
                    L.Check(RightBracket);
 
-                   WriteLn(Out,'  plan_set_lock(__topo_lock__);');
-                   WriteLn(Out,'  __Topology * top = __TopologyStack[topo];');
-                   WriteLn(Out,'  map<string,__Group *>::iterator itGroups = top->Groups.find("'+ID+'");');
-                   WriteLn(Out,'  if (itGroups == top->Groups.end()) {');
-                   WriteLn(Out,'     cout<<"Group '''+ID+''' does not exist in the current topology"<<endl;');
-                   WriteLn(Out,'     exit(-1);');
-                   WriteLn(Out,'  }');
-                   WriteLn(Out,'  __Group * group = itGroups->second;');
-                   WriteLn(Out,'  __Address_union A;');
-                   WriteLn(Out,'  A.ref_idx.ref = (unsigned long long)&_call_'+FunctionID+' & 0xFFFFFFFF;');
+                   _Out.Add('  plan_set_lock(__topo_lock__);');
+                   _Out.Add('  __Topology * top = __TopologyStack[topo];');
+                   _Out.Add('  map<string,__Group *>::iterator itGroups = top->Groups.find("'+ID+'");');
+                   _Out.Add('  if (itGroups == top->Groups.end()) {');
+                   _Out.Add('     cout<<"Group '''+ID+''' does not exist in the current topology"<<endl;');
+                   _Out.Add('     exit(-1);');
+                   _Out.Add('  }');
+                   _Out.Add('  __Group * group = itGroups->second;');
+                   _Out.Add('  __Address_union A;');
+                   _Out.Add('  A.ref_idx.ref = (unsigned long long)&_call_'+FunctionID+' & 0xFFFFFFFF;');
 
                    If S = idreent_registered_barrier Then
-                      WriteLn(Out,'  int num = reent_linear_num();')
+                      _Out.Add('  int num = reent_linear_num();')
                    Else
-                      WriteLn(Out,'  int num = plan_linear_num();');
+                      _Out.Add('  int num = plan_linear_num();');
 
-                   WriteLn(Out,'  A.ref_idx.idx = num;');
+                   _Out.Add('  A.ref_idx.idx = num;');
 
-                   WriteLn(Out,'  __Node * node = top->Nodes[A.single];');
-                   WriteLn(Out,'  if (!group->find(node)) {');
-                   WriteLn(Out,'     cout<<"Barrier at "<<reinterpret_cast<void *>(&_call_'+FunctionID+')<<"["<<num<<"]: not registered in group ''"<<"'+ID+'"<<"''"<<endl;');
-                   WriteLn(Out,'     exit(-1);');
-                   WriteLn(Out,'  }');
-                   WriteLn(Out,'#ifdef __REENT_MPI__');
-                   WriteLn(Out,'  if (top->clustered) {');
-                   WriteLn(Out,'     const char * GroupID = "'+ID+'";');
-                   WriteLn(Out,'     __group_struct gs;');
-                   WriteLn(Out,'     memmove(gs.group, GroupID, strlen(GroupID)+1);');
-                   WriteLn(Out,'     gs.command = gcBarrier;');
-                   WriteLn(Out,'');
-                   WriteLn(Out,'     map<unsigned long long,__Node *>::iterator itNodes;');
-                   WriteLn(Out,'     for (itNodes = top->Nodes.begin(); itNodes != top->Nodes.end(); itNodes++)');
-                   WriteLn(Out,'         if (itNodes->second == node)');
-                   WriteLn(Out,'            itNodes->second->barriered = group;');
-                   WriteLn(Out,'         else if (group->find(itNodes->second))');
-                   WriteLn(Out,'            MPI_Send(&gs, sizeof(gs), MPI_BYTE, itNodes->second->id, 1236, MPI_COMM_WORLD);');
-                   WriteLn(Out,'     bool passed;');
-                   WriteLn(Out,'     do {');
-                   WriteLn(Out,'         plan_unset_lock(__topo_lock__);');
-                   WriteLn(Out,'         _Yield();');
-                   WriteLn(Out,'         plan_set_lock(__topo_lock__);');
-                   WriteLn(Out,'         top->process_group_messages();');
-                   WriteLn(Out,'         passed = true;');
-                   WriteLn(Out,'         for (itNodes = top->Nodes.begin(); passed && itNodes != top->Nodes.end(); itNodes++)');
-                   WriteLn(Out,'             if (group->find(itNodes->second))');
-                   WriteLn(Out,'                if (itNodes->second->barriered != group)');
-                   WriteLn(Out,'                   passed = false;');
-                   WriteLn(Out,'     } while (!passed);');
-                   WriteLn(Out,'     for (itNodes = top->Nodes.begin(); itNodes != top->Nodes.end(); itNodes++)');
-                   WriteLn(Out,'         if (group->find(itNodes->second))');
-                   WriteLn(Out,'            itNodes->second->barriered = NULL;');
-                   WriteLn(Out,'     plan_unset_lock(__topo_lock__);');
-                   WriteLn(Out,'  } else {');
-                   WriteLn(Out,'#endif');
-                   WriteLn(Out,'    plan_unset_lock(__topo_lock__);');
-                   WriteLn(Out,'    #pragma omp critical(__'+ID+'1)');
-                   WriteLn(Out,'    {');
-                   WriteLn(Out,'      group->enter_barrier();');
-                   WriteLn(Out,'    }');
-                   WriteLn(Out,'    #pragma omp critical(__'+ID+'2)');
-                   WriteLn(Out,'    {');
-                   WriteLn(Out,'      group->wait_barrier();');
-                   WriteLn(Out,'    }');
-                   WriteLn(Out,'    group->leave_barrier();');
-                   WriteLn(Out,'#ifdef __REENT_MPI__');
-                   WriteLn(Out,'  }');
-                   WriteLn(Out,'#endif');
-                   WriteLn(Out,'} while(0)');
-                   WriteLn(Out,'#else');
-                   WriteLn(Out,'while(0)');
-                   WriteLn(Out,'#endif');
+                   _Out.Add('  __Node * node = top->Nodes[A.single];');
+                   _Out.Add('  if (!group->find(node)) {');
+                   _Out.Add('     cout<<"Barrier at "<<reinterpret_cast<void *>(&_call_'+FunctionID+')<<"["<<num<<"]: not registered in group ''"<<"'+ID+'"<<"''"<<endl;');
+                   _Out.Add('     exit(-1);');
+                   _Out.Add('  }');
+                   _Out.Add('#ifdef __REENT_MPI__');
+                   _Out.Add('  if (top->clustered) {');
+                   _Out.Add('     const char * GroupID = "'+ID+'";');
+                   _Out.Add('     __group_struct gs;');
+                   _Out.Add('     memmove(gs.group, GroupID, strlen(GroupID)+1);');
+                   _Out.Add('     gs.command = gcBarrier;');
+                   _Out.Add('');
+                   _Out.Add('     map<unsigned long long,__Node *>::iterator itNodes;');
+                   _Out.Add('     for (itNodes = top->Nodes.begin(); itNodes != top->Nodes.end(); itNodes++)');
+                   _Out.Add('         if (itNodes->second == node)');
+                   _Out.Add('            itNodes->second->barriered = group;');
+                   _Out.Add('         else if (group->find(itNodes->second))');
+                   _Out.Add('            MPI_Send(&gs, sizeof(gs), MPI_BYTE, itNodes->second->id, 1236, MPI_COMM_WORLD);');
+                   _Out.Add('     bool passed;');
+                   _Out.Add('     do {');
+                   _Out.Add('         plan_unset_lock(__topo_lock__);');
+                   _Out.Add('         _Yield();');
+                   _Out.Add('         plan_set_lock(__topo_lock__);');
+                   _Out.Add('         top->process_group_messages();');
+                   _Out.Add('         passed = true;');
+                   _Out.Add('         for (itNodes = top->Nodes.begin(); passed && itNodes != top->Nodes.end(); itNodes++)');
+                   _Out.Add('             if (group->find(itNodes->second))');
+                   _Out.Add('                if (itNodes->second->barriered != group)');
+                   _Out.Add('                   passed = false;');
+                   _Out.Add('     } while (!passed);');
+                   _Out.Add('     for (itNodes = top->Nodes.begin(); itNodes != top->Nodes.end(); itNodes++)');
+                   _Out.Add('         if (group->find(itNodes->second))');
+                   _Out.Add('            itNodes->second->barriered = NULL;');
+                   _Out.Add('     plan_unset_lock(__topo_lock__);');
+                   _Out.Add('  } else {');
+                   _Out.Add('#endif');
+                   _Out.Add('    plan_unset_lock(__topo_lock__);');
+                   _Out.Add('    #pragma omp critical(__'+ID+'1)');
+                   _Out.Add('    {');
+                   _Out.Add('      group->enter_barrier();');
+                   _Out.Add('    }');
+                   _Out.Add('    #pragma omp critical(__'+ID+'2)');
+                   _Out.Add('    {');
+                   _Out.Add('      group->wait_barrier();');
+                   _Out.Add('    }');
+                   _Out.Add('    group->leave_barrier();');
+                   _Out.Add('#ifdef __REENT_MPI__');
+                   _Out.Add('  }');
+                   _Out.Add('#endif');
+                   _Out.Add('} while(0)');
+                   _Out.Add('#else');
+                   _Out.Add('while(0)');
+                   _Out.Add('#endif');
                    S:=L.AnlzLine;
                    ID:=L.FindIdent(True)
                  End
@@ -1905,14 +1909,14 @@ begin
                    Else
                       Begin
                         L.Check(RightBracket);
-                        WriteLn(Out,'#pragma omp critical('+ID+')')
+                        _Out.Add('#pragma omp critical('+ID+')')
                       End;
                    S:=L.AnlzLine;
                    ID:=L.FindIdent(True)
                  End;
               If Not ((ID=idReenterable) Or (ID=idChain)) Then
                  Begin // Isn't declaration
-                   HandleChains(Out, L, L1, S, ClusteredArrID, Chain);
+                   HandleChains(_Out, L, L1, S, ClusteredArrID, Chain);
                    If L.Error Then Continue;
 
                    HandleProcMentions(L, L1, Declared, S);
@@ -1941,7 +1945,7 @@ begin
                        If Length(TagID)<>0 Then
                           TypeMaps.Values[TagID]:=S1
                      End;
-                  WriteLn(Out,S)
+                  _Out.Add(S)
                 End
               Else
                 begin
@@ -2052,19 +2056,19 @@ begin
                             GPUFunctionText := StringReplace(GPUFunctionText, '$$$', '('+gpuParams+')', [rfReplaceAll]);
                             S2 := StringReplace(FunctionText, '__transaction_atomic', '', [rfReplaceAll]);
                             If S2[Length(S2)] = LeftFBracket Then
-                               WriteLn(Out, Copy(S2, 1, Length(S2)-1), ';')
+                               _Out.Add( Copy(S2, 1, Length(S2)-1) + ';')
                             Else
-                               WriteLn(Out, S2, ';');
+                               _Out.Add( S2 + ';');
                             S2 := SoftFunctionText;
                             If S2[Length(S2)] = LeftFBracket Then
-                               WriteLn(Out, Copy(S2, 1, Length(S2)-1), ';')
+                               _Out.Add( Copy(S2, 1, Length(S2)-1) + ';')
                             Else
-                               WriteLn(Out, S2, ';');
+                               _Out.Add( S2 + ';');
                             If IsVectorized Then
                                Begin
-                                 WriteLn(Out,'#ifdef __REENT_GPU__');
-                                 WriteLn(Out,'extern const char * gpu_'+ID+'[];');
-                                 WriteLn(Out,'#endif')
+                                 _Out.Add('#ifdef __REENT_GPU__');
+                                 _Out.Add('extern const char * gpu_'+ID+'[];');
+                                 _Out.Add('#endif')
                                End;
                             eRedDummies:=StringReplace(RedDummies,CRLF,' \'+CRLF,[rfReplaceAll]);
                             eRedModifs:=StringReplace(RedModifs,CRLF,' \'+CRLF,[rfReplaceAll]);
@@ -2436,70 +2440,70 @@ begin
                                end;
                             If Declared.IndexOf(ID)<0 Then
                                Begin
-                                 RealType:=WriteStructDeclaration(Out,IDList,DeclarationList, PrmDeclaration+CRLF+'}', PrmStruct);
+                                 RealType:=WriteStructDeclaration(_Out,IDList,DeclarationList, PrmDeclaration+CRLF+'}', PrmStruct);
                                  With _Names Do
                                    Begin
-                                     WriteLn(Out, PrmStruct, ' _x', PrmStruct,';');
-                                     WriteLn(Out, 'int _n', PrmStruct, ' = ', Count, ';');
-                                     Write(Out, 'int _s', PrmStruct, '[] = {');
+                                     _Out.Add( PrmStruct + ' _x' + PrmStruct +';');
+                                     _Out.Add( 'int _n' + PrmStruct + ' = ' + IntToStr(Count) + ';');
+                                     _Out.Add( 'int _s' + PrmStruct + '[] = {');
                                      For F := 0 To Count-1 Do
-                                       Write(Out, 'sizeof(_x'+PrmStruct+'.'+Strings[F]+'),');
-                                     WriteLn(Out, '0};');
-                                     Write(Out, 'int _o', PrmStruct, '[] = {');
+                                       _Out.Add( 'sizeof(_x'+PrmStruct+'.'+Strings[F]+'),');
+                                     _Out.Add( '0};');
+                                     _Out.Add( 'int _o' + PrmStruct + '[] = {');
                                      For F := 0 To Count-1 Do
-                                       Write(Out, '((char *)&_x'+PrmStruct+'.'+Strings[F]+')-((char *)&_x'+PrmStruct+'),');
-                                     WriteLn(Out, '0};')
+                                       _Out.Add( '((char *)&_x'+PrmStruct+'.'+Strings[F]+')-((char *)&_x'+PrmStruct+'),');
+                                     _Out.Add( '0};')
                                    End;
                                  If ChainMode Then
-                                    WriteStructDeclaration(Out,IDList,DeclarationList, ThrDeclaration, ThrStruct);
+                                    WriteStructDeclaration(_Out,IDList,DeclarationList, ThrDeclaration, ThrStruct);
                                  Declared.Add(ID);
                                  If ChainMode Then
                                     Chain.AddObject(ID,TObject(NewStr(Ldecl+#0+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct]))));
                                  If StaticFlag<>smDynamic Then
                                     Begin
                                       Evs:=oEvs;
-                                      WriteLn(Out,'#define '+ID+'_plan_type '+Ldecl+'<'+PrmStruct+'>');
+                                      _Out.Add('#define '+ID+'_plan_type '+Ldecl+'<'+PrmStruct+'>');
                                       Q:=IDList.IndexOf(RealType);
                                       K:=TObjectToInteger(IDList.Objects[Q]);
                                       If (K And LFlag) = 0  Then
                                          Begin
                                             IDList.Objects[Q] := IntegerToTObject(K Or LFlag);
-                                            WriteLn(Out,'plan_type('+ID+') & operator <<(plan_type('+ID+') & A, const plan_item_type('+ID+') &Item) {');
-                                            WriteLn(Out,' A.push_back(Item);');
-                                            WriteLn(Out,' return A;');
-                                            WriteLn(Out,'}');
-                                            WriteLn(Out,'plan_type('+ID+') & operator >>(const plan_item_type('+ID+') &Item, plan_type('+ID+') &A) {');
-                                            WriteLn(Out,' A.push_front(Item);');
-                                            WriteLn(Out,' return A;');
-                                            WriteLn(Out,'}');
-                                            WriteLn(Out,'plan_type('+ID+') & operator <<(plan_item_type('+ID+') &Item, plan_type('+ID+') &A) {');
-                                            WriteLn(Out,' Item = A.front();');
-                                            WriteLn(Out,' A.pop_front();');
-                                            WriteLn(Out,' return A;');
-                                            WriteLn(Out,'}');
-                                            WriteLn(Out,'plan_type('+ID+') & operator >>(plan_type('+ID+') &A, plan_item_type('+ID+') &Item) {');
-                                            WriteLn(Out,' Item = A.back();');
-                                            WriteLn(Out,' A.pop_back();');
-                                            WriteLn(Out,' return A;');
-                                            WriteLn(Out,'}');
-                                            WriteLn(Out,'plan_item_type('+ID+') & operator ++(plan_type('+ID+') & A) {');
-                                            WriteLn(Out,' return A.front();');
-                                            WriteLn(Out,'}');
-                                            WriteLn(Out,'plan_item_type('+ID+') & operator ++(plan_type('+ID+') & A, int) {');
-                                            WriteLn(Out,' return A.back();');
-                                            WriteLn(Out,'}')
+                                            _Out.Add('plan_type('+ID+') & operator <<(plan_type('+ID+') & A, const plan_item_type('+ID+') &Item) {');
+                                            _Out.Add(' A.push_back(Item);');
+                                            _Out.Add(' return A;');
+                                            _Out.Add('}');
+                                            _Out.Add('plan_type('+ID+') & operator >>(const plan_item_type('+ID+') &Item, plan_type('+ID+') &A) {');
+                                            _Out.Add(' A.push_front(Item);');
+                                            _Out.Add(' return A;');
+                                            _Out.Add('}');
+                                            _Out.Add('plan_type('+ID+') & operator <<(plan_item_type('+ID+') &Item, plan_type('+ID+') &A) {');
+                                            _Out.Add(' Item = A.front();');
+                                            _Out.Add(' A.pop_front();');
+                                            _Out.Add(' return A;');
+                                            _Out.Add('}');
+                                            _Out.Add('plan_type('+ID+') & operator >>(plan_type('+ID+') &A, plan_item_type('+ID+') &Item) {');
+                                            _Out.Add(' Item = A.back();');
+                                            _Out.Add(' A.pop_back();');
+                                            _Out.Add(' return A;');
+                                            _Out.Add('}');
+                                            _Out.Add('plan_item_type('+ID+') & operator ++(plan_type('+ID+') & A) {');
+                                            _Out.Add(' return A.front();');
+                                            _Out.Add('}');
+                                            _Out.Add('plan_item_type('+ID+') & operator ++(plan_type('+ID+') & A, int) {');
+                                            _Out.Add(' return A.back();');
+                                            _Out.Add('}')
                                          End;
                                       If StaticFlag=smStatic Then
                                          Begin
-                                           WriteLn(Out,Ldecl+'<'+PrmStruct+'> '+Evs+' = '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
-                                           WriteLn(Out,'#define '+ID+'_plan_prefix');
+                                           _Out.Add(Ldecl+'<'+PrmStruct+'> '+Evs+' = '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
+                                           _Out.Add('#define '+ID+'_plan_prefix');
                                          End
                                       Else
                                          Begin
-                                           WriteLn(Out,Ldecl+'<'+PrmStruct+'> * '+Evs+' = new '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
-                                           WriteLn(Out,'#define '+ID+'_plan_prefix *');
-                                           WriteLn(Out,'reent_list<'+Ldecl+'<'+PrmStruct+'> *> _'+Evs+' = reent_list<'+Ldecl+'<'+PrmStruct+'> *>'+Format(Lfmt,[Evs])+';');
-                                           WriteLn(Out,'volatile int n_'+Evs+' = -1;');
+                                           _Out.Add(Ldecl+'<'+PrmStruct+'> * '+Evs+' = new '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
+                                           _Out.Add('#define '+ID+'_plan_prefix *');
+                                           _Out.Add('reent_list<'+Ldecl+'<'+PrmStruct+'> *> _'+Evs+' = reent_list<'+Ldecl+'<'+PrmStruct+'> *>'+Format(Lfmt,[Evs])+';');
+                                           _Out.Add('volatile int n_'+Evs+' = -1;');
                                            Evs:='(*'+Evs+')';
                                            oEvs:=Evs
                                          End
@@ -2509,79 +2513,82 @@ begin
 
                                  If ChainMode Then
                                     begin
-                                      WriteThrowMacros(Out,ID,_ThrParamNames);
+                                      WriteThrowMacros(_Out,ID,_ThrParamNames);
                                       If Not IsDeclaration Then FunctionThrowParams := ThrParamNames
                                     end;
                                  If Not IsDeclaration Then
-                                    WritePlanMacros(Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
+                                    WritePlanMacros(_Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
                                  If Length(S2)<>0 Then
-                                    WriteLn(Out,S2);
-                                 WriteLn(Out,'#ifdef _OPENMP');
-                                 WriteLn(Out,'#define __plan_group_'+ID+'__(__Direction__) \');
-                                 WriteLn(Out,'do { \');
-                                 WriteLn(Out,' '+PrmStruct+' '+ParamDummy+'; \');
-                                 WriteLn(Out,' '+ParamDummy+'.Flags=1; \');
-                                 WriteLn(Out,' __plan_locking__; \');
-                                 WriteLn(Out,' __event_list__->push_##__Direction__(_dummy_'+ID+'__LOC__); \');
-                                 WriteLn(Out,' __plan_unlocking__; \');
-                                 WriteLn(Out,' __plan_signal__; \');
-                                 WriteLn(Out,'} while(0)');
-                                 WriteLn(Out,'#else');
-                                 WriteLn(Out,'#define __plan_group_'+ID+'__(__Direction__) while(0)');
-                                 WriteLn(Out,'#endif');
-                                 WriteLn(Out,'#define __plan_'+ID+'__(__Direction__,'+_ParamNames+'__mask__) \');
-                                 WriteLn(Out,'do { \');
-                                 WriteLn(Out,' '+PrmStruct+' '+ParamDummy+'; \');
-                                 WriteLn(Out,' '+ParamDummy+'.Flags=__mask__<<1; \');
+                                    _Out.Add(S2);
+                                 _Out.Add('#ifdef _OPENMP');
+                                 _Out.Add('#define __plan_group_'+ID+'__(__Direction__) \');
+                                 _Out.Add('do { \');
+                                 _Out.Add(' '+PrmStruct+' '+ParamDummy+'; \');
+                                 _Out.Add(' '+ParamDummy+'.Flags=1; \');
+                                 _Out.Add(' __plan_locking__; \');
+                                 _Out.Add(' __event_list__->push_##__Direction__(_dummy_'+ID+'__LOC__); \');
+                                 _Out.Add(' __plan_unlocking__; \');
+                                 _Out.Add(' __plan_signal__; \');
+                                 _Out.Add('} while(0)');
+                                 _Out.Add('#else');
+                                 _Out.Add('#define __plan_group_'+ID+'__(__Direction__) while(0)');
+                                 _Out.Add('#endif');
+                                 _Out.Add('#define __plan_'+ID+'__(__Direction__,'+_ParamNames+'__mask__) \');
+                                 _Out.Add('do { \');
+                                 _Out.Add(' '+PrmStruct+' '+ParamDummy+'; \');
+                                 _Out.Add(' '+ParamDummy+'.Flags=__mask__<<1; \');
                                  If Length(TaskReset)<>0 Then
                                     Begin
-                                      WriteLn(Out,' '+TypeTaskID+' id = '+NameTaskID+'; \');
-                                      Write(Out,' ');
+                                      _Out.Add(' '+TypeTaskID+' id = '+NameTaskID+'; \');
+                                      _Out.Add(' '); _Out.Add(strGlue);
                                       If Length(TaskEmpty)<>0 Then
-                                         Write(Out,'if (id!=('+TaskEmpty+')) ');
-                                      WriteLn(Out,TaskReset+'; \')
+                                         Begin
+                                           _Out.Add('if (id!=('+TaskEmpty+')) ');
+                                           _Out.Add(strGlue)
+                                         End;
+                                      _Out.Add(TaskReset+'; \')
                                     End;
                                  If Length(ParamAsgns)>0 Then
-                                    WriteLn(Out,ParamAsgns);
-                                 WriteLn(Out,' __plan_locking__; \');
-                                 WriteLn(Out,' __event_list__->push_##__Direction__('+ParamDummy+'); \');
-                                 WriteLn(Out,' __plan_unlocking__; \');
-                                 WriteLn(Out,' __plan_signal__; \');
-                                 WriteLn(Out,'} while(0)');
+                                    _Out.Add(ParamAsgns);
+                                 _Out.Add(' __plan_locking__; \');
+                                 _Out.Add(' __event_list__->push_##__Direction__('+ParamDummy+'); \');
+                                 _Out.Add(' __plan_unlocking__; \');
+                                 _Out.Add(' __plan_signal__; \');
+                                 _Out.Add('} while(0)');
                                  If ChainMode Then
                                     Begin
-                                      WriteLn(Out,'#define __throw_'+ID+'__(__Direction__,'+_ThrParamNames+'__mask__) \');
-                                      WriteLn(Out,'do { \');
-                                      WriteLn(Out,' _throw_'+ID+' __dummy_throw__; \');
-                                      WriteLn(Out,' __dummy_throw__.Flags=__mask__<<1; \');
+                                      _Out.Add('#define __throw_'+ID+'__(__Direction__,'+_ThrParamNames+'__mask__) \');
+                                      _Out.Add('do { \');
+                                      _Out.Add(' _throw_'+ID+' __dummy_throw__; \');
+                                      _Out.Add(' __dummy_throw__.Flags=__mask__<<1; \');
                                       If Length(ThrParamAsgns)>0 Then
-                                         WriteLn(Out,ThrParamAsgns);
+                                         _Out.Add(ThrParamAsgns);
                                       If Length(InputProcName)>0 Then
-                                         WriteLn(Out,' __throw_cluster__('+ID+','+tran(ChainNames,ChainSubsts,InputProcName)+',__Direction__); \')
+                                         _Out.Add(' __throw_cluster__('+ID+','+tran(ChainNames,ChainSubsts,InputProcName)+',__Direction__); \')
                                       Else
-                                         WriteLn(Out,' __throw_cluster__('+ID+',1,__Direction__); \');
+                                         _Out.Add(' __throw_cluster__('+ID+',1,__Direction__); \');
                                       If Length(InputProcName)>0 Then
-                                         WriteLn(Out,' if ('+tran(ChainNames,ChainSubsts,InputProcName)+' == 1) { \');
-                                      WriteLn(Out,'    if (!__chain_plan__) { \');
-                                      WriteLn(Out,'       cout<<"Default throw link from "<<reinterpret_cast<void *>(&_call_'+ID+')<<"["<<plan_linear_num()<<"] does not exist"<<endl; \');
-                                      WriteLn(Out,'       exit(-1); \');
-                                      WriteLn(Out,'    } \');
-                                      WriteLn(Out,'    __abstract_list<_throw_'+ID+'> * __throw_list__ = (__abstract_list<_throw_'+ID+'> *) __chain_plan__; \');
-                                      WriteLn(Out,'    __throw_locking__; \');
-                                      WriteLn(Out,'    __throw_list__->push_##__Direction__(__dummy_throw__); \');
-                                      WriteLn(Out,'    __throw_unlocking__; \');
-                                      WriteLn(Out,'    __throw_signal__; \');
+                                         _Out.Add(' if ('+tran(ChainNames,ChainSubsts,InputProcName)+' == 1) { \');
+                                      _Out.Add('    if (!__chain_plan__) { \');
+                                      _Out.Add('       cout<<"Default throw link from "<<reinterpret_cast<void *>(&_call_'+ID+')<<"["<<plan_linear_num()<<"] does not exist"<<endl; \');
+                                      _Out.Add('       exit(-1); \');
+                                      _Out.Add('    } \');
+                                      _Out.Add('    __abstract_list<_throw_'+ID+'> * __throw_list__ = (__abstract_list<_throw_'+ID+'> *) __chain_plan__; \');
+                                      _Out.Add('    __throw_locking__; \');
+                                      _Out.Add('    __throw_list__->push_##__Direction__(__dummy_throw__); \');
+                                      _Out.Add('    __throw_unlocking__; \');
+                                      _Out.Add('    __throw_signal__; \');
                                       If Length(InputProcName)>0 Then
                                          Begin
-                                           WriteLn(Out,' } else { \');
-                                           WriteLn(Out,'    __throw_substitute__('+ID+','+tran(ChainNames,ChainSubsts,InputProcName)+'); \');
-                                           WriteLn(Out,'    __throw_locking__; \');
-                                           WriteLn(Out,'    __throw_list__->push_##__Direction__(__dummy_throw__); \');
-                                           WriteLn(Out,'    __throw_unlocking__; \');
-                                           WriteLn(Out,'    __throw_signal__; \');
-                                           WriteLn(Out,' } \');
+                                           _Out.Add(' } else { \');
+                                           _Out.Add('    __throw_substitute__('+ID+','+tran(ChainNames,ChainSubsts,InputProcName)+'); \');
+                                           _Out.Add('    __throw_locking__; \');
+                                           _Out.Add('    __throw_list__->push_##__Direction__(__dummy_throw__); \');
+                                           _Out.Add('    __throw_unlocking__; \');
+                                           _Out.Add('    __throw_signal__; \');
+                                           _Out.Add(' } \');
                                          End;
-                                      WriteLn(Out,'} while(0)')
+                                      _Out.Add('} while(0)')
                                     End;
 
                                  CorrectParamNames(_ParamNames,S);
@@ -2589,565 +2596,583 @@ begin
                                  CorrectParamNames(_rParamNames,S1); {!!!!!!}
                                  CorrectParamNames(rParamNames,S1); {!!!!!!}
 
-                                 WriteLn(Out,'#define '+ID+'('+S+' \');
-                                 WriteLn(Out,'   caller__'+ID+'(0'+ParamNames);
-                                 WriteLn(Out,'#define __continue__'+ID+'('+S+' \');
-                                 WriteLn(Out,'   caller__'+ID+'(1'+ParamNames);
-                                 WriteLn(Out,'#define caller__'+ID+'(__continue'+ParamNames+' \');
+                                 _Out.Add('#define '+ID+'('+S+' \');
+                                 _Out.Add('   caller__'+ID+'(0'+ParamNames);
+                                 _Out.Add('#define __continue__'+ID+'('+S+' \');
+                                 _Out.Add('   caller__'+ID+'(1'+ParamNames);
+                                 _Out.Add('#define caller__'+ID+'(__continue'+ParamNames+' \');
                                  If StaticFlag=smKept Then
                                     Begin
-                                       WriteLn(Out,'  do { \');
-                                       WriteLn(Out,'   if (n__events_'+ID+'+1 >=__events_'+ID+'.size()) { \');
-                                       WriteLn(Out,'     __events_'+ID+'.push_back(new '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+'); \');
-                                       WriteLn(Out,'   } \');
-                                       WriteLn(Out,'   n__events_'+ID+'++; \');
-                                       WriteLn(Out,'   reent_list<'+Ldecl+'<'+PrmStruct+'> *>::iterator it = __events_'+ID+'.begin(); \');
-                                       WriteLn(Out,'   for (int iit = 0; iit < n__events_'+ID+'; iit++, it++); \');
-                                       WriteLn(Out,'   _events_'+ID+' = *it; \');
-                                       WriteLn(Out,'   __'+ID+'__(__continue'+ParamNames+'; \');
-                                       WriteLn(Out,'   n__events_'+ID+'--; \');
-                                       WriteLn(Out,'   it = __events_'+ID+'.begin(); \');
-                                       WriteLn(Out,'   for (int iit = 0; iit < n__events_'+ID+'; iit++, it++); \');
-                                       WriteLn(Out,'   _events_'+ID+' = *it; \');
-                                       WriteLn(Out,'  } while(0)')
+                                       _Out.Add('  do { \');
+                                       _Out.Add('   if (n__events_'+ID+'+1 >=__events_'+ID+'.size()) { \');
+                                       _Out.Add('     __events_'+ID+'.push_back(new '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+'); \');
+                                       _Out.Add('   } \');
+                                       _Out.Add('   n__events_'+ID+'++; \');
+                                       _Out.Add('   reent_list<'+Ldecl+'<'+PrmStruct+'> *>::iterator it = __events_'+ID+'.begin(); \');
+                                       _Out.Add('   for (int iit = 0; iit < n__events_'+ID+'; iit++, it++); \');
+                                       _Out.Add('   _events_'+ID+' = *it; \');
+                                       _Out.Add('   __'+ID+'__(__continue'+ParamNames+'; \');
+                                       _Out.Add('   n__events_'+ID+'--; \');
+                                       _Out.Add('   it = __events_'+ID+'.begin(); \');
+                                       _Out.Add('   for (int iit = 0; iit < n__events_'+ID+'; iit++, it++); \');
+                                       _Out.Add('   _events_'+ID+' = *it; \');
+                                       _Out.Add('  } while(0)')
                                     End
                                  Else
-                                    WriteLn(Out,'   __'+ID+'__(__continue'+ParamNames);
-                                 WriteLn(Out,'#undef __NOT_THROWING__');
+                                    _Out.Add('   __'+ID+'__(__continue'+ParamNames);
+                                 _Out.Add('#undef __NOT_THROWING__');
                                  If ChainMode Then
-                                    WriteLn(Out,'#define __NOT_THROWING__ 0')
+                                    _Out.Add('#define __NOT_THROWING__ 0')
                                  Else
-                                    WriteLn(Out,'#define __NOT_THROWING__ 1');
-                                 WriteLn(Out,'#ifdef _OPENMP');
-                                   WriteLn(Out,TypeID,' ',Proc,'(__reent_event * __signaler__, __reent_event * __next_signaler__, int __throw_stage__,'+
+                                    _Out.Add('#define __NOT_THROWING__ 1');
+                                 _Out.Add('#ifdef _OPENMP');
+                                   _Out.Add(TypeID + ' '+Proc+'(__reent_event * __signaler__, __reent_event * __next_signaler__, int __throw_stage__,'+
                                                             ' void * __chain_plan__, plan_lock_t * __chain_lock__, omp_lock_t * __start_lock__, plan_lock_t * __plan_lock__, omp_lock_t * __continue_lock__, '+
-                                                            'char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<',PrmStruct,'> * __event_list__, int __nprocs__',Params,';');
-                                   WriteLn(Out,'inline ',TypeID,' __'+ID+'__(char __continue__, int __nprocs__'+
+                                                            'char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<' + PrmStruct + '> * __event_list__, int __nprocs__' +Params + ';');
+                                   _Out.Add('inline '+TypeID+' __'+ID+'__(char __continue__, int __nprocs__'+
                                                Copy(Params,1,Length(Params)-1)+
                                                ', __reent_event * p__signaler__ = NULL, __reent_event * __next_signaler__ = NULL, '+
-                                               'int __throw_stage__ = 0, void * p__chain_plan__ = NULL, plan_lock_t * p__chain_lock__ = NULL, plan_lock_t * p__plan_lock__ = NULL, '+Ldecl+'<',PrmStruct,'> * p__event_list__ = NULL)');
-                                   WriteLn(Out,'{');
+                                               'int __throw_stage__ = 0, void * p__chain_plan__ = NULL, plan_lock_t * p__chain_lock__ = NULL, plan_lock_t * p__plan_lock__ = NULL, '+Ldecl+'<'+PrmStruct+'> * p__event_list__ = NULL)');
+                                   _Out.Add('{');
                                    If StaticFlag=smDynamic Then
-                                      WriteLn(Out,' '+Ldecl+'<'+PrmStruct+'>& _events_'+ID+' = p__event_list__ ? *p__event_list__ : *new '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
-                                   WriteLn(Out,' char __val_parallel_flag__ = 0;');
-                                   WriteLn(Out,' char * __parallel_flag__   = &__val_parallel_flag__;');
-                                   WriteLn(Out,' omp_lock_t __start_lock__, __free_lock__, __continue_lock__;');
+                                      _Out.Add(' '+Ldecl+'<'+PrmStruct+'>& _events_'+ID+' = p__event_list__ ? *p__event_list__ : *new '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
+                                   _Out.Add(' char __val_parallel_flag__ = 0;');
+                                   _Out.Add(' char * __parallel_flag__   = &__val_parallel_flag__;');
+                                   _Out.Add(' omp_lock_t __start_lock__, __free_lock__, __continue_lock__;');
                                    If TypeID <> 'void' Then
-                                      WriteLn(Out,' ',TypeID,' __ret__;');
-                                   WriteLn(Out,' plan_lock_t v__plan_lock__;');
-                                   WriteLn(Out,' plan_lock_t& __plan_lock__ = p__plan_lock__ ? *p__plan_lock__ : v__plan_lock__;');
+                                      _Out.Add(' '+TypeID+' __ret__;');
+                                   _Out.Add(' plan_lock_t v__plan_lock__;');
+                                   _Out.Add(' plan_lock_t& __plan_lock__ = p__plan_lock__ ? *p__plan_lock__ : v__plan_lock__;');
                                    If Length(d_eli)<>0 Then
                                       Begin
-                                        WriteLn(Out,' map<'+TypeTaskID+',char> * use_ids = new map<'+TypeTaskID+',char>();');
+                                        _Out.Add(' map<'+TypeTaskID+',char> * use_ids = new map<'+TypeTaskID+',char>();');
                                         S2:=',use_ids'
                                       End
                                    Else
                                       S2:='';
-                                   WriteLn(Out,' '+PrmStruct+' _dummy_;');
-                                   WriteLn(Out,' int __num_threads__    = (__nprocs__ & 0x3FF) ? (__nprocs__ & 0x3FF) : omp_get_max_threads();');
-                                   WriteLn(Out,' int __val_free_count__ = __num_threads__;');
-                                   WriteLn(Out,' int * __free_count__   = &__val_free_count__;');
-                                   WriteLn(Out,' char __val_continue_plan__ = 1+__continue__;');
-                                   WriteLn(Out,' char * __continue_plan__ = &__val_continue_plan__;');
-                                   WriteLn(Out,' __reent_event __v_signaler__;');
-                                   WriteLn(Out,' __reent_event& __signaler__ = p__signaler__ ? *p__signaler__ : __v_signaler__;');
-                                   WriteLn(Out,' '+_pRedDummies);
-                                   WriteLn(Out,' if (!p__signaler__) __init_reent_event(&__signaler__);');
-                                   WriteLn(Out,' omp_init_lock(&__start_lock__);');
-                                   WriteLn(Out,' if (!p__plan_lock__) plan_init_lock(&__plan_lock__);');
-                                   WriteLn(Out,' omp_init_lock(&__free_lock__);');
-                                   WriteLn(Out,' omp_init_lock(&__continue_lock__);');
-                                   WriteLn(Out,' if (__nprocs__ & 0x18000) {');
-                                   WriteLn(Out,'    char __parallelize__ = __add_group_node(plan_topology_num(),"topology",reinterpret_cast<void *>(&_call_'+ID+'),plan_linear_num(),p__event_list__,p__plan_lock__,p__signaler__);');
-                                   WriteLn(Out,'    if (__parallelize__ & 6) __topology_barrier(plan_topology_num());');
-                                   WriteLn(Out,' }');
-                                   WriteLn(Out,' #pragma omp parallel shared(__start_lock__,__free_lock__,__free_count__,__num_threads__,__continue_plan__,__parallel_flag__'+S2+') private(_dummy_) num_threads(__num_threads__)');
-                                   WriteLn(Out,' {');
-                                   WriteLn(Out,'  int __thread_id__ = omp_get_thread_num();');
-                                   WriteLn(Out,'  int StopFlag = 0;');
-                                   WriteLn(Out,' '+Ldecl+'<'+PrmStruct+'>::iterator ev_search;');
+                                   _Out.Add(' '+PrmStruct+' _dummy_;');
+                                   _Out.Add(' int __num_threads__    = (__nprocs__ & 0x3FF) ? (__nprocs__ & 0x3FF) : omp_get_max_threads();');
+                                   _Out.Add(' int __val_free_count__ = __num_threads__;');
+                                   _Out.Add(' int * __free_count__   = &__val_free_count__;');
+                                   _Out.Add(' char __val_continue_plan__ = 1+__continue__;');
+                                   _Out.Add(' char * __continue_plan__ = &__val_continue_plan__;');
+                                   _Out.Add(' __reent_event __v_signaler__;');
+                                   _Out.Add(' __reent_event& __signaler__ = p__signaler__ ? *p__signaler__ : __v_signaler__;');
+                                   _Out.Add(' '+_pRedDummies);
+                                   _Out.Add(' if (!p__signaler__) __init_reent_event(&__signaler__);');
+                                   _Out.Add(' omp_init_lock(&__start_lock__);');
+                                   _Out.Add(' if (!p__plan_lock__) plan_init_lock(&__plan_lock__);');
+                                   _Out.Add(' omp_init_lock(&__free_lock__);');
+                                   _Out.Add(' omp_init_lock(&__continue_lock__);');
+                                   _Out.Add(' if (__nprocs__ & 0x18000) {');
+                                   _Out.Add('    char __parallelize__ = __add_group_node(plan_topology_num(),"topology",reinterpret_cast<void *>(&_call_'+ID+'),plan_linear_num(),p__event_list__,p__plan_lock__,p__signaler__);');
+                                   _Out.Add('    if (__parallelize__ & 6) __topology_barrier(plan_topology_num());');
+                                   _Out.Add(' }');
+                                   _Out.Add(' #pragma omp parallel shared(__start_lock__,__free_lock__,__free_count__,__num_threads__,__continue_plan__,__parallel_flag__'+S2+') private(_dummy_) num_threads(__num_threads__)');
+                                   _Out.Add(' {');
+                                   _Out.Add('  int __thread_id__ = omp_get_thread_num();');
+                                   _Out.Add('  int StopFlag = 0;');
+                                   _Out.Add(' '+Ldecl+'<'+PrmStruct+'>::iterator ev_search;');
                                    If Length(TaskIf)<>0 Then
-                                      WriteLn(Out,' '+TypeTaskID+' id;');
-                                   WriteLn(Out,' '+pRedDummies);
-                                   WriteLn(Out,'  __START_LOCK__(__num_threads__,&__start_lock__);');
-                                   WriteLn(Out,'  if (!__continue__ && __thread_id__==0) {' );
-                                   WriteLn(Out,'     omp_set_lock(&__free_lock__);');
-                                   WriteLn(Out,'     (*__free_count__)--;');
-                                   WriteLn(Out,'     omp_unset_lock(&__free_lock__);');
+                                      _Out.Add(' '+TypeTaskID+' id;');
+                                   _Out.Add(' '+pRedDummies);
+                                   _Out.Add('  __START_LOCK__(__num_threads__,&__start_lock__);');
+                                   _Out.Add('  if (!__continue__ && __thread_id__==0) {' );
+                                   _Out.Add('     omp_set_lock(&__free_lock__);');
+                                   _Out.Add('     (*__free_count__)--;');
+                                   _Out.Add('     omp_unset_lock(&__free_lock__);');
                                    If (Length(TaskReset)<>0) Or (Length(TaskSet)<>0) Then
-                                      WriteLn(Out,'     id = '+NameTaskID+';');
+                                      _Out.Add('     id = '+NameTaskID+';');
                                    If Length(TaskReset)<>0 Then
                                       Begin
-                                        Write(Out,'     ');
+                                        _Out.Add('     ');
+                                        _Out.Add(strGlue);
                                         If Length(TaskEmpty)<>0 Then
-                                           Write(Out,'if (id!=('+TaskEmpty+')) ');
-                                        WriteLn(Out,TaskReset+';')
+                                           Begin
+                                             _Out.Add('if (id!=('+TaskEmpty+')) ');
+                                             _Out.Add(strGlue)
+                                           End;
+                                        _Out.Add(TaskReset+';')
                                       End;
                                    If TypeID = 'void' Then
-                                      WriteLn(Out,'     ',Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,&__start_lock__,&__plan_lock__,&__continue_lock__,__parallel_flag__,__continue_plan__,&'+oEvs+rParamNames+';')
+                                      _Out.Add('     '+Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,&__start_lock__,&__plan_lock__,&__continue_lock__,__parallel_flag__,__continue_plan__,&'+oEvs+rParamNames+';')
                                    Else
-                                      WriteLn(Out,'     __ret__ = ',Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,&__start_lock__,&__plan_lock__,&__continue_lock__,__parallel_flag__,__continue_plan__,&'+oEvs+rParamNames+';');
+                                      _Out.Add('     __ret__ = '+Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,&__start_lock__,&__plan_lock__,&__continue_lock__,__parallel_flag__,__continue_plan__,&'+oEvs+rParamNames+';');
                                    If Length(TaskSet)<>0 Then
                                       Begin
-                                        Write(Out,'     ');
+                                        _Out.Add('     ');
+                                        _Out.Add(strGlue);
                                         If Length(TaskEmpty)<>0 Then
-                                           Write(Out,'if (id!=('+TaskEmpty+')) ');
-                                        WriteLn(Out,TaskSet+';')
+                                           Begin
+                                             _Out.Add('if (id!=('+TaskEmpty+')) ');
+                                             _Out.Add(strGlue)
+                                           End;
+                                        _Out.Add(TaskSet+';')
                                       End;
-                                   WriteLn(Out,'     omp_set_lock(&__free_lock__);');
-                                   WriteLn(Out,'     (*__free_count__)++;');
-                                   WriteLn(Out,'     omp_unset_lock(&__free_lock__);');
-                                   WriteLn(Out,'     '+pRedModifs);
-                                   WriteLn(Out,'  }');
-                                   WriteLn(Out,'  while (!StopFlag)');
-                                   WriteLn(Out,'    {');
-                                   WriteLn(Out,'     int EmptyFlag;');
-                                   WriteLn(Out,'     omp_set_lock(&__continue_lock__);');
-                                   WriteLn(Out,'     StopFlag = !(*__continue_plan__);');
-                                   WriteLn(Out,'     omp_unset_lock(&__continue_lock__);');
-                                   WriteLn(Out,'     if (!StopFlag) {');
-                                   WriteLn(Out,'        int HasMarker;');
-                                   WriteLn(Out,'        int FreeProcs;');
-                                   WriteLn(Out,'        char HasTask;');
-                                   WriteLn(Out,'        char __parallel_flag_store__ = 0;');
-                                   WriteLn(Out,'        do {');
-                                   WriteLn(Out,'          int PopMarker = 0;');
-                                   WriteLn(Out,'          HasMarker = 0;');
-                                   WriteLn(Out,'          HasTask = 0;');
-                                   WriteLn(Out,'          plan_set_lock(&__plan_lock__);');
-                                   WriteLn(Out,'          __parallel_flag_store__ = *__parallel_flag__;');
-                                   WriteLn(Out,'          omp_set_lock(&__free_lock__);');
-                                   WriteLn(Out,'          FreeProcs = *__free_count__;');
-                                   WriteLn(Out,'          omp_unset_lock(&__free_lock__);');
-                                   WriteLn(Out,'          EmptyFlag = '+oEvs+'.empty();');
-                                   WriteLn(Out,'          if (!EmptyFlag) {');
-                                   WriteLn(Out,'             ev_search = '+oEvs+'.begin();');
+                                   _Out.Add('     omp_set_lock(&__free_lock__);');
+                                   _Out.Add('     (*__free_count__)++;');
+                                   _Out.Add('     omp_unset_lock(&__free_lock__);');
+                                   _Out.Add('     '+pRedModifs);
+                                   _Out.Add('  }');
+                                   _Out.Add('  while (!StopFlag)');
+                                   _Out.Add('    {');
+                                   _Out.Add('     int EmptyFlag;');
+                                   _Out.Add('     omp_set_lock(&__continue_lock__);');
+                                   _Out.Add('     StopFlag = !(*__continue_plan__);');
+                                   _Out.Add('     omp_unset_lock(&__continue_lock__);');
+                                   _Out.Add('     if (!StopFlag) {');
+                                   _Out.Add('        int HasMarker;');
+                                   _Out.Add('        int FreeProcs;');
+                                   _Out.Add('        char HasTask;');
+                                   _Out.Add('        char __parallel_flag_store__ = 0;');
+                                   _Out.Add('        do {');
+                                   _Out.Add('          int PopMarker = 0;');
+                                   _Out.Add('          HasMarker = 0;');
+                                   _Out.Add('          HasTask = 0;');
+                                   _Out.Add('          plan_set_lock(&__plan_lock__);');
+                                   _Out.Add('          __parallel_flag_store__ = *__parallel_flag__;');
+                                   _Out.Add('          omp_set_lock(&__free_lock__);');
+                                   _Out.Add('          FreeProcs = *__free_count__;');
+                                   _Out.Add('          omp_unset_lock(&__free_lock__);');
+                                   _Out.Add('          EmptyFlag = '+oEvs+'.empty();');
+                                   _Out.Add('          if (!EmptyFlag) {');
+                                   _Out.Add('             ev_search = '+oEvs+'.begin();');
                                    If Length(TaskIf)<>0 Then
                                       Begin
-                                        WriteLn(Out,'             while (!HasTask && ev_search!='+oEvs+'.end()) {');
-                                        WriteLn(Out,'               _dummy_ = *ev_search;');
-                                        WriteLn(Out,'               if (_dummy_.Flags & 1) HasTask = 1;');
-                                        WriteLn(Out,'               else {');
-                                        WriteLn(Out,'                 id = _dummy_.'+NameTaskID+';');
+                                        _Out.Add('             while (!HasTask && ev_search!='+oEvs+'.end()) {');
+                                        _Out.Add('               _dummy_ = *ev_search;');
+                                        _Out.Add('               if (_dummy_.Flags & 1) HasTask = 1;');
+                                        _Out.Add('               else {');
+                                        _Out.Add('                 id = _dummy_.'+NameTaskID+';');
                                         If Length(d_eli)<>0 Then
                                            Begin
-                                             Write(Out,'                 if (');
+                                             _Out.Add('                 if (');
+                                             _Out.Add(strGlue);
                                              With TaskDependsList Do
                                                For F:=0 To Count-1 Do
                                                  Begin
-                                                   Write(Out,'('+Strings[F]+')');
-                                                   If F<Count-1 Then Write(Out,'&&')
+                                                   _Out.Add('('+Strings[F]+')');
+                                                   _Out.Add(strGlue);
+                                                   If F<Count-1 Then
+                                                      Begin
+                                                        _Out.Add('&&');
+                                                        _Out.Add(strGlue)
+                                                      End
                                                  End;
-                                             WriteLn(Out,')')
+                                             _Out.Add(')')
                                            End;
-                                        WriteLn(Out,'                 HasTask = ('+TaskIf+');');
-                                        WriteLn(Out,'                 if (!HasTask) ++ev_search;');
-                                        WriteLn(Out,'               }');
-                                        WriteLn(Out,'             }');
+                                        _Out.Add('                 HasTask = ('+TaskIf+');');
+                                        _Out.Add('                 if (!HasTask) ++ev_search;');
+                                        _Out.Add('               }');
+                                        _Out.Add('             }');
                                       End
                                    Else
                                       Begin
-                                        WriteLn(Out,'             HasTask = 1;');
-                                        WriteLn(Out,'             _dummy_   = '+oEvs+'.front();')
+                                        _Out.Add('             HasTask = 1;');
+                                        _Out.Add('             _dummy_   = '+oEvs+'.front();')
                                       End;
-                                   WriteLn(Out,'             if (HasTask)');
-                                   WriteLn(Out,'                if (HasMarker = _dummy_.Flags & 1)');
-                                   WriteLn(Out,'                   if (*__parallel_flag__) {');
-                                   WriteLn(Out,'                      PopMarker = FreeProcs==__num_threads__;');
-                                   WriteLn(Out,'                      if (PopMarker) {');
-                                   WriteLn(Out,'                         int __i;');
-                                   WriteLn(Out,'                         plan_unset_lock(&__plan_lock__);');
-                                   WriteLn(Out,'                         __signal_reent_event(&__signaler__);');
-                                   WriteLn(Out,'                         #pragma omp barrier');
-                                   WriteLn(Out,'                         #pragma omp for schedule(static,1) private(__i) ordered nowait');
-                                   WriteLn(Out,'                           for (__i=0; __i<__num_threads__; __i++)');
-                                   WriteLn(Out,'                               #pragma omp ordered');
-                                   WriteLn(Out,'                                 {');
-                                   WriteLn(Out,'                                  plan_set_lock(&__plan_lock__);');
-                                   WriteLn(Out,'                                  if (__i==0) {');
-                                   WriteLn(Out,'                                     '+oEvs+'.pop_front();');
-                                   WriteLn(Out,'                                     *__parallel_flag__ = 0;');
-                                   WriteLn(Out,'                                     __parallel_flag_store__ = 0;');
-                                   WriteLn(Out,'                                  }');
-                                   WriteLn(Out,'                                 }');
-                                   WriteLn(Out,'                      }');
-                                   WriteLn(Out,'                   }');
-                                   WriteLn(Out,'                   else');
-                                   WriteLn(Out,'                      '+oEvs+'.pop_front();');
-                                   WriteLn(Out,'                else {');
-                                   WriteLn(Out,'                   '+oEvs+'.erase(ev_search);');
-                                   WriteLn(Out,'                   omp_set_lock(&__free_lock__);');
-                                   WriteLn(Out,'                   (*__free_count__)--;');
-                                   WriteLn(Out,'                   omp_unset_lock(&__free_lock__);');
-                                   WriteLn(Out,'                   FreeProcs--;');
-                                   WriteLn(Out,'                }');
-                                   WriteLn(Out,'             bool _IsEmpty = '+oEvs+'.empty();');
-                                   WriteLn(Out,'             plan_unset_lock(&__plan_lock__);');
-                                   WriteLn(Out,'             if (!_IsEmpty)');
-                                   WriteLn(Out,'                __signal_reent_event(&__signaler__);');
-                                   WriteLn(Out,'          }');
-                                   WriteLn(Out,'          else if (FreeProcs==__num_threads__) {');
-                                   WriteLn(Out,'               plan_unset_lock(&__plan_lock__);');
-                                   WriteLn(Out,'               __signal_reent_event(&__signaler__);');
-                                   WriteLn(Out,'          }');
-                                   WriteLn(Out,'          else __wait_reent_event(&__signaler__,&__plan_lock__);');
-                                   WriteLn(Out,'          if (PopMarker) __START_LOCK__(__num_threads__,&__start_lock__);');
-                                   WriteLn(Out,'          StopFlag = EmptyFlag && !PopMarker && FreeProcs==__num_threads__;');
-                                   WriteLn(Out,'          _Yield();');
-                                   WriteLn(Out,'        } while (HasMarker || EmptyFlag && !StopFlag || !EmptyFlag && !HasTask);');
-                                   WriteLn(Out,'        if (!StopFlag) {');
-                                   WriteLn(Out,'          ',STParamReasgns);
+                                   _Out.Add('             if (HasTask)');
+                                   _Out.Add('                if (HasMarker = _dummy_.Flags & 1)');
+                                   _Out.Add('                   if (*__parallel_flag__) {');
+                                   _Out.Add('                      PopMarker = FreeProcs==__num_threads__;');
+                                   _Out.Add('                      if (PopMarker) {');
+                                   _Out.Add('                         int __i;');
+                                   _Out.Add('                         plan_unset_lock(&__plan_lock__);');
+                                   _Out.Add('                         __signal_reent_event(&__signaler__);');
+                                   _Out.Add('                         #pragma omp barrier');
+                                   _Out.Add('                         #pragma omp for schedule(static,1) private(__i) ordered nowait');
+                                   _Out.Add('                           for (__i=0; __i<__num_threads__; __i++)');
+                                   _Out.Add('                               #pragma omp ordered');
+                                   _Out.Add('                                 {');
+                                   _Out.Add('                                  plan_set_lock(&__plan_lock__);');
+                                   _Out.Add('                                  if (__i==0) {');
+                                   _Out.Add('                                     '+oEvs+'.pop_front();');
+                                   _Out.Add('                                     *__parallel_flag__ = 0;');
+                                   _Out.Add('                                     __parallel_flag_store__ = 0;');
+                                   _Out.Add('                                  }');
+                                   _Out.Add('                                 }');
+                                   _Out.Add('                      }');
+                                   _Out.Add('                   }');
+                                   _Out.Add('                   else');
+                                   _Out.Add('                      '+oEvs+'.pop_front();');
+                                   _Out.Add('                else {');
+                                   _Out.Add('                   '+oEvs+'.erase(ev_search);');
+                                   _Out.Add('                   omp_set_lock(&__free_lock__);');
+                                   _Out.Add('                   (*__free_count__)--;');
+                                   _Out.Add('                   omp_unset_lock(&__free_lock__);');
+                                   _Out.Add('                   FreeProcs--;');
+                                   _Out.Add('                }');
+                                   _Out.Add('             bool _IsEmpty = '+oEvs+'.empty();');
+                                   _Out.Add('             plan_unset_lock(&__plan_lock__);');
+                                   _Out.Add('             if (!_IsEmpty)');
+                                   _Out.Add('                __signal_reent_event(&__signaler__);');
+                                   _Out.Add('          }');
+                                   _Out.Add('          else if (FreeProcs==__num_threads__) {');
+                                   _Out.Add('               plan_unset_lock(&__plan_lock__);');
+                                   _Out.Add('               __signal_reent_event(&__signaler__);');
+                                   _Out.Add('          }');
+                                   _Out.Add('          else __wait_reent_event(&__signaler__,&__plan_lock__);');
+                                   _Out.Add('          if (PopMarker) __START_LOCK__(__num_threads__,&__start_lock__);');
+                                   _Out.Add('          StopFlag = EmptyFlag && !PopMarker && FreeProcs==__num_threads__;');
+                                   _Out.Add('          _Yield();');
+                                   _Out.Add('        } while (HasMarker || EmptyFlag && !StopFlag || !EmptyFlag && !HasTask);');
+                                   _Out.Add('        if (!StopFlag) {');
+                                   _Out.Add('          '+STParamReasgns);
                                    If (Length(d_eli)<>0) Or (Length(TaskSet)<>0) Then
-                                      WriteLn(Out,'          id = _dummy_.'+NameTaskID+';');
+                                      _Out.Add('          id = _dummy_.'+NameTaskID+';');
                                    If (Length(d_eli)<>0) Then
                                       Begin
                                         If Length(TaskEmpty)<>0 Then
-                                           WriteLn(Out,'           if (id!=('+TaskEmpty+')) {');
-                                        WriteLn(Out,'           plan_set_lock(&__plan_lock__);');
-                                        WriteLn(Out,'           (*use_ids)[id] = 1;');
-                                        WriteLn(Out,'           plan_unset_lock(&__plan_lock__);');
+                                           _Out.Add('           if (id!=('+TaskEmpty+')) {');
+                                        _Out.Add('           plan_set_lock(&__plan_lock__);');
+                                        _Out.Add('           (*use_ids)[id] = 1;');
+                                        _Out.Add('           plan_unset_lock(&__plan_lock__);');
                                         If Length(TaskEmpty)<>0 Then
-                                           WriteLn(Out,'           }')
+                                           _Out.Add('           }')
                                       End;
-                                   WriteLn(Out,'          if (__parallel_flag_store__ == 2) {');
+                                   _Out.Add('          if (__parallel_flag_store__ == 2) {');
                                    If TypeID = 'void' Then
-                                      WriteLn(Out,'            __atomic_'+ID+'('+Copy(STParamDummies, 13 {eliminate ',__nprocs__,'}, Length(STParamDummies)-1)+');')
+                                      _Out.Add('            __atomic_'+ID+'('+Copy(STParamDummies, 13 {eliminate ',__nprocs__,'}, Length(STParamDummies)-1)+');')
                                    Else
                                       Begin
-                                        WriteLn(Out,'            ',TypeID,' l__ret__ = __atomic_'+ID+'('+Copy(STParamDummies, 13 {eliminate ',__nprocs__,'}, Length(STParamDummies)-1)+');');
-                                        WriteLn(Out,'            #pragma omp critical(__ret__)');
-                                        WriteLn(Out,'            {');
-                                        WriteLn(Out,'             __ret__ = l__ret__;');
-                                        WriteLn(Out,'            }')
+                                        _Out.Add('            '+TypeID+' l__ret__ = __atomic_'+ID+'('+Copy(STParamDummies, 13 {eliminate ',__nprocs__,'}, Length(STParamDummies)-1)+');');
+                                        _Out.Add('            #pragma omp critical(__ret__)');
+                                        _Out.Add('            {');
+                                        _Out.Add('             __ret__ = l__ret__;');
+                                        _Out.Add('            }')
                                       End;
-                                   WriteLn(Out,'          } else {');
+                                   _Out.Add('          } else {');
                                    If TypeID = 'void' Then
-                                      WriteLn(Out,'            '+Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,'+
+                                      _Out.Add('            '+Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,'+
                                                                     '&__start_lock__,&__plan_lock__,&__continue_lock__,__parallel_flag__,__continue_plan__,&'+oEvs+STParamDummies+');')
                                    Else
                                       Begin
-                                        WriteLn(Out,'            ',TypeID,' l__ret__ = '+Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,'+
+                                        _Out.Add('            '+TypeID+' l__ret__ = '+Proc+'(&__signaler__,__next_signaler__,__throw_stage__,p__chain_plan__,p__chain_lock__,'+
                                                                       '&__start_lock__,&__plan_lock__,&__continue_lock__,__parallel_flag__,__continue_plan__,&'+oEvs+STParamDummies+');');
-                                        WriteLn(Out,'            #pragma omp critical(__ret__)');
-                                        WriteLn(Out,'            {');
-                                        WriteLn(Out,'             __ret__ = l__ret__;');
-                                        WriteLn(Out,'            }')
+                                        _Out.Add('            #pragma omp critical(__ret__)');
+                                        _Out.Add('            {');
+                                        _Out.Add('             __ret__ = l__ret__;');
+                                        _Out.Add('            }')
                                       End;
-                                   WriteLn(Out,'          }');
-                                   WriteLn(Out,'          if (*__continue_plan__==2) __AFTER_CONTINUE(__NOT_THROWING__,&__continue_lock__,__continue_plan__);');
+                                   _Out.Add('          }');
+                                   _Out.Add('          if (*__continue_plan__==2) __AFTER_CONTINUE(__NOT_THROWING__,&__continue_lock__,__continue_plan__);');
                                    If Length(TaskSet)<>0 Then
                                       Begin
-                                        Write(Out,'          ');
+                                        _Out.Add('          ');
+                                        _Out.Add(strGlue);
                                         If Length(TaskEmpty)<>0 Then
-                                           Write(Out,'if (id!=('+TaskEmpty+')) ');
-                                        WriteLn(Out,TaskSet+';')
+                                           Begin
+                                             _Out.Add('if (id!=('+TaskEmpty+')) ');
+                                             _Out.Add(strGlue)
+                                           End;
+                                        _Out.Add(TaskSet+';')
                                       End;
                                    If (Length(d_eli)<>0) Then
                                       Begin
                                         If Length(TaskEmpty)<>0 Then
-                                           WriteLn(Out,'           if (id!=('+TaskEmpty+')) {');
-                                        WriteLn(Out,'           plan_set_lock(&__plan_lock__);');
-                                        WriteLn(Out,'           use_ids->erase(use_ids->find(id));');
-                                        WriteLn(Out,'           plan_unset_lock(&__plan_lock__);');
+                                           _Out.Add('           if (id!=('+TaskEmpty+')) {');
+                                        _Out.Add('           plan_set_lock(&__plan_lock__);');
+                                        _Out.Add('           use_ids->erase(use_ids->find(id));');
+                                        _Out.Add('           plan_unset_lock(&__plan_lock__);');
                                         If Length(TaskEmpty)<>0 Then
-                                           WriteLn(Out,'           }')
+                                           _Out.Add('           }')
                                       End;
-                                   WriteLn(Out,'          omp_set_lock(&__free_lock__);');
-                                   WriteLn(Out,'          (*__free_count__)++;');
-                                   WriteLn(Out,'          omp_unset_lock(&__free_lock__);');
-                                   WriteLn(Out,'          '+pRedModifs);
-                                   WriteLn(Out,'        }');
-                                   WriteLn(Out,'        _Yield();');
-                                   WriteLn(Out,'     }');
-                                   WriteLn(Out,'    }');
-                                   WriteLn(Out,'  if (__thread_id__==0 && !(*__parallel_flag__)) omp_unset_lock(&__start_lock__);');
-                                   WriteLn(Out,' }');
+                                   _Out.Add('          omp_set_lock(&__free_lock__);');
+                                   _Out.Add('          (*__free_count__)++;');
+                                   _Out.Add('          omp_unset_lock(&__free_lock__);');
+                                   _Out.Add('          '+pRedModifs);
+                                   _Out.Add('        }');
+                                   _Out.Add('        _Yield();');
+                                   _Out.Add('     }');
+                                   _Out.Add('    }');
+                                   _Out.Add('  if (__thread_id__==0 && !(*__parallel_flag__)) omp_unset_lock(&__start_lock__);');
+                                   _Out.Add(' }');
                                    If Length(d_eli)<>0 Then
-                                      WriteLn(Out,' delete use_ids;');
-                                   WriteLn(Out,' omp_destroy_lock(&__start_lock__);');
-                                   WriteLn(Out,' if (!p__signaler__) __destroy_reent_event(&__signaler__);');
-                                   WriteLn(Out,' if (!p__plan_lock__) plan_destroy_lock(&__plan_lock__);');
-                                   WriteLn(Out,' omp_destroy_lock(&__free_lock__);');
-                                   WriteLn(Out,' omp_destroy_lock(&__continue_lock__);');
-                                   WriteLn(Out,' '+pRedModifs_);
+                                      _Out.Add(' delete use_ids;');
+                                   _Out.Add(' omp_destroy_lock(&__start_lock__);');
+                                   _Out.Add(' if (!p__signaler__) __destroy_reent_event(&__signaler__);');
+                                   _Out.Add(' if (!p__plan_lock__) plan_destroy_lock(&__plan_lock__);');
+                                   _Out.Add(' omp_destroy_lock(&__free_lock__);');
+                                   _Out.Add(' omp_destroy_lock(&__continue_lock__);');
+                                   _Out.Add(' '+pRedModifs_);
                                    If StaticFlag=smDynamic Then
-                                      WriteLn(Out,' if (!p__event_list__) delete &_events_'+ID+';');
+                                      _Out.Add(' if (!p__event_list__) delete &_events_'+ID+';');
                                    If TypeID <> 'void' Then
-                                      WriteLn(Out,' return __ret__;');
-                                   WriteLn(Out,'}');
+                                      _Out.Add(' return __ret__;');
+                                   _Out.Add('}');
                                    If ChainMode Then
                                       Begin
-                                        WriteLn(Out,'#define __chain_call_'+ID+'__(__throw_stage__,__parallelize__,__init__,__events__,__plan_lock__,'+
+                                        _Out.Add('#define __chain_call_'+ID+'__(__throw_stage__,__parallelize__,__init__,__events__,__plan_lock__,'+
                                                     '__signaler__,__next_signaler__,__next_events__,__next_lock__,__counter__,__counter_lock__'+_ParamNames+' \');
-                                        WriteLn(Out,'do { \');
-                                        WriteLn(Out,' '+Ldecl+'<'+PrmStruct+'> * __EVENTS__ = ('+Ldecl+'<'+PrmStruct+'> *) __events__; \');
-                                        WriteLn(Out,' int __thread_id__ = omp_get_thread_num(); \');
-                                        WriteLn(Out,' char val__continue_plan__  = 1; \');
-                                        WriteLn(Out,' char * __continue_plan__  = &val__continue_plan__; \');
-                                        WriteLn(Out,' char __parallel_flag__ = 0; \');
-                                        WriteLn(Out,' char __GO__ = 1; \');
-                                        WriteLn(Out,' '+_eRedDummies+' \');
-                                        WriteLn(Out,' '+PrmStruct+' '+ParamDummy+'; \');
-                                        WriteLn(Out,' int __nprocs_mask__ = 0; \');
-                                        WriteLn(Out,' if (__init__) { \');
-                                        WriteLn(Out,'     __'+ID+'__(0'+
+                                        _Out.Add('do { \');
+                                        _Out.Add(' '+Ldecl+'<'+PrmStruct+'> * __EVENTS__ = ('+Ldecl+'<'+PrmStruct+'> *) __events__; \');
+                                        _Out.Add(' int __thread_id__ = omp_get_thread_num(); \');
+                                        _Out.Add(' char val__continue_plan__  = 1; \');
+                                        _Out.Add(' char * __continue_plan__  = &val__continue_plan__; \');
+                                        _Out.Add(' char __parallel_flag__ = 0; \');
+                                        _Out.Add(' char __GO__ = 1; \');
+                                        _Out.Add(' '+_eRedDummies+' \');
+                                        _Out.Add(' '+PrmStruct+' '+ParamDummy+'; \');
+                                        _Out.Add(' int __nprocs_mask__ = 0; \');
+                                        _Out.Add(' if (__init__) { \');
+                                        _Out.Add('     __'+ID+'__(0'+
                                                                     Copy(_rParamNames,1,Length(_rParamNames)-1)+
                                                                     ',__signaler__,__next_signaler__,__throw_stage__,__next_events__,__next_lock__,__plan_lock__,__EVENTS__); \');
-                                        WriteLn(Out,' '+_eRedModifs+' \');
-                                        WriteLn(Out,'     __nprocs_mask__ = 0x18000; \');
-                                        WriteLn(Out,' } \');
-                                        WriteLn(Out,' while (__GO__) { \');
-                                        WriteLn(Out,'   __GO__ = __parallelize__ ? 0 : !__EVENTS__->empty(); \');
-                                        WriteLn(Out,'   while (__parallelize__ && !__GO__) { \');
-                                        WriteLn(Out,'     plan_set_lock(__plan_lock__); \');
-                                        WriteLn(Out,'     __GO__ = !__EVENTS__->empty(); \');
-                                        WriteLn(Out,'     if (!__GO__) { \');
-                                        WriteLn(Out,'        omp_set_lock(__counter_lock__); \');
-                                        WriteLn(Out,'        if (__parallelize__ & 2) \');
-                                        WriteLn(Out,'           if (*__counter__ < 0) { \');
-                                        WriteLn(Out,'              omp_unset_lock(__counter_lock__); \');
-                                        WriteLn(Out,'              plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'              break; \');
-                                        WriteLn(Out,'           } else { \');
-                                        WriteLn(Out,'              omp_unset_lock(__counter_lock__); \');
-                                        WriteLn(Out,'              if (__signaler__) __wait_reent_event(__signaler__,__plan_lock__); \');
-                                        WriteLn(Out,'              else plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'           } \');
-                                        WriteLn(Out,'        else if (*__counter__ == __thread_id__) { \');
-                                        WriteLn(Out,'           (*__counter__)++; \');
-                                        WriteLn(Out,'           omp_unset_lock(__counter_lock__); \');
-                                        WriteLn(Out,'           plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'           if (__next_signaler__) __signal_reent_event(__next_signaler__); \');
-                                        WriteLn(Out,'           break; \');
-                                        WriteLn(Out,'        } else { \');
-                                        WriteLn(Out,'           omp_unset_lock(__counter_lock__); \');
-                                        WriteLn(Out,'           if (__signaler__) __wait_reent_event(__signaler__,__plan_lock__); \');
-                                        WriteLn(Out,'           else plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'        } \');
-                                        WriteLn(Out,'     } \');
-                                        WriteLn(Out,'     else { \');
-                                        WriteLn(Out,'        '+ParamDummy+' = __EVENTS__->front(); \');
-                                        WriteLn(Out,'        __EVENTS__->pop_front(); \');
-                                        WriteLn(Out,'        plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'     } \');
-                                        WriteLn(Out,'     __instead_signal_yield(); \');
-                                        WriteLn(Out,'   } \');
-                                        WriteLn(Out,'   if (__GO__) { \');
-                                        WriteLn(Out,'    if (!__parallelize__) { \');
-                                        WriteLn(Out,'       '+ParamDummy+' = __EVENTS__->front(); \');
-                                        WriteLn(Out,'       __EVENTS__->pop_front(); \');
-                                        WriteLn(Out,'    } \');
-                                        WriteLn(Out,'    '+ResetDummies+' \');
-                                        WriteLn(Out,'    ',rParamReasgns,' \');
-                                        WriteLn(Out,'    __'+ID+'__(0'+
+                                        _Out.Add(' '+_eRedModifs+' \');
+                                        _Out.Add('     __nprocs_mask__ = 0x18000; \');
+                                        _Out.Add(' } \');
+                                        _Out.Add(' while (__GO__) { \');
+                                        _Out.Add('   __GO__ = __parallelize__ ? 0 : !__EVENTS__->empty(); \');
+                                        _Out.Add('   while (__parallelize__ && !__GO__) { \');
+                                        _Out.Add('     plan_set_lock(__plan_lock__); \');
+                                        _Out.Add('     __GO__ = !__EVENTS__->empty(); \');
+                                        _Out.Add('     if (!__GO__) { \');
+                                        _Out.Add('        omp_set_lock(__counter_lock__); \');
+                                        _Out.Add('        if (__parallelize__ & 2) \');
+                                        _Out.Add('           if (*__counter__ < 0) { \');
+                                        _Out.Add('              omp_unset_lock(__counter_lock__); \');
+                                        _Out.Add('              plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('              break; \');
+                                        _Out.Add('           } else { \');
+                                        _Out.Add('              omp_unset_lock(__counter_lock__); \');
+                                        _Out.Add('              if (__signaler__) __wait_reent_event(__signaler__,__plan_lock__); \');
+                                        _Out.Add('              else plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('           } \');
+                                        _Out.Add('        else if (*__counter__ == __thread_id__) { \');
+                                        _Out.Add('           (*__counter__)++; \');
+                                        _Out.Add('           omp_unset_lock(__counter_lock__); \');
+                                        _Out.Add('           plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('           if (__next_signaler__) __signal_reent_event(__next_signaler__); \');
+                                        _Out.Add('           break; \');
+                                        _Out.Add('        } else { \');
+                                        _Out.Add('           omp_unset_lock(__counter_lock__); \');
+                                        _Out.Add('           if (__signaler__) __wait_reent_event(__signaler__,__plan_lock__); \');
+                                        _Out.Add('           else plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('        } \');
+                                        _Out.Add('     } \');
+                                        _Out.Add('     else { \');
+                                        _Out.Add('        '+ParamDummy+' = __EVENTS__->front(); \');
+                                        _Out.Add('        __EVENTS__->pop_front(); \');
+                                        _Out.Add('        plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('     } \');
+                                        _Out.Add('     __instead_signal_yield(); \');
+                                        _Out.Add('   } \');
+                                        _Out.Add('   if (__GO__) { \');
+                                        _Out.Add('    if (!__parallelize__) { \');
+                                        _Out.Add('       '+ParamDummy+' = __EVENTS__->front(); \');
+                                        _Out.Add('       __EVENTS__->pop_front(); \');
+                                        _Out.Add('    } \');
+                                        _Out.Add('    '+ResetDummies+' \');
+                                        _Out.Add('    '+rParamReasgns+' \');
+                                        _Out.Add('    __'+ID+'__(0'+
                                                                     StringReplace(rParamDummies,'__nprocs__','__nprocs__&(~__nprocs_mask__)',[])+
                                                                     ',__signaler__,__next_signaler__,__throw_stage__,__next_events__,__next_lock__,__plan_lock__,__EVENTS__); \');
-                                        WriteLn(Out,'    '+_eRedModifs+' \');
-                                        WriteLn(Out,'    __nprocs_mask__ = 0x18000; \');
-                                        WriteLn(Out,'   } \');
-                                        WriteLn(Out,' } \');
-                                        WriteLn(Out,'} while(0)');
+                                        _Out.Add('    '+_eRedModifs+' \');
+                                        _Out.Add('    __nprocs_mask__ = 0x18000; \');
+                                        _Out.Add('   } \');
+                                        _Out.Add(' } \');
+                                        _Out.Add('} while(0)');
 
-                                        WriteLn(Out,'#define mpi__chain_call_'+ID+'__(__throw_stage__,__parallelize__,__init__,__events__,__plan_lock__,'+
+                                        _Out.Add('#define mpi__chain_call_'+ID+'__(__throw_stage__,__parallelize__,__init__,__events__,__plan_lock__,'+
                                                     '__signaler__,__next_signaler__,__next_events__,__next_lock__,tag_base'+_ParamNames+' \');
-                                        WriteLn(Out,'do { \');
-                                        WriteLn(Out,' '+Ldecl+'<'+PrmStruct+'> * __EVENTS__ = ('+Ldecl+'<'+PrmStruct+'> *) __events__; \');
-                                        WriteLn(Out,' long long next_id = reinterpret_cast<long long>(__next_events__); \');
-                                        WriteLn(Out,' char val__continue_plan__  = 1; \');
-                                        WriteLn(Out,' char * __continue_plan__  = &val__continue_plan__; \');
-                                        WriteLn(Out,' char __parallel_flag__ = 0; \');
-                                        WriteLn(Out,' char __GO__ = 1; \');
-                                        WriteLn(Out,' '+_eRedDummies+' \');
-                                        WriteLn(Out,' '+PrmStruct+' '+ParamDummy+'; \');
-                                        WriteLn(Out,' int __nprocs_mask__ = 0; \');
-                                        WriteLn(Out,' if (__init__) { \');
-                                        WriteLn(Out,'     __'+ID+'__(0'+
+                                        _Out.Add('do { \');
+                                        _Out.Add(' '+Ldecl+'<'+PrmStruct+'> * __EVENTS__ = ('+Ldecl+'<'+PrmStruct+'> *) __events__; \');
+                                        _Out.Add(' long long next_id = reinterpret_cast<long long>(__next_events__); \');
+                                        _Out.Add(' char val__continue_plan__  = 1; \');
+                                        _Out.Add(' char * __continue_plan__  = &val__continue_plan__; \');
+                                        _Out.Add(' char __parallel_flag__ = 0; \');
+                                        _Out.Add(' char __GO__ = 1; \');
+                                        _Out.Add(' '+_eRedDummies+' \');
+                                        _Out.Add(' '+PrmStruct+' '+ParamDummy+'; \');
+                                        _Out.Add(' int __nprocs_mask__ = 0; \');
+                                        _Out.Add(' if (__init__) { \');
+                                        _Out.Add('     __'+ID+'__(0'+
                                                                     Copy(_rParamNames,1,Length(_rParamNames)-1)+
                                                                     ',__signaler__,__next_signaler__,__throw_stage__,__next_events__,__next_lock__,__plan_lock__,__EVENTS__); \');
-                                        WriteLn(Out,' '+_eRedModifs+' \');
-                                        WriteLn(Out,'     __nprocs_mask__ = 0x18000; \');
-                                        WriteLn(Out,' } \');
-                                        WriteLn(Out,' while (__GO__) { \');
-                                        WriteLn(Out,'   __GO__ = __parallelize__ ? 0 : !__EVENTS__->empty(); \');
-                                        WriteLn(Out,'   while (__parallelize__ && !__GO__) { \');
-                                        WriteLn(Out,'     plan_set_lock(__plan_lock__); \');
-                                        WriteLn(Out,'     __GO__ = !__EVENTS__->empty(); \');
-                                        WriteLn(Out,'     if (!__GO__) { \');
-                                        WriteLn(Out,'        plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'        if (__parallelize__ & 2) { \');
-                                        WriteLn(Out,'           MPI_Status status; \');
-                                        WriteLn(Out,'           if (__exited_topology((((__nprocs__)>>10) & 0x1F)/*plan_linear_num()*/)) break; \');
-                                        WriteLn(Out,'           int quit_detected; \');
-                                        WriteLn(Out,'           MPI_Iprobe(MPI_ANY_SOURCE, tag_base, MPI_COMM_WORLD, &quit_detected, &status); \');
-                                        WriteLn(Out,'           if (quit_detected) { \');
-                                        WriteLn(Out,'              MPI_Status status1; \');
-                                        WriteLn(Out,'              MPI_Recv(NULL, 0, MPI_BYTE, status.MPI_SOURCE, tag_base, MPI_COMM_WORLD, &status1); \');
-                                        WriteLn(Out,'              break; \');
-                                        WriteLn(Out,'           } else { \');
-                                        WriteLn(Out,'              int item_received; \');
-                                        WriteLn(Out,'              do { \');
-                                        WriteLn(Out,'                 MPI_Iprobe(MPI_ANY_SOURCE, tag_base+2, MPI_COMM_WORLD, &item_received, &status); \');
-                                        WriteLn(Out,'                 if (item_received) { \');
-                                        WriteLn(Out,'                    MPI_Status status1; \');
-                                        WriteLn(Out,'                    int first; \');
-                                        WriteLn(Out,'                    MPI_Recv(&first, 1, MPI_INT, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
-                                        WriteLn(Out,'                    MPI_Recv(&'+ParamDummy+', sizeof('+ParamDummy+'), MPI_BYTE, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
-                                        WriteLn(Out,'                    plan_set_lock(__plan_lock__); \');
-                                        WriteLn(Out,'                    if (first) __EVENTS__->push_front('+ParamDummy+'); \');
-                                        WriteLn(Out,'                    else __EVENTS__->push_back('+ParamDummy+'); \');
-                                        WriteLn(Out,'                    plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'                 } \');
-                                        WriteLn(Out,'              } while (item_received); \');
-                                        WriteLn(Out,'           } \');
-                                        WriteLn(Out,'        } else { \');
-                                        WriteLn(Out,'           if (__throw_stage__ == 0) { \');
-                                        WriteLn(Out,'              if (next_id >= 0) MPI_Send(NULL, 0, MPI_BYTE, next_id, tag_base+1, MPI_COMM_WORLD); \');
-                                        WriteLn(Out,'              break; \');
-                                        WriteLn(Out,'           } \');
-                                        WriteLn(Out,'           MPI_Status status; \');
-                                        WriteLn(Out,'           int seq_quit_detected; \');
-                                        WriteLn(Out,'           MPI_Iprobe(MPI_ANY_SOURCE, tag_base+1, MPI_COMM_WORLD, &seq_quit_detected, &status); \');
-                                        WriteLn(Out,'           if (seq_quit_detected) { \');
-                                        WriteLn(Out,'              MPI_Status status1; \');
-                                        WriteLn(Out,'              MPI_Recv(NULL, 0, MPI_BYTE, status.MPI_SOURCE, tag_base+1, MPI_COMM_WORLD, &status1); \');
-                                        WriteLn(Out,'              if (next_id >= 0) MPI_Send(NULL, 0, MPI_BYTE, next_id, tag_base+1, MPI_COMM_WORLD); \');
-                                        WriteLn(Out,'              break; \');
-                                        WriteLn(Out,'           } else { \');
-                                        WriteLn(Out,'              int item_received; \');
-                                        WriteLn(Out,'              do { \');
-                                        WriteLn(Out,'                 MPI_Iprobe(MPI_ANY_SOURCE, tag_base+2, MPI_COMM_WORLD, &item_received, &status); \');
-                                        WriteLn(Out,'                 if (item_received) { \');
-                                        WriteLn(Out,'                    MPI_Status status1; \');
-                                        WriteLn(Out,'                    int first; \');
-                                        WriteLn(Out,'                    MPI_Recv(&first, 1, MPI_INT, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
-                                        WriteLn(Out,'                    MPI_Recv(&'+ParamDummy+', sizeof('+ParamDummy+'), MPI_BYTE, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
-                                        WriteLn(Out,'                    plan_set_lock(__plan_lock__); \');
-                                        WriteLn(Out,'                    if (first) __EVENTS__->push_front('+ParamDummy+'); \');
-                                        WriteLn(Out,'                    else __EVENTS__->push_back('+ParamDummy+'); \');
-                                        WriteLn(Out,'                    plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'                 } \');
-                                        WriteLn(Out,'              } while (item_received); \');
-                                        WriteLn(Out,'           } \');
-                                        WriteLn(Out,'        } \');
-                                        WriteLn(Out,'     } \');
-                                        WriteLn(Out,'     else { \');
-                                        WriteLn(Out,'        '+ParamDummy+' = __EVENTS__->front(); \');
-                                        WriteLn(Out,'        __EVENTS__->pop_front(); \');
-                                        WriteLn(Out,'        plan_unset_lock(__plan_lock__); \');
-                                        WriteLn(Out,'     } \');
-                                        WriteLn(Out,'     __instead_signal_yield(); \');
-                                        WriteLn(Out,'   } \');
-                                        WriteLn(Out,'   if (__GO__) { \');
-                                        WriteLn(Out,'    if (!__parallelize__) { \');
-                                        WriteLn(Out,'       '+ParamDummy+' = __EVENTS__->front(); \');
-                                        WriteLn(Out,'       __EVENTS__->pop_front(); \');
-                                        WriteLn(Out,'    } \');
-                                        WriteLn(Out,'    '+ResetDummies+' \');
-                                        WriteLn(Out,'    ',rParamReasgns,' \');
-                                        WriteLn(Out,'    __'+ID+'__(0'+
+                                        _Out.Add(' '+_eRedModifs+' \');
+                                        _Out.Add('     __nprocs_mask__ = 0x18000; \');
+                                        _Out.Add(' } \');
+                                        _Out.Add(' while (__GO__) { \');
+                                        _Out.Add('   __GO__ = __parallelize__ ? 0 : !__EVENTS__->empty(); \');
+                                        _Out.Add('   while (__parallelize__ && !__GO__) { \');
+                                        _Out.Add('     plan_set_lock(__plan_lock__); \');
+                                        _Out.Add('     __GO__ = !__EVENTS__->empty(); \');
+                                        _Out.Add('     if (!__GO__) { \');
+                                        _Out.Add('        plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('        if (__parallelize__ & 2) { \');
+                                        _Out.Add('           MPI_Status status; \');
+                                        _Out.Add('           if (__exited_topology((((__nprocs__)>>10) & 0x1F)/*plan_linear_num()*/)) break; \');
+                                        _Out.Add('           int quit_detected; \');
+                                        _Out.Add('           MPI_Iprobe(MPI_ANY_SOURCE, tag_base, MPI_COMM_WORLD, &quit_detected, &status); \');
+                                        _Out.Add('           if (quit_detected) { \');
+                                        _Out.Add('              MPI_Status status1; \');
+                                        _Out.Add('              MPI_Recv(NULL, 0, MPI_BYTE, status.MPI_SOURCE, tag_base, MPI_COMM_WORLD, &status1); \');
+                                        _Out.Add('              break; \');
+                                        _Out.Add('           } else { \');
+                                        _Out.Add('              int item_received; \');
+                                        _Out.Add('              do { \');
+                                        _Out.Add('                 MPI_Iprobe(MPI_ANY_SOURCE, tag_base+2, MPI_COMM_WORLD, &item_received, &status); \');
+                                        _Out.Add('                 if (item_received) { \');
+                                        _Out.Add('                    MPI_Status status1; \');
+                                        _Out.Add('                    int first; \');
+                                        _Out.Add('                    MPI_Recv(&first, 1, MPI_INT, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
+                                        _Out.Add('                    MPI_Recv(&'+ParamDummy+', sizeof('+ParamDummy+'), MPI_BYTE, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
+                                        _Out.Add('                    plan_set_lock(__plan_lock__); \');
+                                        _Out.Add('                    if (first) __EVENTS__->push_front('+ParamDummy+'); \');
+                                        _Out.Add('                    else __EVENTS__->push_back('+ParamDummy+'); \');
+                                        _Out.Add('                    plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('                 } \');
+                                        _Out.Add('              } while (item_received); \');
+                                        _Out.Add('           } \');
+                                        _Out.Add('        } else { \');
+                                        _Out.Add('           if (__throw_stage__ == 0) { \');
+                                        _Out.Add('              if (next_id >= 0) MPI_Send(NULL, 0, MPI_BYTE, next_id, tag_base+1, MPI_COMM_WORLD); \');
+                                        _Out.Add('              break; \');
+                                        _Out.Add('           } \');
+                                        _Out.Add('           MPI_Status status; \');
+                                        _Out.Add('           int seq_quit_detected; \');
+                                        _Out.Add('           MPI_Iprobe(MPI_ANY_SOURCE, tag_base+1, MPI_COMM_WORLD, &seq_quit_detected, &status); \');
+                                        _Out.Add('           if (seq_quit_detected) { \');
+                                        _Out.Add('              MPI_Status status1; \');
+                                        _Out.Add('              MPI_Recv(NULL, 0, MPI_BYTE, status.MPI_SOURCE, tag_base+1, MPI_COMM_WORLD, &status1); \');
+                                        _Out.Add('              if (next_id >= 0) MPI_Send(NULL, 0, MPI_BYTE, next_id, tag_base+1, MPI_COMM_WORLD); \');
+                                        _Out.Add('              break; \');
+                                        _Out.Add('           } else { \');
+                                        _Out.Add('              int item_received; \');
+                                        _Out.Add('              do { \');
+                                        _Out.Add('                 MPI_Iprobe(MPI_ANY_SOURCE, tag_base+2, MPI_COMM_WORLD, &item_received, &status); \');
+                                        _Out.Add('                 if (item_received) { \');
+                                        _Out.Add('                    MPI_Status status1; \');
+                                        _Out.Add('                    int first; \');
+                                        _Out.Add('                    MPI_Recv(&first, 1, MPI_INT, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
+                                        _Out.Add('                    MPI_Recv(&'+ParamDummy+', sizeof('+ParamDummy+'), MPI_BYTE, status.MPI_SOURCE, tag_base+2, MPI_COMM_WORLD, &status1); \');
+                                        _Out.Add('                    plan_set_lock(__plan_lock__); \');
+                                        _Out.Add('                    if (first) __EVENTS__->push_front('+ParamDummy+'); \');
+                                        _Out.Add('                    else __EVENTS__->push_back('+ParamDummy+'); \');
+                                        _Out.Add('                    plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('                 } \');
+                                        _Out.Add('              } while (item_received); \');
+                                        _Out.Add('           } \');
+                                        _Out.Add('        } \');
+                                        _Out.Add('     } \');
+                                        _Out.Add('     else { \');
+                                        _Out.Add('        '+ParamDummy+' = __EVENTS__->front(); \');
+                                        _Out.Add('        __EVENTS__->pop_front(); \');
+                                        _Out.Add('        plan_unset_lock(__plan_lock__); \');
+                                        _Out.Add('     } \');
+                                        _Out.Add('     __instead_signal_yield(); \');
+                                        _Out.Add('   } \');
+                                        _Out.Add('   if (__GO__) { \');
+                                        _Out.Add('    if (!__parallelize__) { \');
+                                        _Out.Add('       '+ParamDummy+' = __EVENTS__->front(); \');
+                                        _Out.Add('       __EVENTS__->pop_front(); \');
+                                        _Out.Add('    } \');
+                                        _Out.Add('    '+ResetDummies+' \');
+                                        _Out.Add('    '+rParamReasgns+' \');
+                                        _Out.Add('    __'+ID+'__(0'+
                                                                     StringReplace(rParamDummies,'__nprocs__','__nprocs__&(~__nprocs_mask__)',[])+
                                                                     ',__signaler__,__next_signaler__,__throw_stage__,__next_events__,__next_lock__,__plan_lock__,__EVENTS__); \');
-                                        WriteLn(Out,'    '+_eRedModifs+' \');
-                                        WriteLn(Out,'    __nprocs_mask__ = 0x18000; \');
-                                        WriteLn(Out,'   } \');
-                                        WriteLn(Out,' } \');
-                                        WriteLn(Out,'} while(0)');
+                                        _Out.Add('    '+_eRedModifs+' \');
+                                        _Out.Add('    __nprocs_mask__ = 0x18000; \');
+                                        _Out.Add('   } \');
+                                        _Out.Add(' } \');
+                                        _Out.Add('} while(0)');
                                       End;
-                                   WriteLn(Out,TypeID,' ',Proc,'(__reent_event * __signaler__, __reent_event * __next_signaler__,'+
+                                   _Out.Add(TypeID+' '+Proc+'(__reent_event * __signaler__, __reent_event * __next_signaler__,'+
                                                             ' int __throw_stage__, void * __chain_plan__, plan_lock_t * __chain_lock__, omp_lock_t * __start_lock__, plan_lock_t * __plan_lock__, omp_lock_t * __continue_lock__,'+
-                                               ' char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<',PrmStruct,'> * __event_list__, int __nprocs__',Params,L.AnlzLine);
-                                 WriteLn(Out,'#else');
-                                   WriteLn(Out,TypeID,' ',Proc,'(int __num_stages__, int __throw_stage__, void * __chain_plan__, char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<',PrmStruct,'> * __event_list__, int __nprocs__',Params,';');
-                                   WriteLn(Out,'inline ',TypeID,' __'+ID+'__(char __continue__, int __nprocs__'+
+                                               ' char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<'+PrmStruct+'> * __event_list__, int __nprocs__'+Params+L.AnlzLine);
+                                 _Out.Add('#else');
+                                   _Out.Add(TypeID+' '+Proc+'(int __num_stages__, int __throw_stage__, void * __chain_plan__, char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<'+PrmStruct+'> * __event_list__, int __nprocs__'+Params+';');
+                                   _Out.Add('inline '+TypeID+' __'+ID+'__(char __continue__, int __nprocs__'+
                                                Copy(Params,1,Length(Params)-1)+
-                                               ', int __num_stages__ = 1, int __throw_stage__ = 0, void * p__chain_plan__ = NULL, '+Ldecl+'<',PrmStruct,'> * p__event_list__ = NULL)');
-                                   WriteLn(Out,'{');
+                                               ', int __num_stages__ = 1, int __throw_stage__ = 0, void * p__chain_plan__ = NULL, '+Ldecl+'<'+PrmStruct+'> * p__event_list__ = NULL)');
+                                   _Out.Add('{');
                                    If StaticFlag=smDynamic Then
                                       Begin
-                                        WriteLn(Out,' '+Ldecl+'<'+PrmStruct+'> _'+Evs+' = '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
-                                        WriteLn(Out,' '+Ldecl+'<'+PrmStruct+'>& '+Evs+' = p__event_list__ ? *p__event_list__ : _'+Evs+';')
+                                        _Out.Add(' '+Ldecl+'<'+PrmStruct+'> _'+Evs+' = '+Ldecl+'<'+PrmStruct+'>'+Format(Lparm,[PrmStruct, PrmStruct, PrmStruct])+';');
+                                        _Out.Add(' '+Ldecl+'<'+PrmStruct+'>& '+Evs+' = p__event_list__ ? *p__event_list__ : _'+Evs+';')
                                       End;
-                                   WriteLn(Out,' char val__continue_plan__ = 1+__continue__;');
-                                   WriteLn(Out,' char * __continue_plan__  = &val__continue_plan__;');
-                                   WriteLn(Out,' char __parallel_flag__ = 0;');
+                                   _Out.Add(' char val__continue_plan__ = 1+__continue__;');
+                                   _Out.Add(' char * __continue_plan__  = &val__continue_plan__;');
+                                   _Out.Add(' char __parallel_flag__ = 0;');
                                    If TypeID <> 'void' Then
                                       Begin
-                                        WriteLn(Out,' ',TypeID,' __ret__;');
+                                        _Out.Add(' '+TypeID+' __ret__;');
                                         RetAssgn := '__ret__ = '
                                       End
                                    Else
                                       RetAssgn := '';
-                                   WriteLn(Out,' '+RedDummies);
-                                   WriteLn(Out,' '+PrmStruct+' '+ParamDummy+';');
-                                   WriteLn(Out,' if (!__continue__) {');
-                                   WriteLn(Out,'    ',RetAssgn,Proc+'(__num_stages__,__throw_stage__,p__chain_plan__,&__parallel_flag__,&val__continue_plan__,&'+Evs+rParamNames+';');
-                                   WriteLn(Out,'    '+RedModifs);
-                                   WriteLn(Out,' }');
-                                   WriteLn(Out,' while (val__continue_plan__ && !'+Evs+'.empty())');
-                                   WriteLn(Out,'   {');
-                                   WriteLn(Out,'    '+ParamDummy+' = '+Evs+'.front();');
-                                   WriteLn(Out,'    '+Evs+'.pop_front();');
-                                   WriteLn(Out,'    ',ParamReasgns);
-                                   WriteLn(Out,'    ',RetAssgn,Proc+'(__num_stages__,__throw_stage__,p__chain_plan__,&__parallel_flag__,&val__continue_plan__,&'+Evs+_rParamDummies+');');
-                                   WriteLn(Out,'    '+RedModifs);
-                                   WriteLn(Out,'    if (val__continue_plan__==2) val__continue_plan__ = 1;');
-                                   WriteLn(Out,'   }');
+                                   _Out.Add(' '+RedDummies);
+                                   _Out.Add(' '+PrmStruct+' '+ParamDummy+';');
+                                   _Out.Add(' if (!__continue__) {');
+                                   _Out.Add('    '+RetAssgn+Proc+'(__num_stages__,__throw_stage__,p__chain_plan__,&__parallel_flag__,&val__continue_plan__,&'+Evs+rParamNames+';');
+                                   _Out.Add('    '+RedModifs);
+                                   _Out.Add(' }');
+                                   _Out.Add(' while (val__continue_plan__ && !'+Evs+'.empty())');
+                                   _Out.Add('   {');
+                                   _Out.Add('    '+ParamDummy+' = '+Evs+'.front();');
+                                   _Out.Add('    '+Evs+'.pop_front();');
+                                   _Out.Add('    '+ParamReasgns);
+                                   _Out.Add('    '+RetAssgn+Proc+'(__num_stages__,__throw_stage__,p__chain_plan__,&__parallel_flag__,&val__continue_plan__,&'+Evs+_rParamDummies+');');
+                                   _Out.Add('    '+RedModifs);
+                                   _Out.Add('    if (val__continue_plan__==2) val__continue_plan__ = 1;');
+                                   _Out.Add('   }');
                                    If TypeID <> 'void' Then
-                                      WriteLn(Out,' return __ret__;');
-                                   WriteLn(Out,'}');
+                                      _Out.Add(' return __ret__;');
+                                   _Out.Add('}');
                                    If ChainMode Then
                                       Begin
-                                        WriteLn(Out,'#define __chain_call_'+ID+'__(__num_stages__,__throw_stage__,__init__,__events__,__next_events__'+_ParamNames+' \');
-                                        WriteLn(Out,'do { \');
-                                        WriteLn(Out,' '+Ldecl+'<'+PrmStruct+'> * __EVENTS__ = ('+Ldecl+'<'+PrmStruct+'> *) __events__; \');
-                                        WriteLn(Out,' char val__continue_plan__  = 1; \');
-                                        WriteLn(Out,' char * __continue_plan__  = &val__continue_plan__; \');
-                                        WriteLn(Out,' char __parallel_flag__ = 0; \');
-                                        WriteLn(Out,' '+_eRedDummies+' \');
-                                        WriteLn(Out,' '+PrmStruct+' '+ParamDummy+'; \');
-                                        WriteLn(Out,' if (__init__) { \');
-                                        WriteLn(Out,'    __'+ID+'__(0'+Copy(_rParamNames,1,Length(_rParamNames)-1)+
+                                        _Out.Add('#define __chain_call_'+ID+'__(__num_stages__,__throw_stage__,__init__,__events__,__next_events__'+_ParamNames+' \');
+                                        _Out.Add('do { \');
+                                        _Out.Add(' '+Ldecl+'<'+PrmStruct+'> * __EVENTS__ = ('+Ldecl+'<'+PrmStruct+'> *) __events__; \');
+                                        _Out.Add(' char val__continue_plan__  = 1; \');
+                                        _Out.Add(' char * __continue_plan__  = &val__continue_plan__; \');
+                                        _Out.Add(' char __parallel_flag__ = 0; \');
+                                        _Out.Add(' '+_eRedDummies+' \');
+                                        _Out.Add(' '+PrmStruct+' '+ParamDummy+'; \');
+                                        _Out.Add(' if (__init__) { \');
+                                        _Out.Add('    __'+ID+'__(0'+Copy(_rParamNames,1,Length(_rParamNames)-1)+
                                                          ',__num_stages__,__throw_stage__,__next_events__,__EVENTS__); \');
-                                        WriteLn(Out,'    '+_eRedModifs+' \');
-                                        WriteLn(Out,' } \');
-                                        WriteLn(Out,' while (!__EVENTS__->empty()) \');
-                                        WriteLn(Out,'   { \');
-                                        WriteLn(Out,'    '+ParamDummy+' = __EVENTS__->front(); \');
-                                        WriteLn(Out,'    __EVENTS__->pop_front(); \');
-                                        WriteLn(Out,'    ',rParamReasgns,' \');
-                                        WriteLn(Out,'    __'+ID+'__(0'+rParamDummies+',__num_stages__,__throw_stage__,__next_events__,__EVENTS__); \');
-                                        WriteLn(Out,'    '+_eRedModifs+' \');
-                                        WriteLn(Out,'   } \');
-                                        WriteLn(Out,'} while(0)');
+                                        _Out.Add('    '+_eRedModifs+' \');
+                                        _Out.Add(' } \');
+                                        _Out.Add(' while (!__EVENTS__->empty()) \');
+                                        _Out.Add('   { \');
+                                        _Out.Add('    '+ParamDummy+' = __EVENTS__->front(); \');
+                                        _Out.Add('    __EVENTS__->pop_front(); \');
+                                        _Out.Add('    '+rParamReasgns+' \');
+                                        _Out.Add('    __'+ID+'__(0'+rParamDummies+',__num_stages__,__throw_stage__,__next_events__,__EVENTS__); \');
+                                        _Out.Add('    '+_eRedModifs+' \');
+                                        _Out.Add('   } \');
+                                        _Out.Add('} while(0)');
                                       End;
-                                   WriteLn(Out,TypeID,' ',Proc,'(int __num_stages__, int __throw_stage__, void * __chain_plan__, char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<',PrmStruct,'> * __event_list__, int __nprocs__',Params,L.AnlzLine);
-                                 WriteLn(Out,'#endif')
+                                   _Out.Add(TypeID+' '+Proc+'(int __num_stages__, int __throw_stage__, void * __chain_plan__, char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<'+PrmStruct+'> * __event_list__, int __nprocs__'+Params+L.AnlzLine);
+                                 _Out.Add('#endif')
                                End
                             Else If Not IsDeclaration Then
                                Begin
-                                 WritePlanMacros(Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
+                                 WritePlanMacros(_Out,ID,_ParamNames, LocGlobs, _Names, Ldecl);
                                  If ChainMode Then
                                     begin
-                                      WriteThrowMacros(Out,ID,_ThrParamNames);
+                                      WriteThrowMacros(_Out,ID,_ThrParamNames);
                                       FunctionThrowParams := ThrParamNames
                                     end;
-                                 WriteLn(Out,'#ifdef _OPENMP');
-                                   WriteLn(Out,TypeID,' ',Proc,'(__reent_event * __signaler__, __reent_event * __next_signaler__, int __throw_stage__, void * __chain_plan__, plan_lock_t * __chain_lock__,'+
+                                 _Out.Add('#ifdef _OPENMP');
+                                   _Out.Add(TypeID+' '+Proc+'(__reent_event * __signaler__, __reent_event * __next_signaler__, int __throw_stage__, void * __chain_plan__, plan_lock_t * __chain_lock__,'+
                                                          ' omp_lock_t * __start_lock__, plan_lock_t * __plan_lock__, omp_lock_t * __continue_lock__, '+
-                                                         'char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<',PrmStruct,'> * __event_list__, int __nprocs__',Params,L.AnlzLine);
-                                 WriteLn(Out,'#else');
-                                   WriteLn(Out,TypeID,' ',Proc,'(int __num_stages__, int __throw_stage__, void * __chain_plan__, char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<',PrmStruct,'> * __event_list__, int __nprocs__',Params,L.AnlzLine);
-                                 WriteLn(Out,'#endif')
+                                                         'char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<'+PrmStruct+'> * __event_list__, int __nprocs__'+Params+L.AnlzLine);
+                                 _Out.Add('#else');
+                                   _Out.Add(TypeID+' '+Proc+'(int __num_stages__, int __throw_stage__, void * __chain_plan__, char * __parallel_flag__, char * __continue_plan__, '+Ldecl+'<'+PrmStruct+'> * __event_list__, int __nprocs__'+Params+L.AnlzLine);
+                                 _Out.Add('#endif')
                                End
                           End
                      end
                   Else
                      begin
-                       WriteLn(Out,S);
+                       _Out.Add(S);
                        If (Length(SoftFunctionText) > 0) And Not ReadFunction Then
                           begin
-                            WriteLn(Out);
-                            WriteAtomicMacros(Out, FunctionParamNames, FunctionThrowParams);
+                            _Out.Add('');
+                            WriteAtomicMacros(_Out, FunctionParamNames, FunctionThrowParams);
                             S := '';  // current word
                             S1 := ''; // final text
                             S2 := ''; // previous word
@@ -3211,13 +3236,13 @@ begin
                                     S2 := S2 + ' return __dummy__;'+CRLF
                                end;
                             Insert(S2, S1, F);
-                            WriteLn(Out, S1);
+                            _Out.Add( S1);
                             SoftFunctionText := ''
                           end;
                        If (Length(FunctionText) > 0) And Not ReadFunction Then
                           begin
-                            WriteLn(Out);
-                            WriteAtomicMacros(Out, FunctionParamNames, FunctionThrowParams);
+                            _Out.Add('');
+                            WriteAtomicMacros(_Out, FunctionParamNames, FunctionThrowParams);
                             FunctionParamNames := '';
                             FunctionThrowParams := '';
                             S := '';  // current word
@@ -3283,12 +3308,12 @@ begin
                                     S2 := S2 + ' return __dummy__;'+CRLF
                                end;
                             Insert(S2, S1, F);
-                            WriteLn(Out, S1);
+                            _Out.Add( S1);
                             FunctionText := ''
                           end;
                        If (Length(GPUFunctionText) > 0) And Not ReadFunction Then
                           begin
-                            WriteLn(Out);
+                            _Out.Add('');
                             S := '';  // current word
                             S1 := ''; // final text
                             S2 := ''; // previous word
@@ -3329,12 +3354,12 @@ begin
                             Insert(S2, S1, F);
                             If IsVectorized Then
                                Begin
-                                 WriteLn(Out,'#ifdef __REENT_GPU__');
+                                 _Out.Add('#ifdef __REENT_GPU__');
                                  SL := TStringList.Create;
                                  SL.Text := S1;
-                                 WriteString(Out, 'gpu_'+FunctionID, SL);
+                                 WriteString(_Out, 'gpu_'+FunctionID, SL);
                                  SL.Free;
-                                 WriteLn(Out,'#endif')
+                                 _Out.Add('#endif')
                                End
                             Else If VectorizeFlag Then
                                Begin
@@ -3396,7 +3421,14 @@ begin
               Free
             End;
           Topology.Free;
-          Close(Out)
+          Try
+             ProcessGlue(_Out);
+             _Out.SaveToFile(NewName);
+          Except
+             WriteLn('Can''t open output file ', NewName, ' for writing');
+             Halt(-1)
+          End;
+          _Out.Free;
         End
 end.
 

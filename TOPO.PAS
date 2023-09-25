@@ -16,7 +16,7 @@ Type TLink = Record
 
 Type TLinks = Array Of TLink;
 
-Procedure CreateTopology(Var Out: TextFile; Const ClusteredArrID: String;
+Procedure CreateTopology(Var _Out: TStringList; Const ClusteredArrID: String;
                          Chain, Topology: TStringList; NProcs: String);
 
 Function GenerateTopology(IsTopological: Boolean {True for topology};
@@ -1009,7 +1009,7 @@ Begin
   L.Free
 End;
 
-Procedure CreateTopology(Var Out: TextFile; Const ClusteredArrID: String; Chain, Topology: TStringList; NProcs: String);
+Procedure CreateTopology(Var _Out: TStringList; Const ClusteredArrID: String; Chain, Topology: TStringList; NProcs: String);
 
 Var L, L1:TAnalyser;
     ID, Params, NP, Dir: String;
@@ -1199,7 +1199,7 @@ Begin
   // Generate
   If Length(NProcs) = 0 Then
      NProcs := IntToStr(ChainItems.Count);
-  WriteLn(Out, GenerateTopology(True, ClusteredArrID, '(1+2)', '1',
+  _Out.Add( GenerateTopology(True, ClusteredArrID, '(1+2)', '1',
                          NProcs, '0', False,
                          Chain, ChainItems,
                          Links)

@@ -659,7 +659,7 @@ enumerations_point();
     write_fillers('    ', '__plan_item', ['', '' | KINDS], ['init', '__markCommons' | NAMES], ['0', '__markCommons' | NAMES]),
     write('    __plan_sorted[__n] = __plan_item;'), nl,
     write('    __n++;'), nl,
-    write('    if (__n == __working) { __plan_item.init = 2; for (; __n < __total; __n++) { __plan_item.TR = TR + __n*__markCommons; __plan_sorted[__n] = __plan_item; } }'),nl,
+    write('    if (__n == __working) { __plan_item.init = 2; for (; __n < __total; __n++) { __plan_item.TR = TR + __n*__markCommons; __plan_sorted[__n] = __plan_item; } break; }'),nl,
     write('  }'), nl,
 % Sort indexes of plan
     get_pivot(KINDS, NAMES, TYPES, Pivot, PivotType),
