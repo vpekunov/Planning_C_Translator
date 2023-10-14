@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <thread>
 #include <vector>
 
 using namespace std;
@@ -126,7 +127,7 @@ using namespace std;
 enumerations_point();
 #pragma plan common end
 
-#def_pattern optFun => insert_marks(gid(), '', '', '', //RETTYPE/@Value, //ID/@Value, //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, '', //OP/@Value, //TYPE/@Value) {
+#def_pattern optFun => insert_marks(gid(), '', '', '', '', '', //RETTYPE/@Value, //ID/@Value, //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, '', //OP/@Value, //TYPE/@Value) {
   (((^)|(\;)+|\}|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
     \$(\s|\\t|\\n)+
@@ -231,12 +232,22 @@ enumerations_point();
   (\s|\\t|\\n)*
 };
 
-#def_pattern gpuFor => insert_marks(gid(), //DEVICE/@Value, //CHUNK/@Value, //LOOP/@Value, '', randomid(), //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, //SIZES/@Value, //OP/@Value, //TYPE/@Value) {
+#def_pattern gpuFor => insert_marks(gid(), //OPT/@Value, //DEVICE/@Value, //MODE/@Value, //CHUNK/@Value, //LOOP/@Value, '', randomid(), //PARAMS/@Value, //KINDS/@Value, //TYPES/@Value, //NAMES/@Value, //SIZES/@Value, //OP/@Value, //TYPE/@Value) {
   (((^)|(\;)+|\}|\\n)((\s|\\t)*\\n)*)(\s|\\t)*
   @begin
+    (
+     optimized(\s|\\t|\\n)*
+     \(
+     ((.{0,128})->{OPT}\))?=>{Predicates.BAL($,')')}
+     (\s|\\t|\\n)*
+    )?
     vectorized(\s|\\t|\\n)*\(
           ((.{0,128})->{DEVICE}\,)?=>{Predicates.BAL($,',')}
           (\s|\\t|\\n)*
+          (
+           ((.{0,128})->{MODE}\,)?=>{Predicates.BAL($,',')}
+           (\s|\\t|\\n)*
+          )?
           ((.{0,128})->{CHUNK}\))?=>{Predicates.BAL($,')')}
           (\s|\\t|\\n)*
     gpu(\s|\\t|\\n)*
@@ -298,7 +309,7 @@ enumerations_point();
   (\s|\\t|\\n)*
 };
 
-#def_module() insert_marks(GID, DEVICE, CHUNK, LOOP, RETTYPE, ID, PARAMS, KINDS, TYPES, NAMES, SIZES, OP, TYPE) {
+#def_module() insert_marks(GID, OPT, DEVICE, MODE, CHUNK, LOOP, RETTYPE, ID, PARAMS, KINDS, TYPES, NAMES, SIZES, OP, TYPE) {
 @goal:-brackets_off.
 @put_register(N,N1):-
   N1 is N+1,
@@ -458,11 +469,19 @@ enumerations_point();
   gen_reent_each_param(Kinds,Types,Names,Sizes),
   !.
 @insert_prototype([]):-!.
-@insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names,Sizes))|T]):-
+@insert_prototype([block(Gid,loop(B,Device,Mode,Chunk,Kinds,Types,Names,Sizes))|T]):-
   write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names,Sizes),write(') {'), nl,
-  write('  if (init == 1) {'), nl,
-  write('     plan_group_vectorize('), write(Device), write(');'), nl,
-  write('  } else if (init == 2) {'), nl,
+  write('  if ((init & 0x3) == 1) {'), nl,
+  (
+   =(Mode, '')->
+    true;
+    ( write('     if (init == 5 || !('), write(Mode), write('))'), nl,
+      write('        plan_group_parallelize;'), nl,
+      write('     else'), nl
+    )
+  ),
+  write('        plan_group_vectorize('), write(Device), write(');'), nl,
+  write('  } else if ((init & 0x3) == 2) {'), nl,
   write('     plan_undo_locals();'),nl,
   write('  } else {'), nl,
   write(B),
@@ -541,11 +560,23 @@ enumerations_point();
 @read_codes(S,TS):-
   get_code(S,C),
   read_code(S,C,TS).
-@write_starter(Offs):-
+@write_starter(Offs, GIDd, GIDr):-
   write(Offs), write('if (__chunker > 0) {'), nl,
-  write(Offs), write('   Loop'), write(GID), write('([1, __markCommons, TR'),
+  write(Offs), write('  if (on_gpu) {'), nl,
+    write(Offs), write('    Loop'), write(GIDd), write('([1, __markCommons, TR'),
     (=(NAMES,'')->true;write(',')), !, write_param_names(NAMES),
     write(']);'), nl,
+    write(Offs), write('  }'), nl,
+  (
+   =(OPT, '')->true;
+   (
+    write(Offs), write('  else {'), nl,
+      write(Offs), write('    Loop'), write(GIDr), write('([5, __markCommons, TR'),
+      (=(NAMES,'')->true;write(',')), !, write_param_names(NAMES),
+      write(']);'), nl,
+      write(Offs), write('  }'), nl
+   )
+  ),
   write(Offs), write('   float t = last_execution_time('), write(DEVICE), write(');'), nl,
   write(Offs), write('   for (int offs = __start_block; offs < __n; offs++) {'), nl,
   write(Offs), write('       int ptr = __plan_indexes[offs];'), nl,
@@ -586,7 +617,7 @@ enumerations_point();
 @get_pivot([_|TK], [_|TN], [_|TT], N, T):-
   get_pivot(TK, TN, TT, N, T),
   !.
-@write_loop:-
+@write_loop(GIDd, GIDr):-
   write('{'), nl,
     write('static int __nn = 0;'), nl,
     write('static unsigned short * TR = NULL;'), nl,
@@ -650,8 +681,8 @@ enumerations_point();
     write('   }'), nl,
     write('   __nn = __total;'), nl,
     write('}'), nl,
-    write('vector<plan_item_type(Loop'), write(GID), write(')> __plan_sorted(__total);'), nl,
-    write('plan_item_type(Loop'), write(GID), write(') __plan_item;'), nl,
+    write('vector<plan_item_type(Loop'), write(GIDd), write(')> __plan_sorted(__total);'), nl,
+    write('plan_item_type(Loop'), write(GIDd), write(') __plan_item;'), nl,
 % Collect plan
     write(LOOP),
     write('  {'), nl,
@@ -659,51 +690,112 @@ enumerations_point();
     write_fillers('    ', '__plan_item', ['', '' | KINDS], ['init', '__markCommons' | NAMES], ['0', '__markCommons' | NAMES]),
     write('    __plan_sorted[__n] = __plan_item;'), nl,
     write('    __n++;'), nl,
-    write('    if (__n == __working) { __plan_item.init = 2; for (; __n < __total; __n++) { __plan_item.TR = TR + __n*__markCommons; __plan_sorted[__n] = __plan_item; } break; }'),nl,
+    write('    if (__n == __working) { for (; __n < __total; __n++) {'), nl,
+    write('       __plan_item.TR = TR + __n*__markCommons;'), nl,
+    write_fillers('       ', '__plan_item', ['', '' | KINDS], ['init', '__markCommons' | NAMES], ['2', '__markCommons' | NAMES]),
+    write('       __plan_sorted[__n] = __plan_item; } break; }'),nl,
     write('  }'), nl,
 % Sort indexes of plan
     get_pivot(KINDS, NAMES, TYPES, Pivot, PivotType),
-    write('if (!initialized) {'), nl,
     (
      =(Pivot, '')->
       true;
       (
-       write('   sort(__plan_indexes.begin(),__plan_indexes.end(),'), nl,
-       write('     [&](const int & A, const int & B)->bool {'), nl,
-       write('        int d = __plan_sorted[B].'), write(Pivot), write('[B] - __plan_sorted[A].'), write(Pivot), write('[A];'), nl,
-       write('        int i;'), nl,
-       write('        if (abs(d) > 0) return d < 0;'), nl,
-       write('        for (i = 0; i < __markCommons; i++) {'), nl,
-       write('            int p = WOrder[i];'), nl,
-       write('            int q = (TR[B*__markCommons + p] - TR[A*__markCommons + p]);'), nl,
-       write('            if (q != 0) return q < 0;'), nl,
-       write('        }'), nl,
-       write('        return false;'), nl,
-       write('     }'), nl,
-       write('   );'), nl
+       write(' sort(__plan_indexes.begin(),__plan_indexes.end(),'), nl,
+       write('   [&](const int & A, const int & B)->bool {'), nl,
+       write('      int d = __plan_sorted[B].'), write(Pivot), write('[B] - __plan_sorted[A].'), write(Pivot), write('[A];'), nl,
+       write('      int i;'), nl,
+       write('      if (abs(d) > 0) return d < 0;'), nl,
+       write('      for (i = 0; i < __markCommons; i++) {'), nl,
+       write('          int p = WOrder[i];'), nl,
+       write('          int q = (TR[B*__markCommons + p] - TR[A*__markCommons + p]);'), nl,
+       write('          if (q != 0) return q < 0;'), nl,
+       write('      }'), nl,
+       write('      return false;'), nl,
+       write('   }'), nl,
+       write(' );'), nl
       )
     ),
     !,
-    write('   initialized = true;'), nl,
-    write('}'), nl,
+    write(' initialized = true;'), nl,
 % Empty traces
     write('memset(TR, 0, __nn*__markCommons*sizeof(unsigned short));'), nl,
+% For OPT
+    (
+     =(OPT, '')->
+      true;
+      (
+       (
+        =(OPT, 'auto')->
+         Opt is '0.5';
+         =(Opt, OPT)
+       ),
+       write('static double __originalK = 0.0;'), nl,
+       write('static double prev__usedK = 0.0;'), nl,
+       write('static double prev__usedTime = 0.0;'), nl,
+       write('static double __usedK = 0.0;'), nl,
+       write('if (__originalK != ('), write(Opt), write(')) { __usedK = __originalK = ('), write(Opt), write('); }'), nl,
+       write('double __start = omp_get_wtime();'), nl,
+       write('long long __totalLoad = 0;'), nl,
+       write(LOOP), write('  {'), nl,
+       (
+        =(Pivot, '')->
+          ( write('__totalLoad ++;'), nl );
+          ( write('__totalLoad += '), write(Pivot), write('[p];'), nl )
+       ),
+       write('}'), nl,
+       write('long long __divider = (int)((__usedK)*__totalLoad);'), nl,
+       write('int __NGPU = 0;'), nl,
+       write('__totalLoad = 0;'), nl,
+       write(LOOP), write('  {'), nl,
+       write('if (__totalLoad >= __divider) break;'), nl,
+       (
+        =(Pivot, '')->
+          ( write('__totalLoad ++;'), nl );
+          ( write('__totalLoad += '), write(Pivot), write('[p];'), nl )
+       ),
+       write('  __NGPU++;'), nl,
+       write('}'), nl,
+       write('if ((__NGPU % ('), write(CHUNK),
+       write(')) != 0) __NGPU += (('), write(CHUNK), write(') - (__NGPU % ('), write(CHUNK), write(')));'), nl
+      )
+    ),
 % Run
+    write('auto __RUNER = [&](int __start_block, int __total, bool on_gpu, plan_item_type(Loop'),write(GIDd), write(') __plan_item) {'), nl,
+
     write('int __chunker = 0;'), nl,
-    write('int __start_block = 0;'), nl,
-    write('__n = 0;'), nl,
+    write('int __n = __start_block;'), nl,
     write('while (__n < __total)'),nl,
     write('  {'), nl,
-    write('    if (__chunker == 0) { __plan_item.init = 1; *Loop'), write(GID), write(' << __plan_item; }'), nl,
-    write('    *Loop'), write(GID), write(' << __plan_sorted[__plan_indexes[__n]];'), nl,
+    write('    if (__chunker == 0 && on_gpu) { __plan_item.init = 1; *Loop'), write(GIDd), write(' << __plan_item; }'), nl,
+    ( =(OPT,'')->true;
+       ( write('    if (__chunker == 0 && !on_gpu) { __plan_item.init = 5; *Loop'), write(GIDr),
+         write(' << *((plan_item_type(Loop'), write(GIDr), write(')*)&__plan_item); }'), nl )
+    ),
+    write('    if (on_gpu) *Loop'), write(GIDd), write(' << __plan_sorted[__plan_indexes[__n]];'), nl,
+    ( =(OPT,'')->true;
+       ( write('    if (!on_gpu) *Loop'), write(GIDr), write(' << *((plan_item_type(Loop'), write(GIDr), write(')*)&__plan_sorted[__plan_indexes[__n]]);'), nl )
+    ),
     write('    __n++;'), nl,
     write('    if (++__chunker == ('), write(CHUNK), write(')) {'), nl,
-    write_starter('       '),
+    write_starter('       ', GIDd, GIDr),
     write('       __start_block = __n;'), nl,
     write('       __chunker = 0;'), nl,
     write('    }'), nl,
     write('  }'), nl,
-    write_starter('    '),
+    write_starter('    ', GIDd, GIDr),
+
+    write('};'), nl,
+    (
+     =(OPT, '')->
+      ( write('__RUNER(0, __total, true, __plan_item);'), nl );
+      (
+       write('std::thread __gpu(__RUNER, 0, __NGPU, true, __plan_item);'), nl,
+       write('std::thread __omp(__RUNER, __NGPU, __total, false, __plan_item);'), nl,
+       write('__gpu.join();'), nl,
+       write('__omp.join();'), nl
+      )
+    ),
 % Handling
     (
      =(Pivot, '')->
@@ -716,6 +808,25 @@ enumerations_point();
        )
     ),
     !,
+    (
+     =(OPT,'auto')->
+      (
+       write('__start = omp_get_wtime() - __start;'), nl,
+       ( =(MODE,'')->true; ( write('if ('), write(MODE), write(') {'), nl )),
+       write('if (prev__usedTime != 0.0 && fabs(__usedK - prev__usedK) > 0.01) {'), nl,
+       write('   double grad = (__start - prev__usedTime)/(__usedK - prev__usedK);'), nl,
+       write('   prev__usedK = __usedK;'), nl,
+       write('   __usedK -= 0.2*grad;'), nl,
+       write('} else {'), nl,
+       write('   prev__usedK = __usedK;'), nl,
+       write('   if (__usedK < 0.5) __usedK += 0.075; else __usedK -= 0.075;'), nl,
+       write('}'), nl,
+       write('if (__usedK < 0.0) __usedK = 0.0; else if (__usedK > 1.0) __usedK = 1.0;'), nl,
+       write('prev__usedTime = __start;'), nl,
+       ( =(MODE,'')->true; ( write('}'), nl ))
+      );
+      true
+    ),
   write('}'), nl,
   telling(CurOut),
   told,
@@ -730,25 +841,38 @@ enumerations_point();
   close(S),
   !,
   (
-   (predicate_property(marks(_,_,_),'dynamic'), marks(GID,_,_))->
+   (predicate_property(marks(_,_,_),'dynamic'), marks(GIDd,_,_))->
      true;
-     assertz(marks(GID,ID,N))
+     assertz(marks(GIDd,ID,N))
   ),
   !,
   make_set(CALLS, SETCALLS),
   (
-   (predicate_property(gpu_loop(_,_),'dynamic'), gpu_loop(GID,_))->
+   (predicate_property(gpu_loop(_,_),'dynamic'), gpu_loop(GIDd,_))->
      true;
-     assertz(gpu_loop(GID,SETCALLS))
+     assertz(gpu_loop(GIDd,SETCALLS))
   ),
   (
-   (predicate_property(blocks(_,_),'dynamic'), blocks(GID,_))->
+   (predicate_property(blocks(_,_),'dynamic'), blocks(GIDd,_))->
      true;
-     assertz(blocks(GID,loop(Loop,DEVICE,CHUNK,KINDS,TYPES,NAMES,SIZES)))
+     assertz(blocks(GIDd,loop(Loop,DEVICE,MODE,CHUNK,KINDS,TYPES,NAMES,SIZES)))
+  ),
+  (
+   =(OPT,'')->true;
+    (
+     (predicate_property(blocks(_,_),'dynamic'), blocks(GIDr,_))->
+       true;
+       assertz(blocks(GIDr,loop(Loop,DEVICE,MODE,CHUNK,KINDS,TYPES,NAMES,SIZES)))
+    )
   ),
   !.
 @goal:-
- ( =(LOOP,'')->write_fun;write_loop ), !.
+ ( =(LOOP,'')->write_fun;
+     ( atom_concat(GID, 't', GIDt),
+       atom_concat(GID, 'f', GIDf),
+       write_loop(GIDt, GIDf)
+     )
+ ), !.
 };
 
 #def_module() register_fun(GID, RETTYPE, ID, PARAMS) {
@@ -817,11 +941,19 @@ enumerations_point();
   gen_reent_each_param(Kinds,Types,Names,Sizes),
   !.
 @insert_prototype([]):-!.
-@insert_prototype([block(Gid,loop(B,Device,Chunk,Kinds,Types,Names,Sizes))|T]):-
+@insert_prototype([block(Gid,loop(B,Device,Mode,Chunk,Kinds,Types,Names,Sizes))|T]):-
   write('reenterable['), write(Chunk), write('+1] static Loop'), write(Gid), write('('),gen_reent_params(Kinds,Types,Names,Sizes),write(') {'), nl,
-  write('  if (init == 1) {'), nl,
-  write('     plan_group_vectorize('), write(Device), write(');'), nl,
-  write('  } else if (init == 2) {'), nl,
+  write('  if ((init & 0x3) == 1) {'), nl,
+  (
+   =(Mode, '')->
+    true;
+    ( write('     if (init == 5 || !('), write(Mode), write('))'), nl,
+      write('        plan_group_parallelize;'), nl,
+      write('     else'), nl
+    )
+  ),
+  write('        plan_group_vectorize('), write(Device), write(');'), nl,
+  write('  } else if ((init & 0x3) == 2) {'), nl,
   write('     plan_undo_locals();'),nl,
   write('  } else {'), nl,
   write(B),

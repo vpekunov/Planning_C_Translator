@@ -644,7 +644,10 @@ Begin
                  Ldecl:=Copy(Ldecl,1,K-1)
                End;
             If Not ChainIsVector Then
-               Result:=Result+Ldecl+'<_params_'+ID+'> __LIST__'+IntToStr(H)+' = '+Ldecl+'<_params_'+ID+'>'+Lparm+';'+CRLF;
+               If Ldecl <> 'circular_list' Then
+                  Result:=Result+Ldecl+'<_params_'+ID+'> __LIST__'+IntToStr(H)+' = '+Ldecl+'<_params_'+ID+'>'+Lparm+';'+CRLF
+               Else
+                  Result:=Result+Ldecl+'<_params_'+ID+'> & __LIST__'+IntToStr(H)+' = _events_'+ID + ';'+CRLF
           End;
         If ChainIsVector Then
            Begin

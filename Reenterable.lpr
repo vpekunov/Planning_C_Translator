@@ -423,6 +423,8 @@ Begin
      Result:='';
      gpuParams := '';
      gpuInit := 'int __idx = plan_vector_id();'+CRLF+'int __counter__;'+CRLF+'int __undo_locals = 0;'+CRLF;
+     gpuStart := '';
+     gpuStop := '';
      Names.Clear;
      Substs.Clear;
      If Assigned(LocGlob) Then LocGlob.Clear;
@@ -1981,7 +1983,10 @@ begin
                                End
                           End
                        Else
-                          StaticFlag:=smDynamic;
+                          If ChainMode And (LFlag = dcCirc) Then
+                             StaticFlag:=smStatic
+                          Else
+                             StaticFlag:=smDynamic;
                        TypeID := 'void';
                        ID:=L.GetBefore(True,[Space, Tabulation, LeftBracket]);
                        L.DelSpaces;
@@ -2677,7 +2682,7 @@ begin
                                       _Out.Add(' '+TypeTaskID+' id;');
                                    _Out.Add(' '+pRedDummies);
                                    _Out.Add('  __START_LOCK__(__num_threads__,&__start_lock__);');
-                                   _Out.Add('  if (!__continue__ && __thread_id__==0) {' );
+                                   _Out.Add('  if (!__continue__ && __thread_id__==0 && _events_'+ID+'.size()==0) {' );
                                    _Out.Add('     omp_set_lock(&__free_lock__);');
                                    _Out.Add('     (*__free_count__)--;');
                                    _Out.Add('     omp_unset_lock(&__free_lock__);');
