@@ -2740,22 +2740,32 @@ public:
 
 	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
 		generated_vars * result = new generated_vars();
-		
-		// Evaluate expression
-		int p = 0;
-		double _res = prolog->evaluate(f, expression, p);
-
-		if (p < expression.length()) {
-			std::cout << "'is' evaluation : can't understand the following : '" << expression.substr(p) << "'" << endl;
-			exit(2000);
-		}
-
 		value * res;
-		if (_res == (long long)_res)
-			res = new int_number((long long)_res);
-		else
-			res = new float_number(_res);
+		if (expression.length() && expression[0] == '\'') {
+			string a;
+			int i = 1;
+			for (; i < expression.length() && expression[i] != '\''; i++)
+				a += expression[i];
+			if (i != expression.length() - 1) {
+				std::cout << "'is' evaluation : incorrect 'atom' : " << expression << "'" << endl;
+				exit(2000);
+			}
+			res = new term(a);
+		} else {
+			// Evaluate expression
+			int p = 0;
+			double _res = prolog->evaluate(f, expression, p);
 
+			if (p < expression.length()) {
+				std::cout << "'is' evaluation : can't understand the following : '" << expression.substr(p) << "'" << endl;
+				exit(2000);
+			}
+
+			if (_res == (long long)_res)
+				res = new int_number((long long)_res);
+			else
+				res = new float_number(_res);
+		}
 		frame_item * ff = f->copy();
 		value * v = f->get(var_name.c_str());
 		if (!v || !v->defined()) {
@@ -6478,18 +6488,25 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 					else
 						p++;
 					bypass_spaces(s, p);
-					string expr_chars = "+-*/\\()<>^=!";
+					string expr_chars = "\"'+-*/\\()<>^=!";
 					string expr;
+					bool in_quote = false;
 					int br_level = 0;
-					while (p < s.length() && (s[p] == '_' || isspace(s[p]) || isalnum(s[p]) || expr_chars.find(s[p]) != string::npos) ||
-						s[p] == ',' && br_level ||
-						   p+1 < s.length() && s[p] == '.' && isdigit(s[p+1])) {
-						if (s[p] == '(') br_level++;
-						else if (s[p] == ')')
-							if (br_level)
-								br_level--;
-							else
-								break;
+					while (p < s.length() && (
+							(in_quote || s[p] == '_' || isspace(s[p]) || isalnum(s[p]) || expr_chars.find(s[p]) != string::npos) ||
+							s[p] == ',' && br_level ||
+							p+1 < s.length() && s[p] == '.' && isdigit(s[p+1])
+						)) {
+						if (in_quote && s[p] == '\\') p++;
+						else if (s[p] == '\'') in_quote = !in_quote;
+						else if (!in_quote) {
+							if (s[p] == '(') br_level++;
+							else if (s[p] == ')')
+								if (br_level)
+									br_level--;
+								else
+									break;
+						}
 						expr += s[p];
 						p++;
 					}
