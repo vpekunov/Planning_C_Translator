@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <functional>
 #include <chrono>
+#include <regex>
 
 #include <math.h>
 #include <string.h>
@@ -548,9 +549,9 @@ public:
 	string_atomizer() { }
 	unsigned int get_atom(const string & s) {
 		if (s.length() == 1)
-			return s[0];
+			return (unsigned char)s[0];
 		else if (s.length() == 2)
-			return (((unsigned int)s[1]) << 8) + s[0];
+			return (((unsigned char)s[1]) << 8) + (unsigned char)s[0];
 		else {
 			map<string, unsigned int>::iterator it = hash.find(s);
 			if (it != hash.end())
@@ -591,7 +592,7 @@ public:
 	virtual void escape_vars(frame_item * ff) { }
 
 	virtual value * fill(frame_item * vars) { return this; }
-	virtual value * copy(frame_item * f) { return new any(); }
+	virtual value * copy(frame_item * f, int unwind = 0) { return new any(); }
 	virtual bool unify(frame_item * ff, value * from) {
 		return true;
 	}
@@ -625,8 +626,8 @@ public:
 		}
 	}
 
-	virtual value * copy(frame_item * f) {
-		value * v = f->get(name.c_str());
+	virtual value * copy(frame_item * f, int unwind = 0) {
+		value * v = f->get(name.c_str(), unwind);
 		if (v)
 			return v->copy(f);
 		else
@@ -667,7 +668,7 @@ public:
 	virtual void escape_vars(frame_item * ff) {	}
 
 	virtual value * fill(frame_item * vars) { return this; }
-	virtual value * copy(frame_item * f) { return new int_number(v); }
+	virtual value * copy(frame_item * f, int unwind = 0) { return new int_number(v); }
 	virtual bool unify(frame_item * ff, value * from);
 	virtual bool defined() {
 		return true;
@@ -695,7 +696,7 @@ public:
 	virtual void escape_vars(frame_item * ff) {	}
 
 	virtual value * fill(frame_item * vars) { return this; }
-	virtual value * copy(frame_item * f) { return new float_number(v); }
+	virtual value * copy(frame_item * f, int unwind = 0) { return new float_number(v); }
 	virtual bool unify(frame_item * ff, value * from) {
 		if (dynamic_cast<any *>(from)) return true;
 		if (dynamic_cast<var *>(from)) { ff->set(((var *)from)->get_name().c_str(), this); return true; }
@@ -784,16 +785,17 @@ public:
 		return this;
 	}
 
-	virtual void add_arg(frame_item * f, value * v) {
-		args.push_back(v->copy(f));
+	virtual void add_arg(frame_item * f, value * v, int unwind = 0) {
+		args.push_back(v->copy(f, unwind));
 	}
 
-	virtual value * copy(frame_item * f) {
+	virtual value * copy(frame_item * f, int unwind = 0) {
 		term * result = new term(*this);
 		for (int i = 0; i < args.size(); i++)
-			result->add_arg(f, args[i]);
+			result->add_arg(f, args[i], unwind);
 		return result;
 	}
+
 	virtual bool unify(frame_item * ff, value * from) {
 		if (dynamic_cast<any *>(from)) return true;
 		if (dynamic_cast<var *>(from)) { ff->set(((var *)from)->get_name().c_str(), this); return true; }
@@ -934,7 +936,7 @@ public:
 		return this;
 	}
 
-	virtual value * copy(frame_item * f) {
+	virtual value * copy(frame_item * f, int unwind = 0) {
 		return new indicator(name, arity);
 	}
 	virtual bool unify(frame_item * ff, value * from) {
@@ -1241,7 +1243,7 @@ public:
 		return result;
 	}
 
-	virtual value * copy(frame_item * f) {
+	virtual value * copy(frame_item * f, int unwind = 0) {
 		if (is_of_chars)
 			return new ::list(chars, tag ? tag->copy(f) : NULL);
 		else {
@@ -1510,7 +1512,7 @@ generated_vars * predicate_item_user::generate_variants(frame_item * f, vector<v
 		if (id.length() > 0 && id[0] >= 'A' && id[0] <= 'Z') {
 			dummy = dynamic_cast<term *>(f->get(id.c_str()));
 			if (dummy) {
-				dummy = dynamic_cast<term *>(dummy->copy(f));
+				dummy = dynamic_cast<term *>(dummy->copy(f, 1));
 				iid = dummy->get_name();
 			}
 		}
@@ -2204,6 +2206,81 @@ public:
 			term * TT = new term(dynamic_cast<term *>(L2->get_nth(1, false))->get_name());
 			for (int i = 2; i <= L2->size(); i++)
 				TT->add_arg(r, L2->get_nth(i, false)->copy(r));
+
+			if (t1->unify(r, TT)) {
+				result->push_back(r);
+			}
+			else {
+				delete result;
+				result = NULL;
+				delete r;
+			}
+			TT->free();
+		}
+
+		return result;
+	}
+};
+
+class predicate_item_functor : public predicate_item {
+public:
+	predicate_item_functor(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "functor"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << "functor(indicator,name,pow) incorrect call!" << endl;
+			exit(-3);
+		}
+
+		bool d1 = !dynamic_cast<var *>(positional_vals->at(0)) &&
+			!dynamic_cast<any *>(positional_vals->at(0));
+
+		generated_vars * result = new generated_vars();
+
+		if (d1) {
+			term * t1 = dynamic_cast<term *>(positional_vals->at(0));
+			value * v2 = dynamic_cast<value *>(positional_vals->at(1));
+			value * v3 = dynamic_cast<value *>(positional_vals->at(2));
+
+			if (!t1) {
+				std::cout << "functor(indicator,name,pow) has incorrect parameters!" << endl;
+				exit(-3);
+			}
+
+			frame_item * r = f->copy();
+
+			int_number * N = new int_number(t1->get_args().size());
+			term * NM = new term(t1->get_name());
+
+			if (v2->unify(r, NM) && v3->unify(r, N)) {
+				result->push_back(r);
+			}
+			else {
+				delete result;
+				result = NULL;
+				delete r;
+			}
+			N->free();
+			NM->free();
+		}
+		else {
+			value * t1 = dynamic_cast<value *>(positional_vals->at(0));
+			term * v2 = dynamic_cast<term *>(positional_vals->at(1));
+			int_number * v3 = dynamic_cast<int_number *>(positional_vals->at(2));
+
+			if (!v2 || !v3 || v2->get_args().size() || v3->get_value() < 0) {
+				std::cout << "functor(indicator,name,pow) has incorrect parameters!" << endl;
+				exit(-3);
+			}
+
+			frame_item * r = f->copy();
+
+			term * TT = new term(v2->get_name());
+			int NN = v3->get_value();
+			for (int i = 0; i < NN; i++)
+				TT->add_arg(r, new any());
 
 			if (t1->unify(r, TT)) {
 				result->push_back(r);
@@ -4081,6 +4158,85 @@ public:
 	}
 };
 
+class predicate_item_max_list : public predicate_item {
+public:
+	predicate_item_max_list(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "max__list"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "max_list(L,A) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "max_list(L,A) indeterminated!" << endl;
+			exit(-3);
+		}
+
+		generated_vars * result = new generated_vars();
+		::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+
+		if (!L1) {
+			std::cout << "max_list(L,A) : L is not a list!" << endl;
+			exit(-3);
+		}
+
+		::value * V2 = dynamic_cast<::value *>(positional_vals->at(1));
+		if (L1->size() == 0) {
+			delete result;
+			result = NULL;
+		} else {
+			double MAX = -1E300;
+			bool error = false;
+			L1->iterate([&] (value * v) {
+				if (error) return;
+				if (!v->defined())
+					error = true;
+				else {
+					int_number * ni = dynamic_cast<int_number *>(v);
+					if (ni) {
+						if (ni->get_value() > MAX)
+							MAX = ni->get_value();
+					} else {
+						float_number * nf = dynamic_cast<float_number *>(v);
+						if (nf) {
+							if (nf->get_value() > MAX)
+								MAX = nf->get_value();
+						} else
+							error = true;
+					}
+				}
+			});
+			if (error) {
+				delete result;
+				result = NULL;
+			} else {
+				::value * L = new float_number(MAX);
+
+				if (L) {
+					frame_item * r = f->copy();
+					if (V2->unify(r, L))
+						result->push_back(r);
+					else {
+						delete result;
+						result = NULL;
+						delete r;
+					}
+					L->free();
+				}
+				else {
+					delete result;
+					result = NULL;
+				}
+			}
+		}
+
+		return result;
+	}
+};
+
 class predicate_item_atom_length : public predicate_item {
 public:
 	predicate_item_atom_length(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
@@ -4323,6 +4479,71 @@ public:
 			for (int i = 1; i < result->size(); i++)
 				delete result->at(i);
 			result->resize(1);
+		}
+
+		return result;
+	}
+};
+
+class predicate_item_findall : public predicate_item {
+public:
+	predicate_item_findall(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "findall"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << "findall(Template,Term,Result) incorrect call!" << endl;
+			exit(-3);
+		}
+
+		term * t = dynamic_cast<term *>(positional_vals->at(1));
+		var * v = dynamic_cast<var *>(positional_vals->at(1));
+
+		if (!t && !v) {
+			std::cout << "findall(Template,Term,Result) has incorrect parameters!" << endl;
+			exit(-3);
+		}
+
+		generated_vars * result = new generated_vars();
+
+		if (v) {
+			t = dynamic_cast<term *>(f->get(v->get_name().c_str()));
+			if (t) {
+				t = dynamic_cast<term *>(t->copy(f, 1));
+			} else {
+				std::cout << "findall(Template,Term,Result) has incorrect parameters!" << endl;
+				exit(-3);
+			}
+		}
+		if (t && prolog->DB.find(t->get_name()) != prolog->DB.end()) {
+			vector<term *> * terms = prolog->DB[t->get_name()];
+			stack_container<value *> L;
+			for (int i = 0; i < terms->size(); i++) {
+				frame_item * ff = f->copy();
+				term * _dummy = (term *)t->copy(ff);
+				if (_dummy->unify(ff, terms->at(i))) {
+					value * item = positional_vals->at(0)->copy(ff);
+					L.push_back(item);
+				}
+				delete ff;
+				_dummy->free();
+			}
+			if (v) t->free();
+			::list * LL = new ::list(L, NULL);
+			frame_item * ff = f->copy();
+			if (positional_vals->at(2)->unify(ff, LL))
+				result->push_back(ff);
+			else {
+				delete ff;
+				delete result;
+				result = NULL;
+			}
+			LL->free();
+		}
+		else {
+			std::cout << "Predicate [" << t->get_name() << "] is neither standard nor dynamic!" << endl;
+			exit(500);
 		}
 
 		return result;
@@ -6238,6 +6459,41 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 
 	bypass_spaces(s, p);
 
+	if (p < s.length() && s[p] == ':') {
+		string haystack = s.substr(p);
+		regex incl("^:\\s*-\\s*include\\s*\\(\\s*(\\w+)\\s*\\)\\s*\\..*");
+		smatch match;
+		if (regex_search(haystack, match, incl)) {
+			string file = match[1].str();
+			std::ifstream in;
+			in.open(file + ".pro");
+			if (!in)
+				in.open(file + ".pl");
+			if (in) {
+				string body;
+				char buf[65536];
+				while (in.getline(buf, sizeof(buf))) {
+					body.append(buf);
+					body.append("\n");
+				}
+				in.close();
+				string::size_type pos = haystack.find("\n");
+				if (pos != string::npos)
+					p += pos + 1;
+				else {
+					std::cout << s.substr(p, 20) << " : end of line expected!" << endl;
+					exit(22);
+				}
+				s.insert(p, body);
+				return;
+			}
+			else {
+				std::cout << s.substr(p, 20) << " : can't open including file!" << endl;
+				exit(23);
+			}
+		}
+	}
+
 	string id;
 	while (p < s.length() &&
 		(s[p] >= 'A' && s[p] <= 'Z' || s[p] >= 'a' && s[p] <= 'z' || s[p] >= '0' && s[p] <= '9' ||
@@ -6547,6 +6803,9 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				else if (iid == "length") {
 					pi = new predicate_item_length(neg, once, call, num, cl, this);
 				}
+				else if (iid == "max_list") {
+					pi = new predicate_item_max_list(neg, once, call, num, cl, this);
+				}
 				else if (iid == "atom_length") {
 					pi = new predicate_item_atom_length(neg, once, call, num, cl, this);
 				}
@@ -6582,6 +6841,12 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				}
 				else if (iid == "current_predicate") {
 					pi = new predicate_item_current_predicate(neg, once, call, num, cl, this);
+				}
+				else if (iid == "findall") {
+					pi = new predicate_item_findall(neg, once, call, num, cl, this);
+				}
+				else if (iid == "functor") {
+					pi = new predicate_item_functor(neg, once, call, num, cl, this);
 				}
 				else if (iid == "predicate_property") {
 					pi = new predicate_item_predicate_property(neg, once, call, num, cl, this);
@@ -7164,7 +7429,7 @@ int main(int argc, char ** argv) {
 		main_part++;
 	}
 
-	std::cout << "Prolog MicroBrain by V.V.Pekunov V0.21beta" << endl;
+	std::cout << "Prolog MicroBrain by V.V.Pekunov V0.21beta2" << endl;
 	if (argc == main_part) {
 		interpreter prolog("", "");
 		std::cout << "  Enter 'halt.' or 'end_of_file' to exit." << endl << endl;

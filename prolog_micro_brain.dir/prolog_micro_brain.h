@@ -198,7 +198,7 @@ public:
 	virtual void free() { refs--; if (refs == 0) delete this; }
 
 	virtual value * fill(frame_item * vars) = 0;
-	virtual value * copy(frame_item * f) = 0;
+	virtual value * copy(frame_item * f, int unwind = 0) = 0;
 	virtual value * const_copy(frame_item * f) {
 		if (this->defined()) {
 			this->use();
@@ -389,10 +389,16 @@ public:
 		}
 	}
 
-	value * get(const char * name) {
+	value * get(const char * name, int unwind = 0) {
 		bool found = false;
 		int it = find(name, found);
-		return found ? vars[it].ptr : NULL;
+		if (found)
+			return vars[it].ptr;
+		else if (unwind && name[0] == '$') {
+			return get(&name[1], unwind-1);
+		}
+		else
+			return NULL;
 	}
 };
 
