@@ -903,8 +903,11 @@ public:
 			for (int i = 1; valid_atom && i < result.length(); i++)
 				if (!isalnum(result[i]) && result[i] != '_')
 					valid_atom = false;
-			if (!valid_atom)
-				result = string("'") + result + string("'");
+			if (!valid_atom) {
+				char buf[16384];
+				sprintf(buf, "'%s'", result.c_str());
+				result = buf;
+			}
 		}
 		if (args.size() > 0) {
 			result += "(";
@@ -4348,7 +4351,7 @@ public:
 				result = NULL;
 				delete r;
 			}
-			V->free();
+			if (V) V->free();
 		}
 
 		if (result && once && result->size() > 1) {
@@ -4939,6 +4942,139 @@ public:
 	}
 };
 
+class predicate_item_write_to_atom : public predicate_item {
+public:
+	predicate_item_write_to_atom(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "write_to_atom"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "write_to_atom(A,What) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d2) {
+			std::cout << "write_to_atom(A,What) indeterminated!" << endl;
+			exit(-3);
+		}
+		frame_item * ff = f->copy();
+		term * t = new term(positional_vals->at(1)->to_str());
+		generated_vars * result = NULL;
+		if (positional_vals->at(0)->unify(ff, t)) {
+			result = new generated_vars();
+
+			result->push_back(ff);
+		} else
+			delete ff;
+
+		t->free();
+
+		return result;
+	}
+};
+
+class predicate_item_write_term : public predicate_item {
+public:
+	predicate_item_write_term(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "write_term"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() < 2 || positional_vals->size() > 3) {
+			std::cout << "write_term(A,[opts])/write(S,A,[opts]) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		frame_item * ff = f->copy();
+		term * quoted = new term("quoted");
+		quoted->add_arg(ff, new term("true"));
+		stack_container<value *> LL;
+		LL.push_back(quoted);
+		::list * LQ = new ::list(LL, NULL);
+		if (!d1 || !d2 || positional_vals->size() == 3 &&
+					!positional_vals->at(2)->defined()) {
+			std::cout << "write_term(A,[opts])/write(S,A,[opts]) indeterminated!" << endl;
+			exit(-3);
+		}
+		if (positional_vals->size() == 2 && LQ->unify(ff, positional_vals->at(1)) ||
+			positional_vals->size() == 3 && LQ->unify(ff, positional_vals->at(2)))
+			if (positional_vals->size() == 2)
+				if (prolog->out_buf.size() == 0)
+					(*prolog->outs) << (positional_vals->at(0)->export_str());
+				else
+					prolog->out_buf += positional_vals->at(0)->export_str();
+			else {
+				::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+				int fn;
+				prolog->get_file(S->make_str(), fn) << positional_vals->at(1)->export_str();
+			}
+		else
+			if (positional_vals->size() == 2)
+				if (prolog->out_buf.size() == 0)
+					positional_vals->at(0)->write(prolog->outs);
+				else
+					prolog->out_buf += positional_vals->at(0)->to_str();
+			else {
+				::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+				int fn;
+				prolog->get_file(S->make_str(), fn) << positional_vals->at(1)->to_str();
+			}
+
+		generated_vars * result = new generated_vars();
+
+		result->push_back(ff);
+
+		LQ->free();
+
+		return result;
+	}
+};
+
+class predicate_item_write_term_to_atom : public predicate_item {
+public:
+	predicate_item_write_term_to_atom(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "write_term_to_atom"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << "write_term_to_atom(A,What,[opts]) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d2 = positional_vals->at(1)->defined();
+		bool d3 = positional_vals->at(2)->defined();
+		frame_item * ff = f->copy();
+		term * quoted = new term("quoted");
+		quoted->add_arg(ff, new term("true"));
+		stack_container<value *> LL;
+		LL.push_back(quoted);
+		::list * LQ = new ::list(LL, NULL);
+		if (!d2 || !d3) {
+			std::cout << "write_term_to_atom(A,What,[opts]) indeterminated!" << endl;
+			exit(-3);
+		}
+		std::string What;
+		if (LQ->unify(ff, positional_vals->at(2)))
+			What = positional_vals->at(1)->export_str();
+		else
+			What = positional_vals->at(1)->to_str();
+		term * W = new term(What);
+		generated_vars * result = NULL;
+		if (positional_vals->at(0)->unify(ff, W)) {
+			result = new generated_vars();
+
+			result->push_back(ff);
+		} else
+			delete ff;
+		W->free();
+		LQ->free();
+
+		return result;
+	}
+};
+
 class predicate_item_nl : public predicate_item {
 public:
 	predicate_item_nl(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
@@ -5080,7 +5216,10 @@ public:
 		}
 
 		prolog->current_output = positional_vals->at(0)->make_str();
-		prolog->outs = new std::ofstream(prolog->current_output, ios::out | ios::trunc);
+		if (prolog->current_output == STD_OUTPUT)
+			prolog->outs = &std::cout;
+		else
+			prolog->outs = new std::ofstream(prolog->current_output, ios::out | ios::trunc);
 
 		generated_vars * result = new generated_vars();
 
@@ -5108,7 +5247,10 @@ public:
 		}
 
 		prolog->current_input = positional_vals->at(0)->make_str();
-		prolog->ins = new std::ifstream(prolog->current_output, ios::in);
+		if (prolog->current_input == STD_INPUT)
+			prolog->ins = &std::cin;
+		else
+			prolog->ins = new std::ifstream(prolog->current_input, ios::in);
 
 		generated_vars * result = new generated_vars();
 
@@ -5491,7 +5633,7 @@ public:
 	predicate_item_read_token_common(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
 		predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
-	virtual generated_vars * get_token(frame_item * f, vector<value *> * & positional_vals, std::basic_istream<char> & ff) {
+	virtual generated_vars * get_token(frame_item * f, vector<value *> * & positional_vals, int arg_num, std::basic_istream<char> & ff) {
 		streampos beg;
 		string line;
 		int p = 0;
@@ -5559,7 +5701,7 @@ public:
 
 		delete dummy;
 
-		if (v && positional_vals->at(1)->unify(r, v))
+		if (v && positional_vals->at(arg_num)->unify(r, v))
 			result->push_back(r);
 		else {
 			delete result;
@@ -5581,23 +5723,27 @@ public:
 	virtual const string get_id() { return "read_token"; }
 
 	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
-		if (positional_vals->size() != 2) {
-			std::cout << "read_token(S,A) incorrect call!" << endl;
+		if (positional_vals->size() != 1 && positional_vals->size() != 2) {
+			std::cout << "read_token(A)/read_token(S,A) incorrect call!" << endl;
 			exit(-3);
 		}
-		bool d1 = positional_vals->at(0)->defined();
-		bool d2 = positional_vals->at(1)->defined();
-		if (!d1) {
-			std::cout << "read_token(S,A) : S is indeterminated!" << endl;
-			exit(-3);
+		if (positional_vals->size() == 2) {
+			bool d1 = positional_vals->at(0)->defined();
+			bool d2 = positional_vals->at(1)->defined();
+			if (!d1) {
+				std::cout << "read_token(S,A) : S is indeterminated!" << endl;
+				exit(-3);
+			}
+
+			::term * S = dynamic_cast<::term *>(positional_vals->at(0));
+
+			int fn;
+			std::basic_fstream<char> & ff = prolog->get_file(S->make_str(), fn);
+
+			return get_token(f, positional_vals, 1, ff);
+		} else {
+			return get_token(f, positional_vals, 0, *(prolog->ins));
 		}
-
-		::term * S = dynamic_cast<::term *>(positional_vals->at(0));
-
-		int fn;
-		std::basic_fstream<char> & ff = prolog->get_file(S->make_str(), fn);
-
-		return get_token(f, positional_vals, ff);
 	}
 };
 
@@ -5625,7 +5771,7 @@ public:
 
 		std::stringstream ff(A->make_str());
 
-		return get_token(f, positional_vals, ff);
+		return get_token(f, positional_vals, 1, ff);
 	}
 };
 
@@ -6910,6 +7056,15 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				}
 				else if (iid == "write") {
 					pi = new predicate_item_write(neg, once, call, num, cl, this);
+				}
+				else if (iid == "write_to_atom") {
+					pi = new predicate_item_write_to_atom(neg, once, call, num, cl, this);
+				}
+				else if (iid == "write_term") {
+					pi = new predicate_item_write_term(neg, once, call, num, cl, this);
+				}
+				else if (iid == "write_term_to_atom") {
+					pi = new predicate_item_write_term_to_atom(neg, once, call, num, cl, this);
 				}
 				else if (iid == "nl") {
 					pi = new predicate_item_nl(neg, once, call, num, cl, this);

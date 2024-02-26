@@ -313,4 +313,11 @@ function GetNextMail($Name)
     return "";
 }
 
+function getvar($S) {
+ if (strlen($S) > 1 && $S[0] == '$')
+    return $GLOBALS[substr($S, 1)];
+ else
+    return $S;
+}
+
 ?>
