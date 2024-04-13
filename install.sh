@@ -6,10 +6,9 @@ cd ./Grammar
 fpc -B -O3 -Mobjfpc -FcUTF-8 ./Grammar.lpr
 cp ./libGrammar.so ../
 cd ..
-export CPPFLAGS="$PWD/link-grammar-5.3.0"
 cd ./link-grammar-5.3.0
 unzip ./link-grammar-5.3.0.zip
-sudo sh ./configure
+sudo sh ./configure CPPFLAGS="$PWD" CFLAGS="$PWD"
 sudo make
 sudo make install
 sudo ldconfig
