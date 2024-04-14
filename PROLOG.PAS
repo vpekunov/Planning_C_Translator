@@ -117,6 +117,9 @@ Begin
   _Out.Add('          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_NAME, 256, &device, &sz);');
   _Out.Add('          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(d.max_work_size), &d.max_work_size, &sz);');
   _Out.Add('          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_LOCAL_MEM_SIZE, sizeof(d.local_mem_size), &d.local_mem_size, &sz);');
+  _Out.Add('          char version[256];');
+  _Out.Add('          ret = clGetDeviceInfo(device_ids[j], CL_DEVICE_VERSION, sizeof(version), version, NULL);');
+  _Out.Add('          if (strstr(version, "D3")) { cout << "Device ''" << device << "'' is bypassed" << endl; continue; }');
   _Out.Add('          while (__devices.find(device) != __devices.end()) {');
   _Out.Add('            int n = strlen(device);');
   _Out.Add('            device[n++] = ''.''; device[n++] = ''X''; device[n] = 0x0;');
