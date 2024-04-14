@@ -321,8 +321,8 @@ cilk_sync:
 fill_into_plan:
 	Star ident=Identifier
 	Less Less LeftBracket
-	{ if (reenterables.find($ident.text) == reenterables.end() || (reenterables[$ident.text] & static_flag) == 0)
-		throw FailedPredicateException(this, "This action can be applied to Static Reenterable Procedure only");
+	{ if (chains.find($ident.text) == chains.end() && (reenterables.find($ident.text) == reenterables.end() || (reenterables[$ident.text] & static_flag) == 0))
+		throw FailedPredicateException(this, "This action can be applied to Chains or Static Reenterable Procedure only");
 	}
 	reent_filler (Comma reent_filler)*
 	RightBracket
@@ -331,8 +331,8 @@ fill_into_plan:
 fill_from_plan:
 	Star ident=Identifier
 	Greater Greater LeftBracket
-	{ if (reenterables.find($ident.text) == reenterables.end() || (reenterables[$ident.text] & static_flag) == 0)
-		throw FailedPredicateException(this, "This action can be applied to Static Reenterable Procedure only");
+	{ if (chains.find($ident.text) == chains.end() && (reenterables.find($ident.text) == reenterables.end() || (reenterables[$ident.text] & static_flag) == 0))
+		throw FailedPredicateException(this, "This action can be applied to Chains or Static Reenterable Procedure only");
 	}
 	reent_reader (Comma reent_reader)*
 	RightBracket

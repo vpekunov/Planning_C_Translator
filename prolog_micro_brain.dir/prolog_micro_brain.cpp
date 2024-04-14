@@ -1569,7 +1569,7 @@ bool predicate_item_user::processing(bool line_neg, int variant, generated_vars 
 		prolog->CALLS.push(next);
 		prolog->FRAMES.push(up_f->copy());
 		prolog->NEGS.push(line_neg);
-		prolog->_FLAGS.push((is_once() ? once_flag : 0) + (is_call() ? call_flag : 0));
+		prolog->_FLAGS.push((is_once() ? ::once_flag : 0) + (is_call() ? call_flag : 0));
 	}
 
 	prolog->PARENT_CALL_VARIANT.pop();
@@ -5932,8 +5932,8 @@ void interpreter::block_process(bool clear_flag, bool cut_flag, predicate_item *
 			}
 		}
 
-		if ((flags & (call_flag | once_flag))) {
-			if (clear_flag) *itf &= ~(call_flag | once_flag);
+		if ((flags & (call_flag | ::once_flag))) {
+			if (clear_flag) *itf &= ~(call_flag | ::once_flag);
 			break;
 		}
 
@@ -6308,7 +6308,7 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 	bool neg_standard = !(user && !user->is_dynamic()) && p && p->is_negated();
 	int i = 0;
 	if (variants || neg_standard) {
-		FLAGS.push_back((p && p->is_once() ? once_flag : 0) + (p && p->is_call() ? call_flag : 0));
+		FLAGS.push_back((p && p->is_once() ? ::once_flag : 0) + (p && p->is_call() ? call_flag : 0));
 		LEVELS.push(PARENT_CALLS.size());
 		TRACE.push(variants);
 		TRACEARGS.push(positional_vals);
@@ -6412,7 +6412,7 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 					block_process(true, rbo, NULL);
 				}
 				else if (!user && !lb && p && (p->is_call() || p->is_once())) {
-					FLAGS.back() &= ~(call_flag | once_flag);
+					FLAGS.back() &= ~(call_flag | ::once_flag);
 					if (variants && p->is_once())
 						variants->trunc_from(i+1);
 				}
@@ -6514,8 +6514,8 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 							return true;
 						}
 
-						if (_flags & (call_flag | once_flag)) {
-							block_process(true, (_flags & once_flag) != 0, NULL);
+						if (_flags & (call_flag | ::once_flag)) {
+							block_process(true, (_flags & ::once_flag) != 0, NULL);
 						}
 
 						vector<value *> * next_args =

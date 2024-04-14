@@ -6079,8 +6079,8 @@ ReentParser::Fill_into_planContext* ReentParser::fill_into_plan() {
     match(ReentParser::Less);
     setState(1077);
     match(ReentParser::LeftBracket);
-     if (reenterables.find((dynamic_cast<Fill_into_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_into_planContext *>(_localctx)->ident->getText() : "")) == reenterables.end() || (reenterables[(dynamic_cast<Fill_into_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_into_planContext *>(_localctx)->ident->getText() : "")] & static_flag) == 0)
-    		throw FailedPredicateException(this, "This action can be applied to Static Reenterable Procedure only");
+     if (chains.find((dynamic_cast<Fill_into_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_into_planContext *>(_localctx)->ident->getText() : "")) == chains.end() && (reenterables.find((dynamic_cast<Fill_into_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_into_planContext *>(_localctx)->ident->getText() : "")) == reenterables.end() || (reenterables[(dynamic_cast<Fill_into_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_into_planContext *>(_localctx)->ident->getText() : "")] & static_flag) == 0))
+    		throw FailedPredicateException(this, "This action can be applied to Chains or Static Reenterable Procedure only");
     	
     setState(1079);
     reent_filler();
@@ -6202,8 +6202,8 @@ ReentParser::Fill_from_planContext* ReentParser::fill_from_plan() {
     match(ReentParser::Greater);
     setState(1094);
     match(ReentParser::LeftBracket);
-     if (reenterables.find((dynamic_cast<Fill_from_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_from_planContext *>(_localctx)->ident->getText() : "")) == reenterables.end() || (reenterables[(dynamic_cast<Fill_from_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_from_planContext *>(_localctx)->ident->getText() : "")] & static_flag) == 0)
-    		throw FailedPredicateException(this, "This action can be applied to Static Reenterable Procedure only");
+     if (chains.find((dynamic_cast<Fill_from_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_from_planContext *>(_localctx)->ident->getText() : "")) == chains.end() && (reenterables.find((dynamic_cast<Fill_from_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_from_planContext *>(_localctx)->ident->getText() : "")) == reenterables.end() || (reenterables[(dynamic_cast<Fill_from_planContext *>(_localctx)->ident != nullptr ? dynamic_cast<Fill_from_planContext *>(_localctx)->ident->getText() : "")] & static_flag) == 0))
+    		throw FailedPredicateException(this, "This action can be applied to Chains or Static Reenterable Procedure only");
     	
     setState(1096);
     reent_reader();
