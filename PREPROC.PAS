@@ -15,7 +15,7 @@ unit Preproc;
 interface
 
 uses
-  Common, Classes, Lexique, Evaluat;
+  SysUtils, dynlibs, Common, Classes, Lexique, Evaluat;
 
 Const PassCount: Integer = 0;
 Const PreprocPasses: Integer = 1;
@@ -38,7 +38,7 @@ Var Prologer: TLibHandle = DWORD(-1);
 
 implementation
 
-uses SysUtils, dynlibs, Consts, regexpr, xpath, xmlread, dom, Math;
+uses Consts, regexpr, xpath, xmlread, dom, Math;
 
 (* *)
 Type run_gprolog7 = Function(Dir, ConsultScript, OutFName, MainGoal, gprolog_console_out, DoneGoal, GID: PChar):Integer; cdecl;
