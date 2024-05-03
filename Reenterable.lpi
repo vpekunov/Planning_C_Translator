@@ -40,8 +40,8 @@
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="331"/>
-        <CursorPos X="19" Y="349"/>
+        <TopLine Value="2692"/>
+        <CursorPos X="108" Y="2696"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit0>
@@ -227,90 +227,90 @@
         <UsageCount Value="5"/>
       </Unit19>
     </Units>
-    <JumpHistory Count="30" HistoryIndex="29">
+    <JumpHistory Count="29" HistoryIndex="28">
       <Position1>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1331" Column="64" TopLine="1325"/>
+        <Caret Line="1409" Column="14" TopLine="1393"/>
       </Position1>
       <Position2>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1332" Column="20" TopLine="1325"/>
+        <Caret Line="1430" Column="85" TopLine="1416"/>
       </Position2>
       <Position3>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1409" Column="14" TopLine="1393"/>
       </Position3>
       <Position4>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1430" Column="85" TopLine="1416"/>
+        <Caret Line="1306" Column="18" TopLine="1290"/>
       </Position4>
       <Position5>
         <Filename Value="Reenterable.lpr"/>
+        <Caret Line="1312" Column="12" TopLine="1296"/>
       </Position5>
       <Position6>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1306" Column="18" TopLine="1290"/>
+        <Caret Line="1334" Column="24" TopLine="1317"/>
       </Position6>
       <Position7>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1312" Column="12" TopLine="1296"/>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1525" Column="6" TopLine="1516"/>
       </Position7>
       <Position8>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1334" Column="24" TopLine="1317"/>
+        <Filename Value="PREPROC.PAS"/>
       </Position8>
       <Position9>
         <Filename Value="PREPROC.PAS"/>
-        <Caret Line="1525" Column="6" TopLine="1516"/>
+        <Caret Line="37" Column="38" TopLine="27"/>
       </Position9>
       <Position10>
-        <Filename Value="PREPROC.PAS"/>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="1333" Column="23" TopLine="1325"/>
       </Position10>
       <Position11>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="37" Column="38" TopLine="27"/>
+        <Filename Value="Reenterable.lpr"/>
       </Position11>
       <Position12>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1333" Column="23" TopLine="1325"/>
+        <Caret Line="2071" Column="29" TopLine="2052"/>
       </Position12>
       <Position13>
         <Filename Value="Reenterable.lpr"/>
+        <Caret Line="2268" Column="49" TopLine="2252"/>
       </Position13>
       <Position14>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2071" Column="29" TopLine="2052"/>
+        <Caret Line="3380" Column="39" TopLine="3361"/>
       </Position14>
       <Position15>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2268" Column="49" TopLine="2252"/>
       </Position15>
       <Position16>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="3380" Column="39" TopLine="3361"/>
+        <Caret Line="529" Column="10" TopLine="525"/>
       </Position16>
       <Position17>
         <Filename Value="Reenterable.lpr"/>
+        <Caret Line="522" Column="63" TopLine="513"/>
       </Position17>
       <Position18>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="529" Column="10" TopLine="525"/>
+        <Caret Line="526" Column="52" TopLine="513"/>
       </Position18>
       <Position19>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="522" Column="63" TopLine="513"/>
+        <Caret Line="521" Column="13" TopLine="511"/>
       </Position19>
       <Position20>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="526" Column="52" TopLine="513"/>
+        <Caret Line="526" Column="52" TopLine="511"/>
       </Position20>
       <Position21>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="521" Column="13" TopLine="511"/>
+        <Caret Line="590" Column="25" TopLine="574"/>
       </Position21>
       <Position22>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="526" Column="52" TopLine="511"/>
+        <Caret Line="577" Column="57" TopLine="567"/>
       </Position22>
       <Position23>
         <Filename Value="Reenterable.lpr"/>
@@ -318,32 +318,28 @@
       </Position23>
       <Position24>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="577" Column="57" TopLine="567"/>
+        <Caret Line="604" TopLine="593"/>
       </Position24>
       <Position25>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="590" Column="25" TopLine="574"/>
+        <Caret Line="1623" TopLine="1613"/>
       </Position25>
       <Position26>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="604" TopLine="593"/>
+        <Caret Line="1693" TopLine="1683"/>
       </Position26>
       <Position27>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1623" TopLine="1613"/>
+        <Caret Line="604" TopLine="595"/>
       </Position27>
       <Position28>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1693" TopLine="1683"/>
+        <Caret Line="598" Column="10" TopLine="591"/>
       </Position28>
       <Position29>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="604" TopLine="595"/>
+        <Caret Line="337" Column="15" TopLine="331"/>
       </Position29>
-      <Position30>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="598" Column="10" TopLine="591"/>
-      </Position30>
     </JumpHistory>
   </ProjectOptions>
   <CompilerOptions>
