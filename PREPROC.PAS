@@ -34,6 +34,8 @@ Type PatternModes = (pmNone, pmScan, pmParse);
 Var PatternsMode: PatternModes = pmNone;
     PatternsOrder: TStringList = Nil;
 
+Var Prologer: TLibHandle = DWORD(-1);
+
 implementation
 
 uses SysUtils, dynlibs, Consts, regexpr, xpath, xmlread, dom, Math;
@@ -42,8 +44,7 @@ uses SysUtils, dynlibs, Consts, regexpr, xpath, xmlread, dom, Math;
 Type run_gprolog7 = Function(Dir, ConsultScript, OutFName, MainGoal, gprolog_console_out, DoneGoal, GID: PChar):Integer; cdecl;
     switch_gprolog7 = Function(gprolog_console_out: PChar): Integer; cdecl;
 
-Var Prologer: TLibHandle = 0;
-    (* *)runer: run_gprolog7; (* *)
+Var (* *)runer: run_gprolog7; (* *)
     (* *)initer: switch_gprolog7; (* *)
 
 (* *)

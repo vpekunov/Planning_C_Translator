@@ -217,7 +217,7 @@ public:
 		return to_str();
 	}
 
-	virtual string export_str(bool simple = false) {
+	virtual string export_str(bool simple = false, bool double_slashes = true) {
 		return to_str();
 	}
 

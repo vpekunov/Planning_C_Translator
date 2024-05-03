@@ -24,7 +24,7 @@ using namespace std;
 
 #include "../prolog_micro_brain.dir/prolog_micro_brain.h"
 
-#pragma comment(linker, "/STACK:100000000")
+#pragma comment(linker, "/STACK:500000000")
 
 std::ofstream F;
 std::streambuf * coutbuf;

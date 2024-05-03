@@ -276,7 +276,7 @@ bool LoadModellingDesktop(const wstring & parent, const wstring & root_dir) {
 	if (is_directory(root_dir)) {
 		try {
 			// Handle ini-file
-			wpath p(root_dir);
+			path p(root_dir);
 			wstring fname = root_dir;
 			wstring fsname = root_dir;
 			fname += L"/";

@@ -345,8 +345,8 @@ program Reenterable;
 {$H+}
 
 {$CODEPAGE UTF8}
-{$MINSTACKSIZE 100000000}
-{$MAXSTACKSIZE 100000000}
+{$MINSTACKSIZE 170000000}
+{$MAXSTACKSIZE 170000000}
 
 uses
 {$IF (DEFINED(UNIX) OR DEFINED(LINUX)) AND DEFINED(FPC)}
@@ -417,14 +417,16 @@ Function CollectParamsAfterBracket(L:TAnalyser; Names, Substs:TStringList;
 Var S, S1, Store, Tp, _Tp, Nm, _Nm, Reduct:String;
     CastedFlag: TObject;
     Flag: Boolean Absolute CastedFlag;
+    gpuMove: String;
     nLocs: Integer;
     F: Integer;
 Begin
      Result:='';
      gpuParams := '';
-     gpuInit := 'int __idx = plan_vector_id();'+CRLF+'int __counter__;'+CRLF+'int __undo_locals = 0;'+CRLF;
+     gpuInit := '$gpuMove$int __idx = plan_vector_id();'+CRLF+'int __counter__;'+CRLF+'int __undo_locals = 0;'+CRLF;
      gpuStart := '';
      gpuStop := '';
+     gpuMove := '';
      Names.Clear;
      Substs.Clear;
      If Assigned(LocGlob) Then LocGlob.Clear;
@@ -587,7 +589,10 @@ Begin
             L.AnlzLine+' &'+Trim(Nm)+',';
          L.AnlzLine:=S;
          Result:=Result+S1;
-         gpuParams := gpuParams + Trim(_Tp) + ' ' + Trim(_Nm);
+         If (Pos('*', _Tp) <> 0) And Assigned(LocGlob) And (Length(LocGlob.Strings[LocGlob.Count-1]) > 0) Then
+            gpuParams := gpuParams + '__global void * _' + Trim(_Nm)
+         Else
+             gpuParams := gpuParams + Trim(_Tp) + ' ' + Trim(_Nm);
          If L.IsNext(Comma) Then
             Begin
               L.Check(Comma);
@@ -597,6 +602,8 @@ Begin
          If Assigned(LocGlob) Then
             If Length(LocGlob.Strings[LocGlob.Count-1]) > 0 Then
                Begin
+                 If Pos('*', _Tp) <> 0 Then
+                    gpuMove := gpuMove + Trim(_Tp) + ' ' + _Nm + ' = (' + Trim(_Tp) + ') _' + Trim(_Nm) + ';' + CRLF;
                  If Boolean(TObjectToInteger(LocGlob.Objects[LocGlob.Count-1])) Then // _global(N)
                     gpuInit := gpuInit + '__global ' + OCLMap(Tp) + ' ' + Nm + ' = ' + _Nm + ';' + CRLF
                  Else If Pos('__planned__.', LocGlob.Strings[LocGlob.Count-1]) <> 0 Then
@@ -622,6 +629,7 @@ Begin
      Result:=Result+RightBracket;
      gpuParams := Trim(gpuParams);
      gpuInit := StringReplace(gpuInit, '###', IntToStr(nLocs), [rfReplaceAll]);
+     gpuInit := StringReplace(gpuInit, '$gpuMove$', gpuMove, []);
      gpuStart := StringReplace(gpuStart, '###', IntToStr(nLocs), [rfReplaceAll]);
      gpuStop := StringReplace(gpuStop, '###', IntToStr(nLocs), [rfReplaceAll]);
      If (Length(gpuParams) > 0) And (gpuParams[Length(gpuParams)] <> LeftBracket) Then
@@ -1330,6 +1338,8 @@ Begin
           End
        Else If Copy(S, 2, Length('followdefines')) = 'followdefines' Then
           FollowDefs := True
+       Else If Copy(S, 2, Length('force-use-mem')) = 'force-use-mem' Then
+          Prologer := 0
        Else If Copy(S, 2, Length('extensionsonly')) = 'extensionsonly' Then
           ExtensionsOnly := True
        Else If Copy(S, 2, Length('nosourcelines')) = 'nosourcelines' Then
@@ -1427,6 +1437,7 @@ begin
           WriteLn('  -followdefines     If used then the translator performs conditional');
           WriteLn('                     preprocessing using directives define, undef, if and so on.');
           WriteLn('                     Only an active lines are put into the resulting code.');
+          WriteLn('  -force-use-mem     Can increase compilation speed but can lead to stack overflow');
           WriteLn('  -strict-pre-checks If used then the translator performs strict syntactical');
           WriteLn('                     checks of specifical preprocessor directives (#def_module, #pragma memoization, etc)');
           WriteLn('                     using grammar.');

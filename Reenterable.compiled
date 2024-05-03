@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <CONFIG>
-  <Compiler Value="E:\lazarus\fpc\3.2.2\bin\i386-win32\fpc.exe" Date="1429737572"/>
-  <Params Value=" -MObjFPC -Scghi -O1 -g -gl -l -vewnhibq -FuE:\Work\Handle_use\ -oE:\Work\Handle_use\Reenterable.exe Reenterable.lpr"/>
+  <Compiler Value="C:\lazarus\fpc\3.2.2\bin\i386-win32\fpc.exe" Date="1482329590"/>
+  <Params Value=" -MObjFPC -Scghi -O1 -gw3 -gl -l -vewnhibq -FuE:\Work\Handle_use\ -oE:\Work\Handle_use\Reenterable.exe Reenterable.lpr"/>
 </CONFIG>

@@ -4,7 +4,7 @@
 
 #define _CRT_SECURE_NO_WARNINGS
 
-#pragma comment(linker, "/STACK:100000000")
+#pragma comment(linker, "/STACK:1000000000")
 
 #include <iostream>
 #include <fstream>
@@ -876,26 +876,38 @@ public:
 		return result;
 	}
 
-	virtual string escape_specials(const string & src) {
+	virtual string escape_specials(const string & src, bool double_slashes = true) {
 		string result;
 
 		int i = 0;
-		while (i < src.length()) {
-			switch (src[i]) {
-				case '\r': result += "\\\\r"; break;
-				case '\n': result += "\\\\n"; break;
-				case '\t': result += "\\\\t"; break;
-				case '\0': result += "\\\\0"; break;
-				default: result += src[i];
+		if (double_slashes)
+			while (i < src.length()) {
+				switch (src[i]) {
+					case '\r': result += "\\\\r"; break;
+					case '\n': result += "\\\\n"; break;
+					case '\t': result += "\\\\t"; break;
+					case '\0': result += "\\\\0"; break;
+					default: result += src[i];
+				}
+				i++;
 			}
-			i++;
-		}
+		else
+			while (i < src.length()) {
+				switch (src[i]) {
+				case '\r': result += "\\r"; break;
+				case '\n': result += "\\n"; break;
+				case '\t': result += "\\t"; break;
+				case '\0': result += "\\0"; break;
+				default: result += src[i];
+				}
+				i++;
+			}
 
 		return result;
 	}
 
-	virtual string export_str(bool simple = false) {
-		string result = escape_specials(atomizer.get_string(name));
+	virtual string export_str(bool simple = false, bool double_slashes = true) {
+		string result = escape_specials(atomizer.get_string(name), double_slashes);
 		if (result.length() == 0)
 			result = "''";
 		else {
@@ -912,10 +924,10 @@ public:
 		if (args.size() > 0) {
 			result += "(";
 			for (int i = 0; i < args.size() - 1; i++) {
-				result += args[i]->export_str(simple);
+				result += args[i]->export_str(simple, double_slashes);
 				result += ",";
 			}
-			result += args[args.size() - 1]->export_str(simple);
+			result += args[args.size() - 1]->export_str(simple, double_slashes);
 			result += ")";
 		}
 		return result;
@@ -1472,7 +1484,7 @@ public:
 		return result;
 	}
 
-	virtual string export_str(bool simple = false) {
+	virtual string export_str(bool simple = false, bool double_slashes = true) {
 		string result;
 
 		int k = 0;
@@ -1488,13 +1500,13 @@ public:
 		}
 		else
 			for (value * v : val) {
-				result += v->export_str();
+				result += v->export_str(false, double_slashes);
 				k++;
 				if (k < val.size() || tag && !(dynamic_cast<list *>(tag) && dynamic_cast<list *>(tag)->size() == 0))
 					result += ",";
 			}
 		if (tag) {
-			result += tag->export_str(true);
+			result += tag->export_str(true, double_slashes);
 		}
 		if (!simple) result += "]";
 
@@ -4399,11 +4411,11 @@ public:
 				for (int i = 0; i < it->second->size(); i++)
 					if (!t || it->second->at(i)->get_args().size() == t->get_arity()) {
 						if (prolog->out_buf.size() == 0) {
-							(*prolog->outs) << it->second->at(i)->export_str();
+							(*prolog->outs) << it->second->at(i)->export_str(false, false);
 							(*prolog->outs) << "." << endl;
 						}
 						else {
-							prolog->out_buf += it->second->at(i)->export_str();
+							prolog->out_buf += it->second->at(i)->export_str(false, false);
 							prolog->out_buf += ".\n";
 						}
 					}
