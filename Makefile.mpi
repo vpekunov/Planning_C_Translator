@@ -18,7 +18,7 @@ all: $(EXES)
 	g++ $(CPPFLAGS) -o $@ -I../../ $< $(LDFLAGS)
 
 %.cc: %.mpi
-	./Reenterable -strict-pre-checks -strict-plc-checks $< $@
+	./Reenterable -force-use-mem -strict-pre-checks -strict-plc-checks $< $@
 
 %.mpi: %.cpp
 	./mpi2reent `head -n 1 $< | cut -c 3-5` $< $@

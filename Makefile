@@ -16,7 +16,7 @@ all: $(EXES)
 	g++ $(CPPFLAGS) -o $@ -I../ $< $(LDFLAGS)
 
 %.cc: %.cpp
-	./Reenterable -strict-pre-checks -strict-plc-checks $< $@
+	./Reenterable -force-use-mem -strict-pre-checks -strict-plc-checks $< $@
 
 clean:
 	rm -rf $(CCS)
