@@ -47,10 +47,10 @@ cd ./xpathInduct.dir
 fpc -B -O3 -Mobjfpc -FcUTF-8 -fPIC ./xpathInduct.lpr
 cp ./libxpathInduct.so ../
 cd ..
-make
-make -f Makefile.mpi
-make -f Makefile.vectorized
-make -f Makefile.clustered
-make -f Makefile.cilk
-make -f Makefile.russian
-rm -f ./induct.log
+sudo make
+sudo make -f Makefile.mpi
+sudo make -f Makefile.vectorized
+sudo make -f Makefile.clustered
+sudo make -f Makefile.cilk
+sudo make -f Makefile.russian
+sudo rm -f ./induct.log
