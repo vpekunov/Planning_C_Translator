@@ -21,14 +21,14 @@
     </PublishOptions>
     <RunParams>
       <local>
-        <CommandLineParams Value="-followdefines -nosourcelines -D_WIN32 -D__OPENMP__ -D__MVS__ eko_3d.c reent1.cpp"/>
+        <CommandLineParams Value="-force-use-mem -nosourcelines reent_reentera_clust_complex_chain.cpp reent1.cpp"/>
         <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T &apos;Lazarus Run Output&apos; -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
       </local>
       <FormatVersion Value="2"/>
       <Modes Count="1">
         <Mode0 Name="default">
           <local>
-            <CommandLineParams Value="-followdefines -nosourcelines -D_WIN32 -D__OPENMP__ -D__MVS__ eko_3d.c reent1.cpp"/>
+            <CommandLineParams Value="-force-use-mem -nosourcelines reent_reentera_clust_complex_chain.cpp reent1.cpp"/>
             <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T &apos;Lazarus Run Output&apos; -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
           </local>
         </Mode0>
@@ -40,8 +40,8 @@
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="2692"/>
-        <CursorPos X="108" Y="2696"/>
+        <TopLine Value="1560"/>
+        <CursorPos X="27" Y="1572"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit0>
@@ -91,8 +91,8 @@
         <UnitName Value="Common"/>
         <EditorIndex Value="6"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="529"/>
-        <CursorPos X="23" Y="543"/>
+        <TopLine Value="533"/>
+        <CursorPos Y="550"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit5>
@@ -112,6 +112,8 @@
         <UnitName Value="Preproc"/>
         <EditorIndex Value="5"/>
         <WindowIndex Value="1"/>
+        <TopLine Value="736"/>
+        <CursorPos X="14" Y="754"/>
         <UsageCount Value="200"/>
         <Bookmarks Count="2">
           <Item0 X="22" Y="1250" ID="1"/>
@@ -227,119 +229,124 @@
         <UsageCount Value="5"/>
       </Unit19>
     </Units>
-    <JumpHistory Count="29" HistoryIndex="28">
+    <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1409" Column="14" TopLine="1393"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="537" TopLine="521"/>
       </Position1>
       <Position2>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1430" Column="85" TopLine="1416"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="532" TopLine="521"/>
       </Position2>
       <Position3>
-        <Filename Value="Reenterable.lpr"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="533" TopLine="521"/>
       </Position3>
       <Position4>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1306" Column="18" TopLine="1290"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="541" Column="27" TopLine="532"/>
       </Position4>
       <Position5>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1312" Column="12" TopLine="1296"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="538" Column="26" TopLine="532"/>
       </Position5>
       <Position6>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1334" Column="24" TopLine="1317"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="541" Column="27" TopLine="532"/>
       </Position6>
       <Position7>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="1525" Column="6" TopLine="1516"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="552" TopLine="534"/>
       </Position7>
       <Position8>
-        <Filename Value="PREPROC.PAS"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="536" TopLine="533"/>
       </Position8>
       <Position9>
-        <Filename Value="PREPROC.PAS"/>
-        <Caret Line="37" Column="38" TopLine="27"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="541" Column="27" TopLine="533"/>
       </Position9>
       <Position10>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1333" Column="23" TopLine="1325"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="543" TopLine="533"/>
       </Position10>
       <Position11>
-        <Filename Value="Reenterable.lpr"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="551" TopLine="535"/>
       </Position11>
       <Position12>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2071" Column="29" TopLine="2052"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="542" TopLine="535"/>
       </Position12>
       <Position13>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2268" Column="49" TopLine="2252"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="527" Column="17" TopLine="531"/>
       </Position13>
       <Position14>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="3380" Column="39" TopLine="3361"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="537" TopLine="528"/>
       </Position14>
       <Position15>
-        <Filename Value="Reenterable.lpr"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="535" Column="32" TopLine="524"/>
       </Position15>
       <Position16>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="529" Column="10" TopLine="525"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="94" Column="32" TopLine="84"/>
       </Position16>
       <Position17>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="522" Column="63" TopLine="513"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="537" TopLine="528"/>
       </Position17>
       <Position18>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="526" Column="52" TopLine="513"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="542" TopLine="537"/>
       </Position18>
       <Position19>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="521" Column="13" TopLine="511"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="536" TopLine="527"/>
       </Position19>
       <Position20>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="526" Column="52" TopLine="511"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="541" TopLine="537"/>
       </Position20>
       <Position21>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="590" Column="25" TopLine="574"/>
+        <Filename Value="COMMON.PAS"/>
+        <Caret Line="536" TopLine="527"/>
       </Position21>
       <Position22>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="577" Column="57" TopLine="567"/>
+        <Caret Line="1574" Column="37" TopLine="1572"/>
       </Position22>
       <Position23>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="590" Column="25" TopLine="574"/>
       </Position23>
       <Position24>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="604" TopLine="593"/>
+        <Caret Line="1342" Column="19" TopLine="1326"/>
       </Position24>
       <Position25>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1623" TopLine="1613"/>
+        <Caret Line="1369" Column="24" TopLine="1356"/>
       </Position25>
       <Position26>
         <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1693" TopLine="1683"/>
       </Position26>
       <Position27>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="604" TopLine="595"/>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="1810" Column="26" TopLine="1803"/>
       </Position27>
       <Position28>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="598" Column="10" TopLine="591"/>
+        <Filename Value="PREPROC.PAS"/>
       </Position28>
       <Position29>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="337" Column="15" TopLine="331"/>
+        <Filename Value="PREPROC.PAS"/>
+        <Caret Line="37" Column="13" TopLine="21"/>
       </Position29>
+      <Position30>
+        <Filename Value="Reenterable.lpr"/>
+        <Caret Line="1344" Column="21" TopLine="1335"/>
+      </Position30>
     </JumpHistory>
   </ProjectOptions>
   <CompilerOptions>
@@ -358,21 +365,21 @@
         <WatchScope Value="wpsLocal"/>
         <WatchKind Value="wpkWrite"/>
         <Source Value="Reenterable.lpr"/>
-        <Line Value="2852"/>
+        <Line Value="2854"/>
       </Item1>
     </BreakPoints>
     <Watches Count="4">
       <Item1>
-        <Expression Value="HayStack[M]"/>
+        <Expression Value="S"/>
       </Item1>
       <Item2>
-        <Expression Value="HayStack[G]"/>
+        <Expression Value="_Quote"/>
       </Item2>
       <Item3>
-        <Expression Value="S"/>
+        <Expression Value="S[F]"/>
       </Item3>
       <Item4>
-        <Expression Value="ID"/>
+        <Expression Value="S[F]=_Quote"/>
       </Item4>
     </Watches>
   </Debugging>

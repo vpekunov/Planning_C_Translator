@@ -1339,7 +1339,9 @@ Begin
        Else If Copy(S, 2, Length('followdefines')) = 'followdefines' Then
           FollowDefs := True
        Else If Copy(S, 2, Length('force-use-mem')) = 'force-use-mem' Then
-          Prologer := 0
+          Begin
+            If Prologer = DWORD(-1) Then Prologer := 0
+          End
        Else If Copy(S, 2, Length('extensionsonly')) = 'extensionsonly' Then
           ExtensionsOnly := True
        Else If Copy(S, 2, Length('nosourcelines')) = 'nosourcelines' Then

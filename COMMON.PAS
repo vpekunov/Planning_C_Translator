@@ -91,6 +91,7 @@ Function Substitute(S: WideString; Const Prefix, Postfix: String; Const ID, Subs
 Function _IndexOf(L: TStringList; Const What: String): Integer;
 
 Function DelBlanks(Const S: String): String;
+Function Escapize(Const S: WideString): String;
 Function CRC(Const S: String): LongInt;
 Procedure WriteString(Var Out: TextFile; Const V: String; S: TStringList);
 Procedure WriteString(Var _Out: TStringList; Const V: String; S: TStringList);
@@ -518,6 +519,37 @@ Begin
               Else If Quote = S[F] Then
                  _Quote := #0;
            Result := Result + S[F]
+         End
+End;
+
+Function Escapize(Const S: WideString): String;
+
+Var _Quote: WideChar;
+    F: Integer;
+Begin
+  Result := '';
+  _Quote := #0;
+  For F := 1 To Length(S) Do
+      If _Quote = #0 Then
+         Begin
+           If S[F] in [Quote, DblQuote] Then
+              _Quote := S[F];
+           Result := Result + S[F]
+         End
+      Else
+         Begin
+           If _Quote = S[F] Then
+              _Quote := #0;
+           Case S[F] Of
+             #9: AppendStr(Result, '\t');
+             #$0A: If (F = 1) Or (S[F-1] <> #$0D) Then
+                      AppendStr(Result, '\n');
+             #$0D: If (F <> Length(S)) And (S[F+1] = #$0A) Then
+                      AppendStr(Result, '\n')
+                   Else
+                      AppendStr(Result, '\r');
+             Else Result := Result + S[F]
+           end;
          End
 End;
 

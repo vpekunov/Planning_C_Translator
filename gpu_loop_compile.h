@@ -3360,8 +3360,8 @@
   iterative_times(15), % Предсказываем время исполнения функций
   handle_fors(0,15),
   restructure_program,
-  recreate_program('_gpu.cpp'),
-  escape_file('_gpu.cpp').
+  recreate_program('_gpu.cpp').
+%  escape_file('_gpu.cpp').
 
 @collect_global_trace:-
   prog(Cls, GID, _, _),

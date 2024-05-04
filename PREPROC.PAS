@@ -1811,7 +1811,7 @@ begin
                       PassCount := PreprocPasses
                     End;
                  Expanded := TStringList.Create;
-                 Expanded.Text := TextModule;
+                 Expanded.Text := Escapize(TextModule);
                  With Expanded Do
                     Begin
                       If Count = 0 Then Add('');
