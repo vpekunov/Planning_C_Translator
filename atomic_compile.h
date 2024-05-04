@@ -3782,6 +3782,72 @@
 @insert_transact_h:-
   !.
 
+@handle_normalize_line(E,S,W):-
+  get_char(S,A),
+  (
+   =(A,end_of_file)->
+    true;
+    (
+      =(A,E)->
+       write(W,A);
+       (
+        (
+         =(A,'\n')->
+          write(W,'\\n');
+          (
+           =(A,'\r')->
+            write(W,'\\r');
+            (
+             =(A,'\t')->
+              write(W,'\\t');
+              (
+               =(A,'\0')->
+                write(W,'\\0');
+                write(W,A)
+              )
+            )
+          )
+        ),
+        handle_normalize_line(E,S,W)
+       )
+    )
+  ).
+
+@handle_normalize_line(_,_,_).
+
+@handle_normalize('\'',S,W):-
+  write(W,'\''),
+  once(handle_normalize_line('\'',S,W)).
+
+@handle_normalize('\"',S,W):-
+  write(W,'\"'),
+  once(handle_normalize_line('\"',S,W)).
+
+@handle_normalize(C,S,W):-
+  write(W,C).
+
+@escape_normalize(S,W):-
+  get_char(S,C),
+  (
+   =(C,end_of_file)->
+    true;
+    (
+     handle_normalize(C,S,W),
+     escape_normalize(S,W)
+    )
+  ).
+
+@escape_file(FName):-
+  open(FName,read,S),
+  atom_concat(FName, '.new', FName1),
+  unlink(FName1),
+  open(FName1,write,W),
+  once(escape_normalize(S,W)),
+  close(W),
+  close(S),
+  unlink(FName),
+  rename_file(FName1, FName).
+
 @processing:-
   g_assign('$DefFTime', 15.0), % Время исполнения функции/процедуры по умолчанию (внешней или внутренней до расчета)
   g_assign('$SplittedTime', 25.0), % Время исполнения splitted по умолчанию
@@ -3791,7 +3857,8 @@
   process_splits_and_splitteds(5),
   restructure,
   insert_transact_h,
-  recreate_program('_atomic.cpp').
+  recreate_program('_atomic.cpp'),
+  escape_file('_atomic.cpp').
 
 @collect_global_trace:-
   prog(Cls, GID, _, _),
