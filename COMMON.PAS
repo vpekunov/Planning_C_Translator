@@ -356,7 +356,7 @@ Begin
         Begin
           Repeat
              Inc(LCounter);
-             L := UTF8Decode(Lines.Strings[LCounter-1]);
+             L := {UTF8Decode!!!}(Lines.Strings[LCounter-1]);
              L := L+LineDelimiter;
              StripComments(L, CommentFlag);
              L:=Trim(L);

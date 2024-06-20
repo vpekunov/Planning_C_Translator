@@ -3566,7 +3566,7 @@ begin
  else
     text := 'Error';
 
-  Tags := '<' + VName + '>' + UTF8Decode(text) + '</' + VName + '>';
+  Tags := '<' + VName + '>' + {UTF8Decode!!!}(text) + '</' + VName + '>';
   stp := @Tags[3 + Length(VName)];
   enp := @Tags[Length(Tags)-Length(VName)-2]
 end;
