@@ -404,7 +404,7 @@ bool TElementReg::GeneratePHP(wstring & Code) {
 			multimap<wstring, TParameter *> AllParams;
 			CollectParams(AllParams);
 			if (getUsed()) {
-				Code += wstring(L"\r\n  function ") + ClsID +
+				Code += wstring(L"\r\n  function __construct") +
 					wstring(L"($_") + wstring(idfieldID) + wstring(L",");
 				for (it = AllParams.begin(); it != AllParams.end(); it++)
 					if (!it->second->Redefined)
@@ -422,7 +422,7 @@ bool TElementReg::GeneratePHP(wstring & Code) {
 				Code += wstring(L"  }\r\n");
 			}
 			if (FUsed || !Parent) {
-				Code += wstring(L"\r\n  function ") + wstring(idfunGenerate) +
+				Code += wstring(L"\r\n  function ") + wstring(idfunGenerate) + wstring(L"_") +
 					ClsID + wstring(L"($") + wstring(idprmStage) + wstring(L",");
 				ProducePrms(false, Code, dirInput, wstring(L"$"));
 				ProducePrms(false, Code, dirOutput, wstring(L"&$"));
@@ -434,7 +434,7 @@ bool TElementReg::GeneratePHP(wstring & Code) {
 						P = P->Parent;
 					if (P) {
 						Code += wstring(L"   ") + P->ClsID + wstring(L"::") +
-							wstring(idfunGenerate) + P->ClsID + (L"($") +
+							wstring(idfunGenerate) + wstring(L"_") + P->ClsID + (L"($") +
 							wstring(idprmStage) + wstring(L",");
 						P->ProducePrms(false, Code, dirInput, wstring(L"$"));
 						P->ProducePrms(false, Code, dirOutput, wstring(L"$"));
@@ -678,7 +678,7 @@ bool TElement::GenerateCalls(wstring & Code) {
 	for (it = Outputs.begin(); it != Outputs.end(); it++)
 		Code += wstring(L"$") + Ident + wstring(L"_") + it->first +
 			wstring(L" = ") + GetOutDefinition(it->second) + wstring(L";\r\n");
-	Code += wstring(L"$") + Ident + wstring(L"->") + wstring(idfunGenerate) +
+	Code += wstring(L"$") + Ident + wstring(L"->") + wstring(idfunGenerate) + wstring(L"_") +
 		Ref->ClsID + wstring(L"($") + wstring(idvarStage) + wstring(L",");
 	for (it = Inputs.begin(); it != Inputs.end(); it++) {
 		sprintf(buf, "%i", it->second->Links.size());

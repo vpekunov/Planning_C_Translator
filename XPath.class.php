@@ -164,7 +164,7 @@
 // Include guard, protects file being included twice
 $ConstantName = 'INCLUDED_'.strtoupper(__FILE__);
 if (defined($ConstantName)) return;
-define($ConstantName,1, TRUE);
+define($ConstantName,1);
 
 /************************************************************************************************
 * ===============================================================================================
@@ -596,7 +596,7 @@ class XPathBase {
     // Display the error message.
     $err = '<b>XPath error in '.basename($file).':'.$lineNumber.'</b> '.$message."<br \>\n";
     $this->_setLastError($message, $lineNumber, $file);
-    if (($this->properties['verboseLevel'] > 0) OR ($terminate)) echo $err;
+    if ((isset($this->properties['verboseLevel']) AND ($this->properties['verboseLevel'] > 0)) OR ($terminate)) echo $err;
     // End the execution of this script.
     if ($terminate) exit;
   }
@@ -3639,7 +3639,7 @@ class XPathEngine extends XPathBase {
       // * matches all element nodes.
       return (!preg_match(':/[^/]+\(\)\[\d+\]$:U', $contextPath));
     }
-    elseif (preg_match('/^[\w-:\.]+$/', $nodeTest)) {
+    elseif (preg_match('/^[\w\-:\.]+$/', $nodeTest)) {
        // http://www.w3.org/TR/2000/REC-xml-20001006#NT-Name
        // The real spec for what constitutes whitespace is quite elaborate, and 
        // we currently just hope that "\w" catches them all.  In reality it should

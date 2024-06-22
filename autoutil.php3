@@ -5,6 +5,21 @@ define('stInit',1);
 define('stCall',2);
 define('stDone',3);
 
+function _array_merge(...$A) {
+  $result = array();
+  foreach ($A as $Val)
+    if (is_array($Val))
+       $result = array_merge($result, $Val);
+  return $result;
+}
+
+function _count($A) {
+  if (!is_array($A))
+     return $A === NULL ? 0 : 1;
+  else
+     return count($A);
+}
+
 $Events     = array(stResource,stInit,stCall,stDone);
 $NumEvents  = 4;
 $NewEventID = 4;
@@ -40,7 +55,7 @@ function GetTape() {
 function UnrollIfNotExport($V) {
    global $Exporting;
    if (!$Exporting && strlen($V) > 3) {
-      while (ereg("\?\(([A-Za-z0-9_.:\\\/]+)\)",$V,$regs)) {
+      while (preg_match("/\?\(([A-Za-z0-9_.:\\\/]+)\)/",$V,$regs)) {
          $file = file_get_contents($regs[1]);
          $array = split("(\x0D|\x0A)+", $file);
          $f = implode("\n", $array);
@@ -131,7 +146,7 @@ function CreateEventBefore($Before,$Line)
    {
     $Result = $NewEventID++;
     
-    $Events = array_merge(array_slice($Events,0,$Idx),array($Result),array_slice($Events,$Idx));
+    $Events = _array_merge(array_slice($Events,0,$Idx),array($Result),array_slice($Events,$Idx));
     $NumEvents++;
    }
  return $Result;
@@ -151,7 +166,7 @@ function CreateEventAfter($After,$Line)
    {
     $Result = $NewEventID++;
     
-    $Events = array_merge(array_slice($Events,0,$Idx+1),array($Result),array_slice($Events,$Idx+1));
+    $Events = _array_merge(array_slice($Events,0,$Idx+1),array($Result),array_slice($Events,$Idx+1));
     $NumEvents++;
    }
  return $Result;
@@ -161,7 +176,7 @@ function GetLastEvent($Ev)
 {
  global $Events;
 
- $EvNum = count($Ev);
+ $EvNum = _count($Ev);
  if (gettype($Ev)!="array" || $EvNum==0)
     return -1;
  elseif ($EvNum==1)
@@ -201,11 +216,11 @@ function contact_merge($Contacts)
 {
  $Result = reset($Contacts);
  while ($Current = next($Contacts))
-   while (list($CKey,$CVal) = each($Current))
+   foreach ($Current as $CKey => $CVal)
      if (gettype($Result[$CKey])!="array")
         $Result[$CKey] = $CVal;
      else
-        $Result[$CKey] = array_merge($Result[$CKey],$CVal);
+        $Result[$CKey] = _array_merge($Result[$CKey],$CVal);
  return $Result;
 }
 
@@ -246,7 +261,7 @@ function CloseForLoop($NumDims, &$Shift)
 function CreateSetSelector($Shift, $ByWhat, $Assign, $SymArr, $ValArr, $ElseVal)
 {
  echo $Shift,"#SELECT(",$ByWhat,")\n";
- $NumItems = count($SymArr);
+ $NumItems = _count($SymArr);
  for ($i = 0; $i < $NumItems; $i++) {
      echo $Shift, "  #SELECTOR('", $SymArr[$i], "')\n";
      if ($ValArr[$i]!="") echo $Shift, "    #SET(", $Assign, ",", $ValArr[$i], ")\n";
@@ -284,7 +299,7 @@ function ReadNextMail($ID,$Name)
     {
      if (($Idx = $MailBox[$Name][0][$ID])===null)
         $Idx = 1;
-     if ($Idx>=count($MailBox[$Name]))
+     if ($Idx>=_count($MailBox[$Name]))
         return "";
      else
         {
@@ -302,7 +317,7 @@ function GetNextMail($Name)
 
  if (isset($MailBox[$Name]))
     {
-     if (count($MailBox[$Name])<=1)
+     if (_count($MailBox[$Name])<=1)
         return "";
      array_shift($MailBox[$Name]);
      $Result = array_shift($MailBox[$Name]);
