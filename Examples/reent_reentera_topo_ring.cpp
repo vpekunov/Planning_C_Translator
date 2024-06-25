@@ -16,7 +16,9 @@ int main() {
          reent_next_first(this[1 + id % NP], id, val+1);
       }
       if (from >= 1) {
-         SUM += val;
+         plan_critical(topology) {
+            SUM += val;
+         }
          if (id == 1) {
             cout << SUM << endl;
             reent_topology_quit();

@@ -17,7 +17,9 @@ chain conveyor(_function worker, int A) {
 
 int main() {
     _function worker = [&] (_sender send, int n, int stage, int A) {
-         A += stage;
+         plan_critical(topology) {
+           A += stage;
+         }
          if (stage == n - 1) cout << A << endl;
          else send(A);
     };

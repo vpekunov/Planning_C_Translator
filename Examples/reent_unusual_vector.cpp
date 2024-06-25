@@ -5,7 +5,7 @@
 using namespace std;
 
 chain[100] A(int a) {
-  cout << a << " ";
+  if (a != 0) cout << a << " ";
 }
 
 chain[100] B(int b) {

@@ -20,7 +20,9 @@ int main() {
 
          send(DATA);
       }
-      SUM += data.val;
+      plan_critical(topology) {
+        SUM += data.val;
+      }
       if (id == 0 && data.sender != 0)
          cout << SUM << endl;
     };

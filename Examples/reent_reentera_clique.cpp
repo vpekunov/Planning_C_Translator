@@ -19,9 +19,11 @@ int main() {
     int id = reent_linear_num()-1;
 
     if (K == 0) {
-       DATA[id] = new int [NN];
-       DATA[id][id] = id + 2;
-       Counters[id] = 1;
+       plan_critical(topology) {
+         DATA[id] = new int [NN];
+         DATA[id][id] = id + 2;
+         Counters[id] = 1;
+       }
 
        for (int i = 0; i < num_others(); i++)
            reent_next_first(this[other(i)], NN, id + 2);

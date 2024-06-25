@@ -20,7 +20,9 @@ int main() {
             for (int i = 0; i < num_slaves(); i++)
                 reent_next_first(this[slave(i)], val+1);
          } else {
-            SUM += val;
+            plan_critical(topology) {
+               SUM += val;
+            }
             PROCESSED++;
             if (PROCESSED == NP-1) {
                cout << SUM << endl;

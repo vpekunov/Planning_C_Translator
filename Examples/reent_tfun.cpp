@@ -14,14 +14,19 @@ chain Main(double x) throw(int proc, double x, funnel(in, double) * VAR) {
   funnel(in, double) * sin_in = new funnel(in, double)();
   funnel(in, double) * cos_in = new funnel(in, double)();
 
-  throw_first(fnSin, x, sin_in);
-  throw_first(fnCos, x, cos_in);
+  throw_last(fnSin, x, sin_in);
+  throw_last(fnCos, x, cos_in);
 
-  cout<<(**sin_in+**cos_in)<<" vs "<<(sin(x)+cos(x))<<endl;
+  double s = **sin_in;
+  double c = **cos_in;
+
+  cout<<(s+c)<<" vs "<<(sin(x)+cos(x))<<endl;
 }
 
 chain Calc(int proc, double x, funnel(in, double) * VAR) {
   funnel(out, double) * _OUT = new funnel(out, double)(VAR);
+
+  plan_group_parallelize;
 
   if (proc == fnSin) {
      double result = 0.0;

@@ -40,30 +40,14 @@ chain A(input_proc Src, int N) {
 }
 
 #def_module(plan_topology) clique(N) {
-  /*
-  <i = 1,N>
-     <j = 1,i-1>
-        plan_parallel_chain(A[i](NULL,N)->A[j](NULL,N));
-  <i = 1,N>
-     <j = i+1,N>
-        plan_parallel_chain(A[i](NULL,N)->A[j](NULL,N));
-  */
-  @inner_loop(_,0):-!.
+  @inner_loop(I,J):-(I>J;==(I,J)),!.
   @inner_loop(I,J) :-
-    (==(I,J) ->
-      true;
-      (
-       number_atom(I,IND1),
-       atom_concat('A[',IND1,B1), atom_concat(B1,'](empty_proc,N)',B2),
-       number_atom(J,IND2),
-       atom_concat('A[',IND2,B3), atom_concat(B3,'](empty_proc,N)',B4),
-       (I<J ->
-        plan_parallel_chain(B2,B4);
-        plan_parallel_reverse(B2,B4)
-       ),
-       plan_parallel_reverse(B4,B2)
-      )
-    ),
+    number_atom(I,IND1),
+    atom_concat('A[',IND1,B1), atom_concat(B1,'](empty_proc,N,0)',B2),
+    number_atom(J,IND2),
+    atom_concat('A[',IND2,B3), atom_concat(B3,'](empty_proc,N,0)',B4),
+    plan_parallel_chain(B2,B4),
+    plan_parallel_reverse(B4,B2),
     J1 is J-1,
     inner_loop(I,J1).
   @outer_loop(0):-!.

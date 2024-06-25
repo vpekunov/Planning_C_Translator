@@ -2124,16 +2124,16 @@ Const Tunnels_Vars_Sems: PChar =
 '        MPI_Win_unlock(root, win);'+CRLF+
 '        return buf;'+CRLF+
 '      }'+CRLF+
-'      Type operator ++ () {'+CRLF+
+'      Type operator ++ (int) {'+CRLF+
 '        return add(+1, false);'+CRLF+
 '      };'+CRLF+
-'      Type operator ++ (int) {'+CRLF+
+'      Type operator ++ () {'+CRLF+
 '        return add(+1, true);'+CRLF+
 '      };'+CRLF+
-'      Type operator -- () {'+CRLF+
+'      Type operator -- (int) {'+CRLF+
 '        return add(-1, false);'+CRLF+
 '      };'+CRLF+
-'      Type operator -- (int) {'+CRLF+
+'      Type operator -- () {'+CRLF+
 '        return add(-1, true);'+CRLF+
 '      };'+CRLF+
 '      Type operator += (Type Val) {'+CRLF+
@@ -2171,11 +2171,11 @@ Const Tunnels_Vars_Sems: PChar =
 '        int v;'+CRLF+
 '        do {'+CRLF+
 '           v = common_var<int>::operator ++();'+CRLF+
-'           if (v >= MAX) {'+CRLF+
+'           if (v > MAX) {'+CRLF+
 '              common_var<int>::operator --();'+CRLF+
 '              Sleep(rand()%4);'+CRLF+
 '           }'+CRLF+
-'        } while (v >= MAX);'+CRLF+
+'        } while (v > MAX);'+CRLF+
 '      };'+CRLF+
 '      void release () {'+CRLF+
 '        common_var<int>::operator --();'+CRLF+

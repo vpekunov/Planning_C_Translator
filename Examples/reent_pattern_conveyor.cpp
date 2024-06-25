@@ -115,7 +115,9 @@ class MyConveyoredFunction: public ConveyoredFunction<int> {
     }
 
     virtual void run(int A) {
-      A += stage;
+      plan_critical(topology) {
+        A += stage;
+      }
       if (stage == owner->get_num_stages() - 1) cout << A << endl;
       else send(A);
     }

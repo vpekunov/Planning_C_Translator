@@ -2695,7 +2695,7 @@ begin
                                       _Out.Add(' '+TypeTaskID+' id;');
                                    _Out.Add(' '+pRedDummies);
                                    _Out.Add('  __START_LOCK__(__num_threads__,&__start_lock__);');
-                                   _Out.Add('  if (!__continue__ && __thread_id__==0 && '+oEvs+'.size()==0) {' );
+                                   _Out.Add('  if (!__continue__ && __thread_id__==0) {' );
                                    _Out.Add('     omp_set_lock(&__free_lock__);');
                                    _Out.Add('     (*__free_count__)--;');
                                    _Out.Add('     omp_unset_lock(&__free_lock__);');
