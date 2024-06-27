@@ -2114,14 +2114,11 @@ Const Tunnels_Vars_Sems: PChar =
 '      Type add(Type inc, bool pre) {'+CRLF+
 '        Type buf;'+CRLF+
 '        MPI_Win_lock(MPI_LOCK_EXCLUSIVE, root, 0, win);'+CRLF+
-'        if (pre) {'+CRLF+
-'           MPI_Accumulate(&inc, 1, MPI_Types<Type>::val, root, 0, 1, MPI_Types<Type>::val, MPI_SUM, win);'+CRLF+
-'           MPI_Get(&buf, 1, MPI_Types<Type>::val, root, 0, 1, MPI_Types<Type>::val, win);'+CRLF+
-'        } else {'+CRLF+
-'           MPI_Get(&buf, 1, MPI_Types<Type>::val, root, 0, 1, MPI_Types<Type>::val, win);'+CRLF+
-'           MPI_Accumulate(&inc, 1, MPI_Types<Type>::val, root, 0, 1, MPI_Types<Type>::val, MPI_SUM, win);'+CRLF+
-'        }'+CRLF+
+'        MPI_Get_accumulate(&inc, 1, MPI_Types<Type>::val, &buf, 1, MPI_Types<Type>::val, root, 0, 1, MPI_Types<Type>::val, MPI_SUM, win);'+CRLF+
 '        MPI_Win_unlock(root, win);'+CRLF+
+'        if (pre) {'+CRLF+
+'           buf += inc;'+CRLF+
+'        }'+CRLF+
 '        return buf;'+CRLF+
 '      }'+CRLF+
 '      Type operator ++ (int) {'+CRLF+
