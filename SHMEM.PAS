@@ -1775,9 +1775,9 @@ Const Tunnels_Vars_Sems: PChar =
 '      memmove(Buf.connect, Name.c_str(), Name.length()+1);'+CRLF+
 '      Buf.tag = tag;'+CRLF+
 '	  if (all) {'+CRLF+
-'		  for (int i = 0; i < __cluster_size__; i++)'+CRLF+
-'			  if (i != __cluster_id__)'+CRLF+
-'				  MPI_Send(&Buf, sizeof(Buf), MPI_BYTE, i, connect_tag, MPI_COMM_WORLD);'+CRLF+
+'		  for (int i = 0; i < __cluster_topo_size__; i++)'+CRLF+
+'			  if (__cluster_topo_ids__[i] != __cluster_id__)'+CRLF+
+'				  MPI_Send(&Buf, sizeof(Buf), MPI_BYTE, __cluster_topo_ids__[i], connect_tag, MPI_COMM_WORLD);'+CRLF+
 '	  } else if (in_id == __cluster_id__)'+CRLF+
 '		  MPI_Send(&Buf, sizeof(Buf), MPI_BYTE, out_id, connect_tag, MPI_COMM_WORLD);'+CRLF+
 '	  else if (out_id == __cluster_id__)'+CRLF+
@@ -1827,7 +1827,7 @@ Const Tunnels_Vars_Sems: PChar =
 '       }'+CRLF+
 '       _Ref->in_id = __cluster_id__;'+CRLF+
 '       do {'+CRLF+
-'         _Ref->tag = rand();'+CRLF+
+'         _Ref->tag = rand() % (RAND_MAX / 20);'+CRLF+
 '       } while (_Ref->tag >= 1232 && _Ref->tag < 1240);'+CRLF+
 '    };'+CRLF+
 '  public:'+CRLF+

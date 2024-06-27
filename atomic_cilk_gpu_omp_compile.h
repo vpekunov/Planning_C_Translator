@@ -9706,8 +9706,8 @@
   !,
   atom_processing,
   !,
-  clk_recreate_program('_atomic_cilk_gpu_omp.cpp').
-%  escape_file('_atomic_cilk_gpu_omp.cpp').
+  clk_recreate_program('_atomic_cilk_gpu_omp.cpp'),
+  escape_file('_atomic_cilk_gpu_omp.cpp').
 
 @goal:-
   main_debug.

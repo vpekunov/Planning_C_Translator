@@ -3599,8 +3599,8 @@
   (
    (predicate_property(cilk_auto_for,'dynamic'), cilk_auto_for)->handle_fors;true
   ),
-  recreate_program('_cilk.cpp').
-%  escape_file('_cilk.cpp').
+  recreate_program('_cilk.cpp'),
+  escape_file('_cilk.cpp').
 
 @collect_global_trace:-
   prog(Cls, GID, _, _),

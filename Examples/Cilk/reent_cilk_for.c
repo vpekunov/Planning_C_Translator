@@ -1,3 +1,6 @@
+// Uncomment the following line if you hava a Cilk-capable compiler
+// #define CILK
+
 #include "cilk_compile.h"
 
 #pragma auto for
@@ -19,6 +22,12 @@
 #define h 0.01
 
 #define tau 0.00001
+
+#ifndef CILK
+#define _Cilk_spawn /* _Cilk_spawn */
+#define _Cilk_sync /* _Cilk_sync */
+#define _Cilk_for for
+#endif
 
 #define cilk_spawn _Cilk_spawn
 #define cilk_sync _Cilk_sync

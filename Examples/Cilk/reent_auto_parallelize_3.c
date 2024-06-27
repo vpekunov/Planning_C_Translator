@@ -1,3 +1,6 @@
+// Uncomment the following line if you hava a Cilk-capable compiler
+// #define CILK
+
 #include <iostream>
 
 using namespace std;
@@ -8,6 +11,12 @@ using namespace std;
 #pragma auto omp for
 #pragma auto gpu for
 #pragma auto parallelize
+
+#ifndef CILK
+#define _Cilk_spawn /* _Cilk_spawn */
+#define _Cilk_sync /* _Cilk_sync */
+#define _Cilk_for for
+#endif
 
 #define cilk_spawn
 #define cilk_sync

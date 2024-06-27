@@ -3857,8 +3857,8 @@
   process_splits_and_splitteds(5),
   restructure,
   insert_transact_h,
-  recreate_program('_atomic.cpp').
-%  escape_file('_atomic.cpp').
+  recreate_program('_atomic.cpp'),
+  escape_file('_atomic.cpp').
 
 @collect_global_trace:-
   prog(Cls, GID, _, _),

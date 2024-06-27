@@ -839,6 +839,7 @@ Begin
                       '; else'+CRLF;
        Result:=Result+'do {;'+CRLF;
        Result:=Result+'int * __ids = (int *) '+ClusteredArrID+';'+CRLF;
+       Result:=Result+'__cluster_topo_ids__ = (int *) '+ClusteredArrID+';'+CRLF;
        If IsTopological Then
           Result:=Result+'char __chain_init__  = 1;'+CRLF
        Else
@@ -856,6 +857,7 @@ Begin
        Else
           Result:=Result+IntToStr(ChainItems.Count);
        Result:=Result+' : 1;'+CRLF;
+       Result:=Result+'__cluster_topo_size__ =  __nprocesses__;' + CRLF;
        With ChainItems Do
          If Count>0 Then
            Begin

@@ -4,7 +4,7 @@
 #include <stdio.h>
 int main(int argc,char *argv[])
 {
- char message[24];
+ char message[48];
  MPI_Group MPI_GROUP_WORLD;
  MPI_Group group;
  MPI_Comm fcomm;

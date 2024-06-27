@@ -37,9 +37,9 @@ chain A(input_proc Src, int N) {
   @inner_loop(I,J):-(I>J;==(I,J)),!.
   @inner_loop(I,J) :-
     number_atom(I,IND1),
-    atom_concat('A[',IND1,B1), atom_concat(B1,'](empty_proc,N,0)',B2),
+    atom_concat('A[',IND1,B1), atom_concat(B1,'](empty_proc,N)',B2),
     number_atom(J,IND2),
-    atom_concat('A[',IND2,B3), atom_concat(B3,'](empty_proc,N,0)',B4),
+    atom_concat('A[',IND2,B3), atom_concat(B3,'](empty_proc,N)',B4),
     plan_parallel_chain(B2,B4),
     plan_parallel_reverse(B4,B2),
     J1 is J-1,

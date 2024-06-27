@@ -6858,8 +6858,8 @@
   !,
   atom_processing,
   !,
-  clk_recreate_program('_atomic_cilk.cpp').
-%  escape_file('_atomic_cilk.cpp').
+  clk_recreate_program('_atomic_cilk.cpp'),
+  escape_file('_atomic_cilk.cpp').
 
 @goal:-
   main_debug.

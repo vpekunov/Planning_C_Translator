@@ -494,6 +494,8 @@ Begin
   _Out.Add('#include "mpi.h"');
   _Out.Add('int __cluster_size__;');
   _Out.Add('int __cluster_id__;');
+  _Out.Add('int * __cluster_topo_ids__;');
+  _Out.Add('int __cluster_topo_size__;');
   _Out.Add('inline int plan_cluster_size() {');
   _Out.Add('  return __cluster_size__;');
   _Out.Add('}');

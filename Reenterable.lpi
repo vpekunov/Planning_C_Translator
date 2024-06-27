@@ -38,7 +38,6 @@
       <Unit0>
         <Filename Value="Reenterable.lpr"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
         <WindowIndex Value="1"/>
         <TopLine Value="2976"/>
         <CursorPos X="172" Y="3010"/>
@@ -80,7 +79,7 @@
         <UnitName Value="Topo"/>
         <EditorIndex Value="10"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="672"/>
+        <TopLine Value="671"/>
         <CursorPos X="23" Y="654"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
@@ -123,9 +122,10 @@
       </Unit7>
       <Unit8>
         <Filename Value="SHMEM.PAS"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="4"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="3498"/>
+        <TopLine Value="3500"/>
         <CursorPos Y="3519"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
