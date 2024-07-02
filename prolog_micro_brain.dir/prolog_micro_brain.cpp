@@ -23,6 +23,7 @@
 #include <regex>
 
 #include <math.h>
+#include <time.h>
 #include <string.h>
 
 #include "elements.h"
@@ -2662,6 +2663,32 @@ public:
 		bool d1 = positional_vals->at(0)->defined();
 		generated_vars * result = new generated_vars();
 		if (!d1) {
+			frame_item * r = f->copy();
+			result->push_back(r);
+		}
+		else {
+			delete result;
+			result = NULL;
+		}
+		return result;
+	}
+};
+
+class predicate_item_nonvar : public predicate_item {
+public:
+	predicate_item_nonvar(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "nonvar"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 1) {
+			std::cout << "nonvar(V) incorrect call!" << endl;
+			exit(-3);
+		}
+
+		bool d1 = positional_vals->at(0)->defined();
+		generated_vars * result = new generated_vars();
+		if (d1) {
 			frame_item * r = f->copy();
 			result->push_back(r);
 		}
@@ -5639,6 +5666,26 @@ public:
 	}
 };
 
+class predicate_item_randomize : public predicate_item {
+public:
+	predicate_item_randomize(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "randomize"; }
+
+	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+		if (positional_vals->size() != 0) {
+			std::cout << "randomize: extra arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars * result = new generated_vars();
+		frame_item * ff = f->copy();
+		srand((unsigned int)time(NULL) ^ (unsigned int)clock());
+		result->push_back(ff);
+
+		return result;
+	}
+};
+
 class predicate_item_read_token_common : public predicate_item {
 	bool peek;
 public:
@@ -7111,6 +7158,9 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				else if (iid == "random") {
 					pi = new predicate_item_random(neg, once, call, num, cl, this);
 				}
+				else if (iid == "randomize") {
+					pi = new predicate_item_randomize(neg, once, call, num, cl, this);
+				}
 				else if (iid == "char_code") {
 					pi = new predicate_item_char_code(neg, once, call, num, cl, this);
 				}
@@ -7161,6 +7211,9 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				}
 				else if (iid == "var") {
 					pi = new predicate_item_var(neg, once, call, num, cl, this);
+				}
+				else if (iid == "nonvar") {
+					pi = new predicate_item_nonvar(neg, once, call, num, cl, this);
 				}
 				else if (iid == "get_icontacts") {
 					pi = new predicate_item_get_contacts(dirInput, neg, once, call, num, cl, this);

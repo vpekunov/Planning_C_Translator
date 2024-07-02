@@ -276,10 +276,10 @@ begin
             // CloseFile(L);
 
             If Compiled Then
-               RunExtCommandAsAdmin({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'nocompile _.xout _.in','_.xout','$##$!','_.result')
+               RunExtCommandAsAdmin({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'bash ./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'nocompile _.xout _.in','_.xout','$##$!','_.result')
             Else
                Begin
-                 RunExtCommandAsAdmin({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'_.' + Lang + ' _.xout _.in','_.xout','$##$!','_.result');
+                 RunExtCommandAsAdmin({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'bash ./start_'+Lang+'.sh'{$ELSE}'start_'+Lang+'.bat'{$ENDIF},'_.' + Lang + ' _.xout _.in','_.xout','$##$!','_.result');
                  Compiled := True
                End;
 
@@ -1096,15 +1096,16 @@ Type
         out_tr: TTrace;
         ENV: TXPathEnvironment;
         OnlyInduceModel: Boolean;
+        DEBUG_OFFS: String;
 
-        constructor Create(_OnlyInduceModel: Boolean; _ENV: TXPathEnvironment; _dom: TXMLDocument; _semaphored: Boolean; _parent: Integer; Const tr: TTrace; _in_stage: Integer; Const _in_tr: TTrace);
+        constructor Create(Const _OFFS: String; _OnlyInduceModel: Boolean; _ENV: TXPathEnvironment; _dom: TXMLDocument; _semaphored: Boolean; _parent: Integer; Const tr: TTrace; _in_stage: Integer; Const _in_tr: TTrace);
         destructor Destroy; override;
         procedure Execute; override;
 
         procedure Process;
      End;
 
-function Deduce(OnlyInduceModel: Boolean; ENV: TXPathEnvironment; var dom: TXMLDocument; semaphored: Boolean; T: TDeducer;
+function Deduce(Const OFFS: String; OnlyInduceModel: Boolean; ENV: TXPathEnvironment; var dom: TXMLDocument; semaphored: Boolean; T: TDeducer;
   parent: Integer; Var tr: TTrace; Var outtr: TTrace;
   _in_stage: Integer; Const _in_tr: TTrace): Pointer;
 
@@ -1141,12 +1142,12 @@ Begin
    Try
      Result := ExtractSystemFromDOM(dom, res, ENV);
      res.Free;
-
+     (* If Not Assigned(Result) Then WriteLn(OFFS, ' STOP'); *)
      If Assigned(T) Then {T.Synchronize(}T.Process{)};
      If Assigned(Result) Then
         Begin
           CRes := TResultType(CheckSys(Result));
-
+          (*WriteLn(OFFS, ' ', CRes);*)
           If CRes = rsStrict Then
              Begin
                _Free(Result);
@@ -1190,11 +1191,11 @@ Begin
                           CreateStrFile('_.php3',Prog);
                           {$IF DEFINED(LCL) OR DEFINED(VCL)}
                           Gen := RunExtCommandAsAdmin(
-                             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
+                             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
                              '_.php3 _.gen','_.gen',DBLLINE,'');
                           {$ELSE}
                           Gen := RunExtCommandAsAdmin(
-                             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
+                             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_php.sh'{$ELSE}'run_php.bat'{$ENDIF},
                              '_.php3 _.gen','_.gen',DBLLINE,'');
                           {$ENDIF}
                           If Pos(errPHP,Gen) <> 0 Then
@@ -1395,7 +1396,7 @@ Begin
                       started[F] := NumThrSemaphore.AttemptWait;
                       if started[F] Then
                          begin
-                           threads[F] := TDeducer.Create(OnlyInduceModel, ENV, vars[F], true, nums[F], tr, _in_stage+1, _in_tr);
+                           threads[F] := TDeducer.Create(OFFS + ' ' + IntToStr(GetCurrentThreadId), OnlyInduceModel, ENV, vars[F], true, nums[F], tr, _in_stage+1, _in_tr);
                            threads[F].Resume;
                            // NumThrSemaphore.Post;
                          end
@@ -1404,7 +1405,7 @@ Begin
                            SetLength(ttrs, Length(tr));
                            If Length(ttrs) > 0 Then
                               System.Move(tr[0], ttrs[0], Length(tr)*SizeOf(Integer));
-                           Result := Deduce(OnlyInduceModel, ENV, vars[F], false, T, nums[F], ttrs, outtr, _in_stage+1, _in_tr);
+                           Result := Deduce(OFFS + ' ' + IntToStr(GetCurrentThreadId), OnlyInduceModel, ENV, vars[F], false, T, nums[F], ttrs, outtr, _in_stage+1, _in_tr);
                            FreeAndNil(vars[F]);
 
                            If Assigned(T) Then {T.Synchronize(}T.Process{)};
@@ -1471,7 +1472,7 @@ End;
 
 { Deducer }
 
-constructor TDeducer.Create(_OnlyInduceModel: Boolean; _ENV: TXPathEnvironment; _dom: TXMLDocument;
+constructor TDeducer.Create(Const _OFFS: String; _OnlyInduceModel: Boolean; _ENV: TXPathEnvironment; _dom: TXMLDocument;
   _semaphored: Boolean; _parent: Integer; const tr: TTrace;
   _in_stage: Integer; Const _in_tr: TTrace);
 begin
@@ -1481,6 +1482,7 @@ begin
    Inc(NActiveThreads);
    LeaveCriticalSection(VariantsCS);
    dom := _dom;
+   DEBUG_OFFS := _OFFS;
 
    semaphored := _semaphored;
    OnlyInduceModel := _OnlyInduceModel;
@@ -1507,7 +1509,7 @@ end;
 
 procedure TDeducer.Execute;
 begin
-  Result := Deduce(OnlyInduceModel, ENV, dom, semaphored, Self, parent, trace, out_tr, in_stage, in_tr)
+  Result := Deduce(DEBUG_OFFS, OnlyInduceModel, ENV, dom, semaphored, Self, parent, trace, out_tr, in_stage, in_tr)
 end;
 
 procedure TDeducer.Process;
@@ -2270,7 +2272,7 @@ begin
           SetLength(tr, 0);
           Start := Now;
           NActiveThreads := 0;
-          deducer := TDeducer.Create(OnlyInduceModel, ENV, dom, false, -1, tr, 0, MainLine);
+          deducer := TDeducer.Create('', OnlyInduceModel, ENV, dom, false, -1, tr, 0, MainLine);
           deducer.Resume;
           deducer.WaitFor;
           dom := deducer.dom;

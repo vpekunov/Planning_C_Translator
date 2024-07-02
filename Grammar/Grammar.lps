@@ -9,9 +9,9 @@
         <Filename Value="Grammar.lpr"/>
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
-        <TopLine Value="132"/>
-        <CursorPos Y="139"/>
-        <UsageCount Value="30"/>
+        <TopLine Value="234"/>
+        <CursorPos X="21" Y="253"/>
+        <UsageCount Value="31"/>
         <Loaded Value="True"/>
       </Unit0>
       <Unit1>
@@ -120,5 +120,10 @@
       <FormatVersion Value="2"/>
       <Modes ActiveMode="default"/>
     </RunParams>
+    <HistoryLists Count="1">
+      <List0 Name="LaunchingApplication" Type="File" Count="1">
+        <Item1 Value="/usr/bin/gnome-terminal -t &apos;Lazarus Run Output&apos; -e &apos;$(LazarusDir)/tools/runwait.sh $(TargetCmdLine)&apos;"/>
+      </List0>
+    </HistoryLists>
   </ProjectSession>
 </CONFIG>

@@ -1334,7 +1334,7 @@ begin
                  Begin
                    With TPattern(Patterns.Objects[F]) Do
                      P := '(' + Context1 + ')(' + Needle + ')(' + Context2 + ')';
-                   RS[F] := TRegExpr.Create(P);
+                   RS[F] := TRegExpr.Create(UTF8Decode(P));
                    RS[F].Compile;
                    RS[F].SetENV(ENV);
                    RS[F].SetDB(db);
@@ -1425,7 +1425,7 @@ begin
                     Context1Num := 1;
                     NeedleNum := Context1Num + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Context1);
                     Context2Num := NeedleNum + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Needle);
-                    R := TRegExpr.Create(P);
+                    R := TRegExpr.Create(UTF8Decode(P));
                     R.Compile;
                     R.SetENV(ENV);
                     R.SetDB(db);

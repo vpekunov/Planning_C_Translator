@@ -55,6 +55,9 @@
       <RelocatableUnit Value="True"/>
     </CodeGeneration>
     <Linking>
+      <Debugging>
+        <DebugInfoType Value="dsDwarf3"/>
+      </Debugging>
       <Options>
         <ExecutableType Value="Library"/>
       </Options>

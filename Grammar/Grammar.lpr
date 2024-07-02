@@ -7,7 +7,7 @@ library Grammar;
 //{$linklib stdc++}
 {$ENDIF}
 
-Uses (* LazUTF8, *) dynlibs, StrUtils, SysUtils, Classes;
+Uses (* LazUTF8, *) {$IF DEFINED(UNIX) OR DEFINED(LINUX)} cmem,{$ENDIF}dynlibs, StrUtils, SysUtils, Classes;
 
 Var Grammer: TLibHandle;
     GOpts: Pointer;
@@ -120,7 +120,7 @@ begin
       _info := Copy(_text, F + 1, Length(_text) - F - 1)
 end;
 
-Var _text: String;
+Var _text: WideString;
     _mode: WideChar;
     sent: Pointer;
     linkage: Pointer;
@@ -130,8 +130,8 @@ Var _text: String;
     Ltext, Rtext: WideString;
     Linfo, Rinfo: WideString;
     Ltype, Rtype: WideString;
-    _Tags: String;
-    WTags: WideString;
+    _Tags: WideString;
+    // WTags: WideString;
     Restricts: TList;
     Good: Boolean;
     S: String;
@@ -177,10 +177,10 @@ begin
                                            ((text[F] >= 'а') And (text[F] <= 'я'))
                                           )
                        ) Then
-                   AppendStr(_text, text[F]);
+                   _text := _text + text[F];
              Inc(F)
            End;
-        sent := sentence_create(PChar(_text), dict);
+        sent := sentence_create(PChar(UTF8Encode(_text)), dict);
 	parse_options_set_min_null_count(GOpts, 0);
 	parse_options_set_max_null_count(GOpts, 0);
 	parse_options_reset_resources(GOpts);
@@ -216,19 +216,19 @@ begin
                           Begin
                             L := linkage_get_link_lword(linkage, G);
                             R := linkage_get_link_rword(linkage, G);
-                            Ltext := {UTF8Decode}(linkage_get_word(linkage, L));
+                            Ltext := UTF8Decode(linkage_get_word(linkage, L));
                             Ltext := _parse(Ltext, Linfo, Ltype);
-                            Rtext := {UTF8Decode}(linkage_get_word(linkage, R));
+                            Rtext := UTF8Decode(linkage_get_word(linkage, R));
                             Rtext := _parse(Rtext, Rinfo, Rtype);
                             Lbl := linkage_get_link_label(linkage, G);
                             For K := 0 To Restricts.Count-1 Do
                                 If TStringList(Restricts[K]).IndexOf(Lbl) >= 0 Then
                                    TStringList(Restricts[K]).Objects[0] := IntegerToTObject(256);
-                            AppendStr(_Tags, Format('<Link><Name>%s</Name><Left><Value>%s</Value><Info>%s</Info><Type>%s</Type></Left><Right><Value>%s</Value><Info>%s</Info><Type>%s</Type></Right></Link>',
+                            _Tags := _Tags + WideFormat('<Link><Name>%s</Name><Left><Value>%s</Value><Info>%s</Info><Type>%s</Type></Left><Right><Value>%s</Value><Info>%s</Info><Type>%s</Type></Right></Link>',
                               [Lbl,
                                  Ltext, Linfo, Ltype,
                                  Rtext, Rinfo, Rtype
-                              ]))
+                              ])
                           End;
                       linkage_delete(linkage);
                       Good := True;
@@ -247,10 +247,10 @@ begin
             TStringList(Restricts[F]).Free;
         Restricts.Free
      end;
-  WTags := _Tags;
-  Result := WideStrAlloc(Length(WTags)+1);
-  Move(WTags[1], Result^, Length(WTags)*SizeOf(WideChar));
-  (Result + Length(WTags))^ := #0;
+  // WTags := _Tags;
+  Result := WideStrAlloc(Length(_Tags)+1);
+  Move(_Tags[1], Result^, Length(_Tags)*SizeOf(WideChar));
+  (Result + Length(_Tags))^ := #0;
 end;
 
 function ru(Const text: PWideChar): PWideChar; cdecl;

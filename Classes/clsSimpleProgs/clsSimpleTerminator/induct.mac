@@ -244,5 +244,6 @@ create_model:-
   clear_db.
 @goal:-
   handle,!.
+@versions(Programmatical,Russian)
 @done:-
   create_model.

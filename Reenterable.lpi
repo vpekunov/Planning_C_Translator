@@ -122,7 +122,6 @@
       </Unit7>
       <Unit8>
         <Filename Value="SHMEM.PAS"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="4"/>
         <WindowIndex Value="1"/>
         <TopLine Value="3500"/>
@@ -189,10 +188,11 @@
       <Unit15>
         <Filename Value="regexpr.pas"/>
         <UnitName Value="RegExpr"/>
+        <IsVisibleTab Value="True"/>
         <EditorIndex Value="8"/>
         <WindowIndex Value="1"/>
         <TopLine Value="3581"/>
-        <CursorPos Y="3591"/>
+        <CursorPos X="47" Y="3590"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit15>

@@ -1243,7 +1243,7 @@ begin
 end;
 
 Const Specials: Array[1..5] Of WideString = ('\', #$0D#$0A, #$0D, #$0A, #09);
-Const Escaped:  Array[1..5] Of WideString = ('\\', '\n', '\r', '\r', '\t');
+Const Escaped:  Array[1..5] Of WideString = ('\\', '\n', '\n', '\n', '\t');
 
 function EscapeString(const S: WideString): WideString;
 
@@ -2491,12 +2491,12 @@ begin
   try
      {$IF DEFINED(LCL) OR DEFINED(VCL)}
      RunExtCommand(
-        {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
+        {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
         FName + ' unify ' + Treba + ' _ _ _ _.info',
         '_.info');
      {$ELSE}
      WriteLn(RunExtCommand(
-        {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
+        {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
         FName + ' unify ' + Treba + ' _ _ _ _.info',
         '_.info'));
      {$ENDIF}
@@ -2543,12 +2543,12 @@ begin
        try
           {$IF DEFINED(LCL) OR DEFINED(VCL)}
           RunExtCommand(
-             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
+             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
              FName + ' teach _ _ _ _ _.info',
              '_.info');
           {$ELSE}
           WriteLn(RunExtCommand(
-             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
+             {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
              FName + ' teach _ _ _ _ _.info',
               '_.info'));
           {$ENDIF}
@@ -2573,12 +2573,12 @@ begin
      try
         {$IF DEFINED(LCL) OR DEFINED(VCL)}
         RunExtCommand(
-           {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
+           {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
            Prms + ' _.info',
            '_.info');
         {$ELSE}
         WriteLn(RunExtCommand(
-           {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
+           {$IF DEFINED(UNIX) OR DEFINED(LINUX)}'sh ./run_nneuronet.sh'{$ELSE}'run_nneuronet.bat'{$ENDIF},
            Prms + ' _.info',
             '_.info'));
         {$ENDIF}
@@ -3554,7 +3554,7 @@ begin
                end
             else
                begin
-                 text := utf8encode('#MVv;MVIv#'+text); {!!!}
+                 text := {utf8encode}('#MVv;MVIv#'+text); {!!!}
                  p := T(PWideChar(text));
                  text := p;
                  // FreeMem(p);
@@ -3670,7 +3670,7 @@ begin
 
        S := EscapeProlog(E.TextContent);
        AppendStr(Result, split_if_need(S, Term));
-       AppendStr(Result, 'assertz(var(''' + MacroID + ''',' + IntToStr(id) + ',''' + String(E.NodeName) + ''',' + Term + ',' + L1 + ')),' + #$0D#$0A);
+       AppendStr(Result, 'assertz(xvar(''' + MacroID + ''',' + IntToStr(id) + ',''' + String(E.NodeName) + ''',' + Term + ',' + L1 + ')),' + #$0D#$0A);
        Inc(id);
        L := L + IntToStr(id - 1) + ','
      end
@@ -3715,7 +3715,7 @@ begin
                If Length(L1) > 1 Then L1[Length(L1)] := ']'
                else L1 := L1 + ']';
                AppendStr(Result, split_if_need(EscapeProlog(S), Term));
-               AppendStr(Result, 'assertz(var(''' + MacroID + ''',' + IntToStr(id) + ',''' + String(R.VarNames[Num]) + ''',' + Term + ',' + L1 + ')),' + #$0D#$0A);
+               AppendStr(Result, 'assertz(xvar(''' + MacroID + ''',' + IntToStr(id) + ',''' + String(R.VarNames[Num]) + ''',' + Term + ',' + L1 + ')),' + #$0D#$0A);
                Inc(id);
                L := L + IntToStr(id - 1) + ','
             end
@@ -7465,7 +7465,7 @@ begin
   if Length(L) > 1 Then L[Length(L)] := ']'
   else L := L + ']';
   RootID := id;
-  AppendStr(Result, 'assertz(var(''' + MacroID + ''',' + IntToStr(id) + ',' + '''root''' + ','''',' + L + ')).' + #$0D#$0A)
+  AppendStr(Result, 'assertz(xvar(''' + MacroID + ''',' + IntToStr(id) + ',' + '''root''' + ','''',' + L + ')).' + #$0D#$0A)
 end;
 
 function TRegExpr.ExportXML: String;
