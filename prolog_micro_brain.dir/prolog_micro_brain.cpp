@@ -1751,6 +1751,16 @@ double interpreter::evaluate(frame_item * ff, const string & expression, int & p
 							pp.v = sign*fabs(a);
 							postfix.push(pp);
 						}
+						else if (id == "floor") {
+							double a = get_arg(p, ')');
+							pp.v = floor(a);
+							postfix.push(pp);
+						}
+						else if (id == "ceiling") {
+							double a = get_arg(p, ')');
+							pp.v = ceil(a);
+							postfix.push(pp);
+						}
 						else if (id == "round") {
 							double a = get_arg(p, ')');
 							pp.v = sign*round(a);
