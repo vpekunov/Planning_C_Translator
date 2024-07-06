@@ -3295,7 +3295,7 @@ begin
       Objects[F].Free;
   With libs Do
     For F := 0 To Count - 1 Do
-        FreeLibrary(TLibHandle(TObjectToInteger(Objects[F])));
+        FreeLibrary(TLibHandle(Objects[F]));
   inherited Destroy;
 end;
 
@@ -3359,10 +3359,10 @@ begin
                        Exit
                      end
                   Else
-                     libs.AddObject(lib, IntegerToTObject(H))
+                     libs.AddObject(lib, TObject(H))
                 end
              Else
-                H := TLibHandle(TObjectToInteger(libs.Objects[L]));
+                H := TLibHandle(libs.Objects[L]);
              proc := GetProcedureAddress(H, p);
              If TLibHandle(proc) = NilHandle Then
                 begin
@@ -3536,19 +3536,19 @@ begin
                 {$ENDIF}
               end
            Else
-              Transformers.AddObject(lib, IntegerToTObject(H))
+              Transformers.AddObject(lib, TObject(H))
          end
       Else
-         H := TLibHandle(TObjectToInteger(Transformers.Objects[L]));
+         H := TLibHandle(Transformers.Objects[L]);
       If H <> NilHandle Then
          begin
             T := GetProcedureAddress(H, fn);
             If TLibHandle(@T) = NilHandle Then
                begin
                  {$IF DEFINED(LCL) OR DEFINED(VCL)}
-                 MessageDlg('Can''t load transformer "' + fn + '"',mtWarning,[mbOk],0);
+                 MessageDlg('Can''t load transformer "' + fn + '"' + GetLoadErrorStr(),mtWarning,[mbOk],0);
                  {$ELSE}
-                 WriteLn('Can''t load transformer "' + fn + '"');
+                 WriteLn('Can''t load transformer "' + fn + '" : ' + GetLoadErrorStr());
                  {$ENDIF}
                  text := 'Error';
                end
@@ -6488,7 +6488,7 @@ function TRegExpr.MatchPrim(context: TVarValue; contextNum: Integer;
                   end
                else if varsp[no]^ in ['*', '?', '!', '^'] then
                   begin
-                    pcalls := TFastCalls(IntegerToTObject(Hex2Dec(varsp[no]+1)));
+                    pcalls := TFastCalls(Hex2Dec64(varsp[no]+1));
                     Result := False;
                     Case varsp[no]^ Of
                         '*' : Result := pcalls.Learn(db, Self, valext, valsp);

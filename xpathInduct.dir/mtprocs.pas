@@ -1,18 +1,15 @@
-{ Unit for light weight threads.
-
+{
+ **********************************************************************
   This file is part of the Free Pascal run time library.
+
+  See the file COPYING.FPC, included in this distribution,
+  for details about the license.
+ **********************************************************************
+
+  Unit for light weight threads.
 
   Copyright (C) 2008 Mattias Gaertner mattias@freepascal.org
 
-  See the file COPYING.FPC, included in this distribution,
-  for details about the copyright.
-
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-
- **********************************************************************}
-{
   Abstract:
     Light weight threads.
     This unit provides methods to easily run a procedure/method with several
@@ -23,6 +20,7 @@ unit MTProcs;
 {$mode objfpc}{$H+}
 
 {$inline on}
+{$ModeSwitch nestedprocvars}
 
 interface
 
@@ -58,6 +56,8 @@ type
     destructor Destroy; override;
     function WaitForIndexRange(StartIndex, EndIndex: PtrInt): boolean;
     function WaitForIndex(Index: PtrInt): boolean; inline;
+    procedure CalcBlock(Index, BlockSize, LoopLength: PtrInt;
+                        out BlockStart, BlockEnd: PtrInt); inline;
     property Index: PtrInt read FIndex;
     property Group: TProcThreadGroup read FGroup;
     property WaitingForIndexStart: PtrInt read FWaitingForIndexStart;
@@ -90,6 +90,8 @@ type
                         Item: TMultiThreadProcItem) of object;
   TMTProcedure = procedure(Index: PtrInt; Data: Pointer;
                            Item: TMultiThreadProcItem);
+  TMTNestedProcedure = procedure(Index: PtrInt; Data: Pointer;
+                           Item: TMultiThreadProcItem) is nested;
 
   { TProcThreadGroup
     Each task creates a new group of threads.
@@ -107,23 +109,26 @@ type
   TProcThreadGroup = class
   private
     FEndIndex: PtrInt;
-    FFirstRunningIndex: PtrInt;
-    FLastRunningIndex: PtrInt;
-    FStarterItem: TMultiThreadProcItem;
-    FMaxThreads: PtrInt;
-    FPool: TProcThreadPool;
-    FStartIndex: PtrInt;
-    FTaskData: Pointer;
-    FNext, FPrev: TProcThreadGroup;
-    FState: TMTPGroupState;
-    FTaskMethod: TMTMethod;
-    FFirstThread: TProcThread;
-    FTaskProcdure: TMTProcedure;
-    FThreadCount: PtrInt;
     FException: Exception;
+    FFirstRunningIndex: PtrInt;
+    FFirstThread: TProcThread;
+    FLastRunningIndex: PtrInt;
+    FMaxThreads: PtrInt;
+    FNext, FPrev: TProcThreadGroup;
+    FPool: TProcThreadPool;
+    FStarterItem: TMultiThreadProcItem;
+    FStartIndex: PtrInt;
+    FState: TMTPGroupState;
+    FTaskData: Pointer;
+    FTaskFrame: Pointer;
+    FTaskMethod: TMTMethod;
+    FTaskNested: TMTNestedProcedure;
+    FTaskProcedure: TMTProcedure;
+    FThreadCount: PtrInt;
     procedure AddToList(var First: TProcThreadGroup; ListType: TMTPGroupState); inline;
     procedure RemoveFromList(var First: TProcThreadGroup); inline;
     function NeedMoreThreads: boolean; inline;
+    procedure IncreaseLastRunningIndex(Item: TMultiThreadProcItem);
     procedure AddThread(AThread: TProcThread);
     procedure RemoveThread(AThread: TProcThread); inline;
     procedure Run(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem); inline;
@@ -141,13 +146,17 @@ type
     property LastRunningIndex: PtrInt read FLastRunningIndex; // last started
     property TaskData: Pointer read FTaskData;
     property TaskMethod: TMTMethod read FTaskMethod;
-    property TaskProcdure: TMTProcedure read FTaskProcdure;
+    property TaskNested: TMTNestedProcedure read FTaskNested;
+    property TaskProcedure: TMTProcedure read FTaskProcedure;
+    property TaskFrame: Pointer read FTaskFrame;
     property MaxThreads: PtrInt read FMaxThreads;
     property StarterItem: TMultiThreadProcItem read FStarterItem;
   end;
 
   { TLightWeightThreadPool
     Group 0 are the inactive threads }
+
+  { TProcThreadPool }
 
   TProcThreadPool = class
   private
@@ -163,14 +172,16 @@ type
     procedure SetMaxThreadCount(const AValue: PtrInt);
     procedure CleanTerminatedThreads;
     procedure DoParallelIntern(const AMethod: TMTMethod;
-      const AProc: TMTProcedure;
-      StartIndex, EndIndex: PtrInt;
+      const AProc: TMTProcedure; const ANested: TMTNestedProcedure;
+      const AFrame: Pointer; StartIndex, EndIndex: PtrInt;
       Data: Pointer = nil; MaxThreads: PtrInt = 0);
+  public
+    // for debugging only: the critical section is public:
+    procedure EnterPoolCriticalSection; inline;
+    procedure LeavePoolCriticalSection; inline;
   public
     constructor Create;
     destructor Destroy; override;
-    procedure EnterPoolCriticalSection; inline;
-    procedure LeavePoolCriticalSection; inline;
 
     procedure DoParallel(const AMethod: TMTMethod;
       StartIndex, EndIndex: PtrInt;
@@ -178,6 +189,18 @@ type
     procedure DoParallel(const AProc: TMTProcedure;
       StartIndex, EndIndex: PtrInt;
       Data: Pointer = nil; MaxThreads: PtrInt = 0); inline;
+    procedure DoParallelNested(const ANested: TMTNestedProcedure;
+      StartIndex, EndIndex: PtrInt;
+      Data: Pointer = nil; MaxThreads: PtrInt = 0); inline;
+
+    // experimental
+    procedure DoParallelLocalProc(const LocalProc: Pointer;
+      StartIndex, EndIndex: PtrInt;
+      Data: Pointer = nil; MaxThreads: PtrInt = 0); // do not make this inline!
+
+    // utility functions for loops:
+    procedure CalcBlockSize(LoopLength: PtrInt;
+      out BlockCount, BlockSize: PtrInt; MinBlockSize: PtrInt = 0); inline;
   public
     property MaxThreadCount: PtrInt read FMaxThreadCount write SetMaxThreadCount;
     property ThreadCount: PtrInt read FThreadCount;
@@ -185,6 +208,9 @@ type
 
 var
   ProcThreadPool: TProcThreadPool = nil;
+
+threadvar
+  CurrentThread: TThread; // TProcThread sets this, you can set this for your own TThreads descendants
 
 implementation
 
@@ -242,6 +268,15 @@ begin
   Result:=WaitForIndexRange(Index,Index);
 end;
 
+procedure TMultiThreadProcItem.CalcBlock(Index, BlockSize, LoopLength: PtrInt;
+  out BlockStart, BlockEnd: PtrInt);
+begin
+  BlockStart:=BlockSize*Index;
+  BlockEnd:=BlockStart+BlockSize;
+  if LoopLength<BlockEnd then BlockEnd:=LoopLength;
+  dec(BlockEnd);
+end;
+
 { TProcThread }
 
 procedure TProcThread.AddToList(var First: TProcThread;
@@ -273,7 +308,7 @@ begin
   try
     // remove from group
     if Item.FGroup<>nil then begin
-      // an exception occured
+      // an exception occurred
       Item.FGroup.EnterExceptionState(E);
       Item.FGroup.RemoveThread(Self);
       Item.FGroup:=nil;
@@ -311,6 +346,7 @@ var
   ok: Boolean;
   E: Exception;
 begin
+  MTProcs.CurrentThread:=Self;
   aPool:=Item.Group.Pool;
   ok:=false;
   try
@@ -326,8 +362,7 @@ begin
         // find next work
         if Group.LastRunningIndex<Group.EndIndex then begin
           // next index of group
-          inc(Group.FLastRunningIndex);
-          Item.FIndex:=Group.FLastRunningIndex;
+          Group.IncreaseLastRunningIndex(Item);
         end else begin
           // remove from group
           RemoveFromList(Group.FFirstThread,mtptlGroup);
@@ -395,17 +430,23 @@ begin
       and (FState<>mtpgsException);
 end;
 
+procedure TProcThreadGroup.IncreaseLastRunningIndex(Item: TMultiThreadProcItem);
+begin
+  inc(FLastRunningIndex);
+  Item.FIndex:=FLastRunningIndex;
+  if NeedMoreThreads then exit;
+  if FState=mtpgsNeedThreads then begin
+    RemoveFromList(Pool.FFirstGroupNeedThreads);
+    AddToList(Pool.FFirstGroupFinishing,mtpgsFinishing);
+  end;
+end;
+
 procedure TProcThreadGroup.AddThread(AThread: TProcThread);
 begin
   AThread.Item.FGroup:=Self;
   AThread.AddToList(FFirstThread,mtptlGroup);
   inc(FThreadCount);
-  inc(FLastRunningIndex);
-  AThread.Item.FIndex:=FLastRunningIndex;
-  if not NeedMoreThreads then begin
-    RemoveFromList(Pool.FFirstGroupNeedThreads);
-    AddToList(Pool.FFirstGroupFinishing,mtpgsFinishing);
-  end;
+  IncreaseLastRunningIndex(AThread.Item);
 end;
 
 procedure TProcThreadGroup.RemoveThread(AThread: TProcThread);
@@ -417,8 +458,12 @@ end;
 procedure TProcThreadGroup.Run(Index: PtrInt; Data: Pointer;
   Item: TMultiThreadProcItem); inline;
 begin
-  if Assigned(FTaskProcdure) then
-    FTaskProcdure(Index,Data,Item)
+  if Assigned(FTaskFrame) then
+    CallLocalProc(FTaskProcedure,FTaskFrame,Index,Data,Item)
+  else if Assigned(FTaskProcedure) then
+    FTaskProcedure(Index,Data,Item)
+  else if Assigned(FTaskNested) then
+    FTaskNested(Index,Data,Item)
   else
     FTaskMethod(Index,Data,Item);
 end;
@@ -638,22 +683,57 @@ procedure TProcThreadPool.DoParallel(const AMethod: TMTMethod;
   StartIndex, EndIndex: PtrInt; Data: Pointer; MaxThreads: PtrInt);
 begin
   if not Assigned(AMethod) then exit;
-  DoParallelIntern(AMethod,nil,StartIndex,EndIndex,Data,MaxThreads);
+  DoParallelIntern(AMethod,nil,nil,nil,StartIndex,EndIndex,Data,MaxThreads);
 end;
 
 procedure TProcThreadPool.DoParallel(const AProc: TMTProcedure;
   StartIndex, EndIndex: PtrInt; Data: Pointer; MaxThreads: PtrInt);
 begin
   if not Assigned(AProc) then exit;
-  DoParallelIntern(nil,AProc,StartIndex,EndIndex,Data,MaxThreads);
+  DoParallelIntern(nil,AProc,nil,nil,StartIndex,EndIndex,Data,MaxThreads);
+end;
+
+procedure TProcThreadPool.DoParallelNested(const ANested: TMTNestedProcedure;
+  StartIndex, EndIndex: PtrInt; Data: Pointer; MaxThreads: PtrInt);
+begin
+  if not Assigned(ANested) then exit;
+  DoParallelIntern(nil,nil,ANested,nil,StartIndex,EndIndex,Data,MaxThreads);
+end;
+
+procedure TProcThreadPool.DoParallelLocalProc(const LocalProc: Pointer;
+  StartIndex, EndIndex: PtrInt; Data: Pointer; MaxThreads: PtrInt);
+var
+  Frame: Pointer;
+begin
+  if not Assigned(LocalProc) then exit;
+  Frame:=get_caller_frame(get_frame);
+  DoParallelIntern(nil,TMTProcedure(LocalProc),nil,Frame,StartIndex,EndIndex,
+                   Data,MaxThreads);
+end;
+
+procedure TProcThreadPool.CalcBlockSize(LoopLength: PtrInt; out BlockCount,
+  BlockSize: PtrInt; MinBlockSize: PtrInt);
+begin
+  if LoopLength<=0 then begin
+    BlockCount:=0;
+    BlockSize:=1;
+    exit;
+  end;
+  // split work into equally sized blocks
+  BlockCount:=ProcThreadPool.MaxThreadCount;
+  BlockSize:=(LoopLength div BlockCount);
+  if (BlockSize<MinBlockSize) then BlockSize:=MinBlockSize;
+  if BlockSize<1 then BlockSize:=1;
+  BlockCount:=((LoopLength-1) div BlockSize)+1;
 end;
 
 procedure TProcThreadPool.DoParallelIntern(const AMethod: TMTMethod;
-  const AProc: TMTProcedure;
-  StartIndex, EndIndex: PtrInt; Data: Pointer; MaxThreads: PtrInt);
+  const AProc: TMTProcedure; const ANested: TMTNestedProcedure;
+  const AFrame: Pointer; StartIndex, EndIndex: PtrInt; Data: Pointer;
+  MaxThreads: PtrInt);
 var
   Group: TProcThreadGroup;
-  i: PtrInt;
+  Index: PtrInt;
   AThread: TProcThread;
   NewThread: Boolean;
   Item: TMultiThreadProcItem;
@@ -668,9 +748,16 @@ begin
     // single threaded
     Item:=TMultiThreadProcItem.Create;
     try
-      for i:=StartIndex to EndIndex do begin
-        Item.FIndex:=i;
-        AMethod(i,Data,Item);
+      for Index:=StartIndex to EndIndex do begin
+        Item.FIndex:=Index;
+        if Assigned(AFrame) then
+          CallLocalProc(AProc,AFrame,Index,Data,Item)
+        else if Assigned(AProc) then
+          AProc(Index,Data,Item)
+        else if Assigned(AMethod) then
+          AMethod(Index,Data,Item)
+        else
+          ANested(Index,Data,Item);
       end;
     finally
       Item.Free;
@@ -683,7 +770,9 @@ begin
   Group.FPool:=Self;
   Group.FTaskData:=Data;
   Group.FTaskMethod:=AMethod;
-  Group.FTaskProcdure:=AProc;
+  Group.FTaskProcedure:=AProc;
+  Group.FTaskNested:=ANested;
+  Group.FTaskFrame:=AFrame;
   Group.FStartIndex:=StartIndex;
   Group.FEndIndex:=EndIndex;
   Group.FFirstRunningIndex:=StartIndex;
@@ -718,7 +807,7 @@ begin
         AThread.AddToList(FFirstActiveThread,mtptlPool);
         AThread.Item.FState:=mtptsActive;
         if NewThread then
-          AThread.Resume
+          AThread.Start
         else
           RTLeventSetEvent(AThread.Item.fWaitForPool);
       end;
@@ -727,25 +816,25 @@ begin
     end;
 
     // run until no more Index left
-    i:=StartIndex;
+    Index:=StartIndex;
     repeat
-      Group.FStarterItem.FIndex:=i;
-      Group.Run(i,Data,Group.FStarterItem);
+      Group.FStarterItem.FIndex:=Index;
+      Group.Run(Index,Data,Group.FStarterItem);
 
       EnterPoolCriticalSection;
       try
-        Group.IndexComplete(i);
+        Group.IndexComplete(Index);
         if (Group.FLastRunningIndex<Group.EndIndex) and (Group.FState<>mtpgsException)
         then begin
           inc(Group.FLastRunningIndex);
-          i:=Group.FLastRunningIndex;
+          Index:=Group.FLastRunningIndex;
         end else begin
-          i:=StartIndex;
+          Index:=StartIndex;
         end;
       finally
         LeavePoolCriticalSection;
       end;
-    until i=StartIndex;
+    until Index=StartIndex;
   finally
     // wait for Group to finish
     if Group.FFirstThread<>nil then begin
@@ -762,11 +851,11 @@ begin
         LeavePoolCriticalSection;
       end;
       // waiting with exponential spin lock
-      i:=0;
+      Index:=0;
       while Group.FFirstThread<>nil do begin
-        sleep(i);
-        i:=i*2+1;
-        if i>30 then i:=30;
+        sleep(Index);
+        Index:=Index*2+1;
+        if Index>30 then Index:=30;
       end;
     end;
     // remove group from pool
@@ -784,13 +873,14 @@ begin
     // free terminated threads (terminated, because of exceptions)
     CleanTerminatedThreads;
   end;
-  // if the exception occured in a helper thread raise it now
+  // if the exception occurred in a helper thread raise it now
   if HelperThreadException<>nil then
     raise HelperThreadException;
 end;
 
 initialization
   ProcThreadPool:=TProcThreadPool.Create;
+  CurrentThread:=nil;
 
 finalization
   ProcThreadPool.Free;

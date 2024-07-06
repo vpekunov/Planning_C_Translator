@@ -1,8 +1,6 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <string.h>
-#include <wchar.h>
-#include <stdio.h>
 
 #if defined(__GNUC__)
 //  GCC
@@ -43,22 +41,20 @@ void wfree(wchar_t * _Arg, short int * Arg) {
 extern "C" {
 
 	// Функция удаления начальных пробелов, табуляций и переводов строки из S
-	int stripLeading(wchar_t * S) {
+	void stripLeading(wchar_t * S) {
 		int i = 0; // Счетчик входных символов
 		int j = 0; // Счетчик выходных символов
 		// Пропускаем пробелы/табуляции/переводы строк
 		while (S[i] == ' ' || S[i] == '\t' || S[i] == '\n' || S[i] == '\r')
 			i++;
 		if (i == 0) // Если ничего не пропускаем, то выходим
-			return 0;
-		int result = i;
+			return;
 		while (S[i] != 0) { // Пока не дошли до конечного нулевого символа
 			S[j] = S[i]; // Копируем символ биже к началу
 			i++;
 			j++;
 		}
 		S[j] = 0; // Закрываем строку нулевым символом
-		return result;
 	}
 
 	enum { qtNone = 0, qtSingle, qtDouble }; // Константы режима чтения строки (обычный, строка в апострофах, строка в кавычках )
@@ -145,7 +141,7 @@ extern "C" {
 	*/
 	wchar_t * getBalancedItem(wchar_t * S, wchar_t ** lines, int nL, int * nline, wchar_t * terms,
 		int & count, bool use_triang = false) {
-		wchar_t * result = new wchar_t[10*65536]; // Результат
+		wchar_t * result = new wchar_t[65536]; // Результат
 
 		int K; // Текущая длина строки в буфере
 		int i;
@@ -192,37 +188,6 @@ extern "C" {
 		wfree(Args1, Args[1]);
 
 		return count + 1 == L;
-	}
-
-	EXPORT bool getBAL(int N, short int * Map, short int ** Args) {
-		if (N < 3 || Map[0] || Map[1])
-			return false;
-
-		wchar_t * Args0 = walloc(Args[0]);
-		wchar_t * Args1 = walloc(Args[1]);
-		wchar_t _Args2[40];
-		wchar_t * Args2 = _Args2;
-
-		stripLeading(Args0); // Удаляем начальные пробелы, если они есть
-
-		int L = wcslen(Args0);
-
-		int NN = 0;
-		int count = 0;
-
-		delete[] getBalancedItem(Args0, &Args0, 1, &NN, Args1, count);
-
-#if defined(__GNUC__)
-		swprintf(Args2, 40, L"%i", (count+1)-L);
-#else
-		swprintf(Args2, L"%i", (count+1)-L);
-#endif
-		wfree(Args0, Args[0]);
-		wfree(Args1, Args[1]);
-		short int * dest = Args[2];
-		while (*dest++ = *Args2++);
-
-		return true;
 	}
 
 	EXPORT bool TBAL(int N, short int * Map, short int ** Args) {

@@ -289,7 +289,7 @@ begin
   SetMultiByteConversionCodePage(CP_UTF8);
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);
 
-  Grammer := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./liblink-grammar.'{$ELSE}'link-grammar-x86.'{$ENDIF} + SharedSuffix);
+  Grammer := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./liblink-grammar.'{$ELSE}'link-grammar-x64.'{$ENDIF} + SharedSuffix);
   If Grammer <> NilHandle Then
      Begin
        parse_options_create := GetProcedureAddress(Grammer, 'parse_options_create');

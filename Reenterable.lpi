@@ -5,6 +5,9 @@
     <PathDelim Value="\"/>
     <General>
       <Flags>
+        <MainUnitHasCreateFormStatements Value="False"/>
+        <MainUnitHasTitleStatement Value="False"/>
+        <MainUnitHasScaledStatement Value="False"/>
         <LRSInOutputDirectory Value="False"/>
         <CompatibilityMode Value="True"/>
       </Flags>
@@ -21,26 +24,26 @@
     </PublishOptions>
     <RunParams>
       <local>
-        <CommandLineParams Value="-force-use-mem -nosourcelines reent_reentera_clust_complex_chain.cpp reent1.cpp"/>
+        <CommandLineParams Value="-force-use-mem -nosourcelines reent_russian_transform.cpp reent1.cpp"/>
         <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T &apos;Lazarus Run Output&apos; -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
       </local>
       <FormatVersion Value="2"/>
       <Modes Count="1">
         <Mode0 Name="default">
           <local>
-            <CommandLineParams Value="-force-use-mem -nosourcelines reent_reentera_clust_complex_chain.cpp reent1.cpp"/>
+            <CommandLineParams Value="-force-use-mem -nosourcelines reent_russian_transform.cpp reent1.cpp"/>
             <LaunchingApplication PathPlusParams="/usr/X11R6/bin/xterm -T &apos;Lazarus Run Output&apos; -e $(LazarusDir)/tools/runwait.sh $(TargetCmdLine)"/>
           </local>
         </Mode0>
       </Modes>
     </RunParams>
-    <Units Count="20">
+    <Units Count="22">
       <Unit0>
         <Filename Value="Reenterable.lpr"/>
         <IsPartOfProject Value="True"/>
         <WindowIndex Value="1"/>
         <TopLine Value="2976"/>
-        <CursorPos X="172" Y="3010"/>
+        <CursorPos X="72" Y="3010"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit0>
@@ -48,9 +51,9 @@
         <Filename Value="LEXIQUE.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Lexique"/>
-        <EditorIndex Value="12"/>
+        <EditorIndex Value="14"/>
         <WindowIndex Value="1"/>
-        <CursorPos X="33" Y="135"/>
+        <CursorPos Y="135"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
       </Unit1>
@@ -58,7 +61,7 @@
         <Filename Value="EVALUAT.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Evaluat"/>
-        <EditorIndex Value="11"/>
+        <EditorIndex Value="13"/>
         <WindowIndex Value="1"/>
         <TopLine Value="415"/>
         <CursorPos X="6" Y="422"/>
@@ -77,7 +80,7 @@
         <Filename Value="TOPO.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Topo"/>
-        <EditorIndex Value="10"/>
+        <EditorIndex Value="12"/>
         <WindowIndex Value="1"/>
         <TopLine Value="671"/>
         <CursorPos X="23" Y="654"/>
@@ -90,8 +93,8 @@
         <UnitName Value="Common"/>
         <EditorIndex Value="6"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="533"/>
-        <CursorPos Y="550"/>
+        <TopLine Value="245"/>
+        <CursorPos Y="251"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit5>
@@ -99,9 +102,9 @@
         <Filename Value="PROLOG.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Prolog"/>
-        <EditorIndex Value="9"/>
+        <EditorIndex Value="11"/>
         <WindowIndex Value="1"/>
-        <CursorPos X="7" Y="9"/>
+        <CursorPos Y="9"/>
         <UsageCount Value="200"/>
         <Loaded Value="True"/>
       </Unit6>
@@ -133,7 +136,7 @@
         <Filename Value="LISTS.PAS"/>
         <EditorIndex Value="3"/>
         <WindowIndex Value="1"/>
-        <CursorPos X="32" Y="9"/>
+        <CursorPos X="20" Y="9"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit9>
@@ -181,7 +184,7 @@
         <EditorIndex Value="7"/>
         <WindowIndex Value="1"/>
         <TopLine Value="4077"/>
-        <CursorPos X="41" Y="4083"/>
+        <CursorPos Y="4083"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit14>
@@ -191,8 +194,8 @@
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="8"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="3581"/>
-        <CursorPos X="47" Y="3590"/>
+        <TopLine Value="3585"/>
+        <CursorPos X="86" Y="3532"/>
         <UsageCount Value="100"/>
         <Loaded Value="True"/>
       </Unit15>
@@ -228,130 +231,153 @@
         <CursorPos X="28" Y="187"/>
         <UsageCount Value="4"/>
       </Unit19>
+      <Unit20>
+        <Filename Value="C:\lazarus64\fpc\3.2.2\source\rtl\inc\systemh.inc"/>
+        <EditorIndex Value="10"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="1195"/>
+        <CursorPos X="11" Y="1204"/>
+        <UsageCount Value="10"/>
+        <Loaded Value="True"/>
+      </Unit20>
+      <Unit21>
+        <Filename Value="C:\lazarus64\fpc\3.2.2\source\packages\rtl-objpas\src\inc\strutils.pp"/>
+        <UnitName Value="StrUtils"/>
+        <EditorIndex Value="9"/>
+        <WindowIndex Value="1"/>
+        <TopLine Value="210"/>
+        <CursorPos X="10" Y="219"/>
+        <UsageCount Value="10"/>
+        <Loaded Value="True"/>
+      </Unit21>
     </Units>
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1344" Column="21" TopLine="1335"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="6491" Column="53" TopLine="6475"/>
       </Position1>
       <Position2>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1572" Column="27" TopLine="1560"/>
+        <Filename Value="regexpr.pas"/>
       </Position2>
       <Position3>
-        <Filename Value="Reenterable.lpr"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="1672" Column="11" TopLine="1656"/>
       </Position3>
       <Position4>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2723" Column="85" TopLine="2687"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="1675" Column="10" TopLine="1659"/>
       </Position4>
       <Position5>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2938" Column="162" TopLine="2918"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="1676" Column="8" TopLine="1660"/>
       </Position5>
       <Position6>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2937" Column="162" TopLine="2918"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2033" Column="39" TopLine="2017"/>
       </Position6>
       <Position7>
-        <Filename Value="Reenterable.lpr"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2048" Column="39" TopLine="2032"/>
       </Position7>
       <Position8>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1133" Column="94" TopLine="1101"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2113" Column="39" TopLine="2097"/>
       </Position8>
       <Position9>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1229" Column="37" TopLine="1197"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="2122" Column="39" TopLine="2106"/>
       </Position9>
       <Position10>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1254" Column="20" TopLine="1221"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="3868" Column="55" TopLine="3852"/>
       </Position10>
       <Position11>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1303" Column="33" TopLine="1271"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="3871" Column="64" TopLine="3855"/>
       </Position11>
       <Position12>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1474" Column="48" TopLine="1441"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="3872" Column="65" TopLine="3856"/>
       </Position12>
       <Position13>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1522" Column="61" TopLine="1489"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="4992" Column="33" TopLine="4984"/>
       </Position13>
       <Position14>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1808" Column="35" TopLine="1775"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5355" Column="14" TopLine="5339"/>
       </Position14>
       <Position15>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="1870" Column="79" TopLine="1837"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5361" Column="22" TopLine="5345"/>
       </Position15>
       <Position16>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2625" Column="75" TopLine="2592"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5495" Column="27" TopLine="5479"/>
       </Position16>
       <Position17>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="3009" Column="172" TopLine="2976"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5499" Column="25" TopLine="5483"/>
       </Position17>
       <Position18>
-        <Filename Value="Reenterable.lpr"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5506" Column="29" TopLine="5491"/>
       </Position18>
       <Position19>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2923" Column="132" TopLine="2890"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5512" Column="30" TopLine="5497"/>
       </Position19>
       <Position20>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2926" Column="131" TopLine="2893"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5515" Column="60" TopLine="5500"/>
       </Position20>
       <Position21>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2938" Column="172" TopLine="2905"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5516" Column="52" TopLine="5501"/>
       </Position21>
       <Position22>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2943" Column="96" TopLine="2910"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5522" Column="32" TopLine="5507"/>
       </Position22>
       <Position23>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2946" Column="76" TopLine="2913"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5523" Column="48" TopLine="5508"/>
       </Position23>
       <Position24>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2972" Column="86" TopLine="2939"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5526" Column="28" TopLine="5511"/>
       </Position24>
       <Position25>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2973" Column="69" TopLine="2940"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5529" Column="56" TopLine="5514"/>
       </Position25>
       <Position26>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2980" Column="85" TopLine="2947"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5530" Column="48" TopLine="5515"/>
       </Position26>
       <Position27>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2981" Column="68" TopLine="2948"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="6491" Column="45" TopLine="6475"/>
       </Position27>
       <Position28>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2987" Column="172" TopLine="2954"/>
+        <Filename Value="regexpr.pas"/>
       </Position28>
       <Position29>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2994" Column="135" TopLine="2961"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="5000" Column="36" TopLine="4982"/>
       </Position29>
       <Position30>
-        <Filename Value="Reenterable.lpr"/>
-        <Caret Line="2997" Column="131" TopLine="2964"/>
+        <Filename Value="regexpr.pas"/>
+        <Caret Line="6490" Column="44" TopLine="6481"/>
       </Position30>
     </JumpHistory>
   </ProjectOptions>
   <CompilerOptions>
     <Version Value="11"/>
     <PathDelim Value="\"/>
+    <CodeGeneration>
+      <TargetCPU Value="x86_64"/>
+    </CodeGeneration>
     <Linking>
       <Debugging>
         <DebugInfoType Value="dsDwarf3"/>
