@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <string.h>
+#include <stdio.h>
 
 #if defined(__GNUC__)
 //  GCC
@@ -141,7 +142,7 @@ extern "C" {
 	*/
 	wchar_t * getBalancedItem(wchar_t * S, wchar_t ** lines, int nL, int * nline, wchar_t * terms,
 		int & count, bool use_triang = false) {
-		wchar_t * result = new wchar_t[65536]; // Результат
+		wchar_t * result = new wchar_t[10*65536]; // Результат
 
 		int K; // Текущая длина строки в буфере
 		int i;
@@ -210,6 +211,37 @@ extern "C" {
 		wfree(Args1, Args[1]);
 
 		return count + 1 == L;
+	}
+
+	EXPORT bool getBAL(int N, short int * Map, short int ** Args) {
+		if (N < 3 || Map[0] || Map[1])
+			return false;
+
+		wchar_t * Args0 = walloc(Args[0]);
+		wchar_t * Args1 = walloc(Args[1]);
+		short int _Args2[20] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
+		wchar_t * Args2 = (wchar_t *) _Args2;
+
+		stripLeading(Args0); // Удаляем начальные пробелы, если они есть
+
+		int L = wcslen(Args0);
+
+		int NN = 0;
+		int count = 0;
+
+		delete[] getBalancedItem(Args0, &Args0, 1, &NN, Args1, count);
+
+#if defined(__GNUC__)
+		swprintf(Args2, 15, L"%i", (count+1)-L);
+#else
+		swprintf(Args2, L"%i", (count+1)-L);
+#endif
+		wfree(Args0, Args[0]);
+		wfree(Args1, Args[1]);
+		wchar_t * dest = (wchar_t *)Args[2];
+		while (*dest++ = *Args2++);
+
+		return true;
 	}
 
 	EXPORT bool set(int N, short int * Map, short int ** Args) {
