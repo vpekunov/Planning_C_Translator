@@ -39,6 +39,20 @@ void wfree(wchar_t * _Arg, short int * Arg) {
 }
 #endif
 
+
+long _wcslen(wchar_t * Arg) {
+    wchar_t * End = Arg;
+    while (*End++);
+    return End - Arg - 1;
+}
+
+void _swprintf(wchar_t * Dest, char * fmt, int val) {
+    char buf[30];
+    char * ptr = (char *)buf;
+    sprintf(ptr, fmt, val);
+    while (*Dest++ = *ptr++);
+}
+
 extern "C" {
 
 	// Функция удаления начальных пробелов, табуляций и переводов строки из S
@@ -71,7 +85,7 @@ extern "C" {
 			(*nline)++;
 			wcscat(S, L"\n");
 			wcscat(S, lines[*nline]);
-			*K = wcslen(S);
+			*K = _wcslen(S);
 		}
 	}
 
@@ -89,13 +103,14 @@ extern "C" {
 		wchar_t _quote = qtNone; // Сначала обычный режим чтения
 		int result = 1;
 
-		if (wcslen(S) == 0) { // Если входная строка пуста
+		if (_wcslen(S) == 0) { // Если входная строка пуста
 			inc_count(S, lines, nL, nline, count, K); // то дочитываем в нее еще одну строку,
 			// увеличивая счетчик *count на единицу
 			(*count)--; // Возвращаем счетчик *count на место -- на 1 символ назад.
 		}
 		while (*count < *K && result && (_quote != qtNone || wcschr(before, S[*count]) == NULL)) {
 			wchar_t C = S[*count];
+
 			if (_quote != qtNone && C == '\\') { // Пропускаем экранируемый символ в строке
 				inc_count(S, lines, nL, nline, count, K); // передвигаемся к следующему символу
 			}
@@ -149,13 +164,14 @@ extern "C" {
 
 		wcscpy(result, L"");
 
-		if (wcslen(S) == 0) { // Если входная строка пуста
+		if (_wcslen(S) == 0) { // Если входная строка пуста
 			inc_count(S, lines, nL, nline, &count, &K); // то дочитываем в нее еще одну строку,
 			// увеличивая счетчик count на единицу
 			count--; // Возвращаем счетчик count на место -- на 1 символ назад.
 		}
 
-		K = wcslen(S);
+		K = _wcslen(S);
+
 		trace(&count, &K, terms, S, lines, nL, nline, use_triang);
 		// Копируем первые count-1 символов в результат
 		for (i = 0; i < count; i++)
@@ -172,13 +188,12 @@ extern "C" {
 	EXPORT bool BAL(int N, short int * Map, short int ** Args) {
 		if (N < 2 || Map[0] || Map[1])
 			return false;
-
 		wchar_t * Args0 = walloc(Args[0]);
 		wchar_t * Args1 = walloc(Args[1]);
 
 		stripLeading(Args0); // Удаляем начальные пробелы, если они есть
 
-		int L = wcslen(Args0);
+		int L = _wcslen(Args0);
 
 		int NN = 0;
 		int count = 0;
@@ -200,7 +215,7 @@ extern "C" {
 
 		stripLeading(Args0); // Удаляем начальные пробелы, если они есть
 
-		int L = wcslen(Args0);
+		int L = _wcslen(Args0);
 
 		int NN = 0;
 		int count = 0;
@@ -219,23 +234,20 @@ extern "C" {
 
 		wchar_t * Args0 = walloc(Args[0]);
 		wchar_t * Args1 = walloc(Args[1]);
-		short int _Args2[20] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19 };
+		short int _Args2[50] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25 };
 		wchar_t * Args2 = (wchar_t *) _Args2;
 
 		stripLeading(Args0); // Удаляем начальные пробелы, если они есть
 
-		int L = wcslen(Args0);
+		int L = _wcslen(Args0);
 
 		int NN = 0;
 		int count = 0;
 
 		delete[] getBalancedItem(Args0, &Args0, 1, &NN, Args1, count);
 
-#if defined(__GNUC__)
-		swprintf(Args2, 15, L"%i", (count+1)-L);
-#else
-		swprintf(Args2, L"%i", (count+1)-L);
-#endif
+		_swprintf(Args2, "%i", (count+1)-L);
+
 		wfree(Args0, Args[0]);
 		wfree(Args1, Args[1]);
 		wchar_t * dest = (wchar_t *)Args[2];

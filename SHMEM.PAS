@@ -2065,19 +2065,20 @@ Const Tunnels_Vars_Sems: PChar =
 '	  cfunneled_predictor_out(const char * Name, int N = 1, int P = 5, double rel_eps = 0.001) : cfunneled_out<Type>(Name) {'+CRLF+
 '	  }'+CRLF+
 '  };'+CRLF+
+' static constexpr MPI_Datatype MPI_TYPES[12] = { MPI_CHAR, MPI_CHAR, MPI_SHORT, MPI_INT, MPI_LONG, MPI_FLOAT, MPI_DOUBLE, MPI_UNSIGNED_SHORT, MPI_UNSIGNED, MPI_UNSIGNED_LONG, MPI_LONG_DOUBLE, MPI_LONG_LONG_INT };'+CRLF+
 ' template<class T> struct MPI_Types { };'+CRLF+
-' template<> struct MPI_Types<unsigned char> { static const MPI_Datatype val = MPI_BYTE; };'+CRLF+
-' template<> struct MPI_Types<char> { static const MPI_Datatype val = MPI_CHAR; };'+CRLF+
-' template<> struct MPI_Types<short> { static const MPI_Datatype val = MPI_SHORT; };'+CRLF+
-' template<> struct MPI_Types<int> { static const MPI_Datatype val = MPI_INT; };'+CRLF+
-' template<> struct MPI_Types<long> { static const MPI_Datatype val = MPI_LONG; };'+CRLF+
-' template<> struct MPI_Types<float> { static const MPI_Datatype val = MPI_FLOAT; };'+CRLF+
-' template<> struct MPI_Types<double> { static const MPI_Datatype val = MPI_DOUBLE; };'+CRLF+
-' template<> struct MPI_Types<unsigned short> { static const MPI_Datatype val = MPI_UNSIGNED_SHORT; };'+CRLF+
-' template<> struct MPI_Types<unsigned int> { static const MPI_Datatype val = MPI_UNSIGNED; };'+CRLF+
-' template<> struct MPI_Types<unsigned long> { static const MPI_Datatype val = MPI_UNSIGNED_LONG; };'+CRLF+
-' template<> struct MPI_Types<long double> { static const MPI_Datatype val = MPI_LONG_DOUBLE; };'+CRLF+
-' template<> struct MPI_Types<long long> { static const MPI_Datatype val = MPI_LONG_LONG_INT; };'+CRLF+
+' template<> struct MPI_Types<unsigned char> { static constexpr MPI_Datatype val = MPI_TYPES[0]; };'+CRLF+
+' template<> struct MPI_Types<char> { static constexpr MPI_Datatype val = MPI_TYPES[1]; };'+CRLF+
+' template<> struct MPI_Types<short> { static constexpr MPI_Datatype val = MPI_TYPES[2]; };'+CRLF+
+' template<> struct MPI_Types<int> { static constexpr MPI_Datatype val = MPI_TYPES[3]; };'+CRLF+
+' template<> struct MPI_Types<long> { static constexpr MPI_Datatype val = MPI_TYPES[4]; };'+CRLF+
+' template<> struct MPI_Types<float> { static constexpr MPI_Datatype val = MPI_TYPES[5]; };'+CRLF+
+' template<> struct MPI_Types<double> { static constexpr MPI_Datatype val = MPI_TYPES[6]; };'+CRLF+
+' template<> struct MPI_Types<unsigned short> { static constexpr MPI_Datatype val = MPI_TYPES[7]; };'+CRLF+
+' template<> struct MPI_Types<unsigned int> { static constexpr MPI_Datatype val = MPI_TYPES[8]; };'+CRLF+
+' template<> struct MPI_Types<unsigned long> { static constexpr MPI_Datatype val = MPI_TYPES[9]; };'+CRLF+
+' template<> struct MPI_Types<long double> { static constexpr MPI_Datatype val = MPI_TYPES[10]; };'+CRLF+
+' template<> struct MPI_Types<long long> { static constexpr MPI_Datatype val = MPI_TYPES[11]; };'+CRLF+
 ' template<class Type>'+CRLF+
 '  class common_var {'+CRLF+
 '    protected:'+CRLF+

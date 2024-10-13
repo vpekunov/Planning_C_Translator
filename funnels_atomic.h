@@ -2083,19 +2083,20 @@ template<class Type>
 	  cfunneled_predictor_out(const char * Name, int N = 1, int P = 5, double rel_eps = 0.001) : cfunneled_out<Type>(Name) {
 	  }
   };
+ static constexpr MPI_Datatype MPI_TYPES[12] = { MPI_CHAR, MPI_CHAR, MPI_SHORT, MPI_INT, MPI_LONG, MPI_FLOAT, MPI_DOUBLE, MPI_UNSIGNED_SHORT, MPI_UNSIGNED, MPI_UNSIGNED_LONG, MPI_LONG_DOUBLE, MPI_LONG_LONG_INT };
  template<class T> struct MPI_Types { };
- template<> struct MPI_Types<unsigned char> { static const MPI_Datatype val = MPI_BYTE; };
- template<> struct MPI_Types<char> { static const MPI_Datatype val = MPI_CHAR; };
- template<> struct MPI_Types<short> { static const MPI_Datatype val = MPI_SHORT; };
- template<> struct MPI_Types<int> { static const MPI_Datatype val = MPI_INT; };
- template<> struct MPI_Types<long> { static const MPI_Datatype val = MPI_LONG; };
- template<> struct MPI_Types<float> { static const MPI_Datatype val = MPI_FLOAT; };
- template<> struct MPI_Types<double> { static const MPI_Datatype val = MPI_DOUBLE; };
- template<> struct MPI_Types<unsigned short> { static const MPI_Datatype val = MPI_UNSIGNED_SHORT; };
- template<> struct MPI_Types<unsigned int> { static const MPI_Datatype val = MPI_UNSIGNED; };
- template<> struct MPI_Types<unsigned long> { static const MPI_Datatype val = MPI_UNSIGNED_LONG; };
- template<> struct MPI_Types<long double> { static const MPI_Datatype val = MPI_LONG_DOUBLE; };
- template<> struct MPI_Types<long long> { static const MPI_Datatype val = MPI_LONG_LONG_INT; };
+ template<> struct MPI_Types<unsigned char> { static constexpr MPI_Datatype val = MPI_TYPES[0]; };
+ template<> struct MPI_Types<char> { static constexpr MPI_Datatype val = MPI_TYPES[1]; };
+ template<> struct MPI_Types<short> { static constexpr MPI_Datatype val = MPI_TYPES[2]; };
+ template<> struct MPI_Types<int> { static constexpr MPI_Datatype val = MPI_TYPES[3]; };
+ template<> struct MPI_Types<long> { static constexpr MPI_Datatype val = MPI_TYPES[4]; };
+ template<> struct MPI_Types<float> { static constexpr MPI_Datatype val = MPI_TYPES[5]; };
+ template<> struct MPI_Types<double> { static constexpr MPI_Datatype val = MPI_TYPES[6]; };
+ template<> struct MPI_Types<unsigned short> { static constexpr MPI_Datatype val = MPI_TYPES[7]; };
+ template<> struct MPI_Types<unsigned int> { static constexpr MPI_Datatype val = MPI_TYPES[8]; };
+ template<> struct MPI_Types<unsigned long> { static constexpr MPI_Datatype val = MPI_TYPES[9]; };
+ template<> struct MPI_Types<long double> { static constexpr MPI_Datatype val = MPI_TYPES[10]; };
+ template<> struct MPI_Types<long long> { static constexpr MPI_Datatype val = MPI_TYPES[11]; };
  template<class Type>
   class common_var {
     protected:
