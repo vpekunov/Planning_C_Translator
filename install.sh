@@ -8,7 +8,7 @@ cp ./libGrammar.so ../
 cd ..
 cd ./link-grammar-5.3.0
 unzip ./link-grammar-5.3.0.zip
-sudo sh ./configure CPPFLAGS="-I$PWD" CFLAGS="-I$PWD"
+sudo sh ./configure CPPFLAGS="-I$PWD -fshort-wchar" CFLAGS="-I$PWD -fshort-wchar"
 sudo make
 sudo make install
 sudo ldconfig

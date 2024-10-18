@@ -46,6 +46,12 @@ long _wcslen(wchar_t * Arg) {
     return End - Arg - 1;
 }
 
+wchar_t * _wcschr(wchar_t * Str, wchar_t C) {
+    while (*Str && *Str != C)
+        Str++;
+    return *Str == C ? Str : NULL;
+}
+
 void _swprintf(wchar_t * Dest, char * fmt, int val) {
     char buf[30];
     char * ptr = (char *)buf;
@@ -108,7 +114,7 @@ extern "C" {
 			// увеличивая счетчик *count на единицу
 			(*count)--; // Возвращаем счетчик *count на место -- на 1 символ назад.
 		}
-		while (*count < *K && result && (_quote != qtNone || wcschr(before, S[*count]) == NULL)) {
+		while (*count < *K && result && (_quote != qtNone || _wcschr(before, S[*count]) == NULL)) {
 			wchar_t C = S[*count];
 
 			if (_quote != qtNone && C == '\\') { // Пропускаем экранируемый символ в строке
@@ -136,7 +142,7 @@ extern "C" {
 					break;
 				}
 			}
-			else if (_quote == qtNone && (C == ')' || C == ']' || C == '}' || use_triang && C == '>') && wcschr(before, C) == NULL)
+			else if (_quote == qtNone && (C == ')' || C == ']' || C == '}' || use_triang && C == '>') && _wcschr(before, C) == NULL)
 				// Если мы не посередине строки в апострофах/кавычках и незапланированно встретили закрывающую скобку
 				result = 0; // то это ошибка.
 
@@ -144,7 +150,7 @@ extern "C" {
 				inc_count(S, lines, nL, nline, count, K); // то передвигаемся к следующему символу
 		}
 		// Проверяем, дошли ли мы до завершающего символа из строки before.
-		result = result && *count < *K && wcschr(before, S[*count]) != NULL;
+		result = result && *count < *K && _wcschr(before, S[*count]) != NULL;
 		return result;
 	}
 
