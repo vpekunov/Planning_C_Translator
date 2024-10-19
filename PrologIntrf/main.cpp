@@ -60,7 +60,7 @@ extern "C" {
 		mem_block_size -= mem_block_size % 1024;
 
 		_prolog = new interpreter("", "");
-		std::cout << "Prolog MicroBrain by V.V.Pekunov V0.21beta" << endl;
+		std::cout << "Prolog MicroBrain by V.V.Pekunov V0.23beta" << endl;
 
 		vector<string> renew;
 		string body;
@@ -78,7 +78,7 @@ extern "C" {
 
 		bypass_spaces(body, p);
 		while (p < body.length()) {
-			_prolog->parse_clause(renew, f, body, p);
+			_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p);
 			bypass_spaces(body, p);
 		}
 		_prolog->bind();
@@ -128,19 +128,20 @@ extern "C" {
 		_prolog->current_input = STD_INPUT;
 		_prolog->ins = &cin;
 
-		_prolog->CALLS.resize(0);
-		_prolog->FRAMES.resize(0);
-		_prolog->NEGS.resize(0);
-		_prolog->_FLAGS.resize(0);
-		_prolog->PARENT_CALLS.resize(0);
-		_prolog->PARENT_CALL_VARIANT.resize(0);
-		_prolog->CLAUSES.resize(0);
+		_prolog->CONTEXT->CALLS.resize(0);
+		_prolog->CONTEXT->FRAMES.resize(0);
+		_prolog->CONTEXT->NEGS.resize(0);
+		_prolog->CONTEXT->_FLAGS.resize(0);
+		_prolog->CONTEXT->PARENT_CALLS.resize(0);
+		_prolog->CONTEXT->PARENT_CALL_VARIANT.resize(0);
+		_prolog->CONTEXT->CLAUSES.resize(0);
 		// FLAGS;
-		_prolog->LEVELS.resize(0);
-		_prolog->TRACE.resize(0);
-		_prolog->TRACEARGS.resize(0);
-		_prolog->TRACERS.resize(0);
-		_prolog->ptrTRACE.resize(0);
+		_prolog->CONTEXT->LEVELS.resize(0);
+		_prolog->CONTEXT->TRACE.resize(0);
+		_prolog->CONTEXT->TRACEARGS.resize(0);
+		_prolog->CONTEXT->TRACERS.resize(0);
+		_prolog->CONTEXT->ptrTRACE.resize(0);
+		_prolog->CONTEXT->CTXS.resize(0);
 
 		int goal = 0;
 		while (goal < 8) {
@@ -170,7 +171,7 @@ extern "C" {
 			body.append("\n");
 			bypass_spaces(body, p);
 			while (p < body.length()) {
-				_prolog->parse_clause(renew, f, body, p);
+				_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p);
 				bypass_spaces(body, p);
 			}
 			_prolog->bind();
@@ -181,7 +182,7 @@ extern "C" {
 			variants->push_back(f);
 			predicate_item_user * pi = new predicate_item_user(false, false, false, 0, NULL, _prolog, "internal_goal");
 			pi->bind();
-			bool ret = pi->processing(false, 0, variants, &args, f);
+			bool ret = pi->processing(_prolog->CONTEXT, false, 0, variants, &args, f, _prolog->CONTEXT);
 			auto end = std::chrono::high_resolution_clock::now(); // Засечка конечного времени
 			std::chrono::duration<double, std::ratio<1, 1>> elapsed = end - start; // Вычисляем длительность исполнения
 
