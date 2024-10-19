@@ -3,20 +3,20 @@
   "WorkspaceRootPath": "E:\\Work\\Handle_use\\PrologIntrf\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\PrologIntrf\\main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
-      "RelativeMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|solutionrelative:main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\prolog_micro_brain.dir\\prolog_micro_brain.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\prolog_micro_brain.dir\\elements.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\prolog_micro_brain.dir\\prolog_micro_brain.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\PrologIntrf\\main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "RelativeMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|solutionrelative:main.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\prolog_micro_brain.dir\\elements.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\prolog_micro_brain.dir\\prolog_micro_brain.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{8AF84696-CAE4-4B06-A562-7CBD28175C0E}|PrologIntrf.vcxproj|E:\\Work\\Handle_use\\prolog_micro_brain.dir\\elements.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
   "DocumentGroupContainers": [
@@ -26,37 +26,36 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 1,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "main.cpp",
               "DocumentMoniker": "E:\\Work\\Handle_use\\PrologIntrf\\main.cpp",
               "RelativeDocumentMoniker": "main.cpp",
               "ToolTip": "E:\\Work\\Handle_use\\PrologIntrf\\main.cpp",
               "RelativeToolTip": "main.cpp",
-              "ViewState": "AQIAAAYAAAAAAAAAAAAAABoAAAAhAAAA",
+              "ViewState": "AQIAAAsAAAAAAAAAAAAAAJoAAAAKAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
-              "WhenOpened": "2024-04-28T21:43:28.557Z",
-              "EditorCaption": ""
+              "WhenOpened": "2024-04-28T21:43:28.557Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "prolog_micro_brain.cpp",
               "DocumentMoniker": "E:\\Work\\Handle_use\\prolog_micro_brain.dir\\prolog_micro_brain.cpp",
               "RelativeDocumentMoniker": "..\\prolog_micro_brain.dir\\prolog_micro_brain.cpp",
               "ToolTip": "E:\\Work\\Handle_use\\prolog_micro_brain.dir\\prolog_micro_brain.cpp",
               "RelativeToolTip": "..\\prolog_micro_brain.dir\\prolog_micro_brain.cpp",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAYAAAAiAAAA",
+              "ViewState": "AQIAAO4CAAAAAAAAAAAUwAEDAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2024-04-28T21:42:59.76Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 4,
               "Title": "elements.h",
               "DocumentMoniker": "E:\\Work\\Handle_use\\prolog_micro_brain.dir\\elements.h",
               "RelativeDocumentMoniker": "..\\prolog_micro_brain.dir\\elements.h",
@@ -74,19 +73,19 @@
               "RelativeDocumentMoniker": "..\\prolog_micro_brain.dir\\elements.cpp",
               "ToolTip": "E:\\Work\\Handle_use\\prolog_micro_brain.dir\\elements.cpp",
               "RelativeToolTip": "..\\prolog_micro_brain.dir\\elements.cpp",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAwAAAAAAAAA",
+              "ViewState": "AQIAAKkCAAAAAAAAAAAEwLcCAAArAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2024-04-28T21:34:34.19Z"
             },
             {
               "$type": "Document",
-              "DocumentIndex": 4,
+              "DocumentIndex": 1,
               "Title": "prolog_micro_brain.h",
               "DocumentMoniker": "E:\\Work\\Handle_use\\prolog_micro_brain.dir\\prolog_micro_brain.h",
               "RelativeDocumentMoniker": "..\\prolog_micro_brain.dir\\prolog_micro_brain.h",
               "ToolTip": "E:\\Work\\Handle_use\\prolog_micro_brain.dir\\prolog_micro_brain.h",
               "RelativeToolTip": "..\\prolog_micro_brain.dir\\prolog_micro_brain.h",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "ViewState": "AQIAAJgDAAAAAAAAAAAAAJgDAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
               "WhenOpened": "2024-04-28T21:33:00.843Z"
             }

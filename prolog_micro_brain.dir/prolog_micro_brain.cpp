@@ -465,6 +465,8 @@ string unescape(const string & s) {
 
 unsigned int mem_block_size = 1024 * 1024;
 
+std::mutex mem_lock;
+
 typedef struct {
 	unsigned int available;
 	unsigned int top;
@@ -483,6 +485,7 @@ stack_container<mem_block *> used;
 stack_container<mem_block *> freed;
 
 void * __alloc(size_t size) {
+	std::lock_guard<std::mutex> lock(mem_lock);
 	unsigned int occupied = size + (sizeof(int) + sizeof(unsigned int));
 	
 	char rest = occupied % 8;
@@ -530,6 +533,7 @@ void * __alloc(size_t size) {
 }
 
 void __free(void * ptr) {
+	std::lock_guard<std::mutex> lock(mem_lock);
 	mem_header * mm = (mem_header *)((char *)ptr - (sizeof(int) + sizeof(unsigned int)));
 	int offs = mm->start_offs;
 	mm->start_offs = -1;
@@ -543,20 +547,252 @@ void __free(void * ptr) {
 	}
 }
 
+tframe_item* frame_item::tcopy(context* CTX, interpreter* INTRP, bool import_globs) {
+	tframe_item* result = new tframe_item();
+	result->names = names;
+	long long d = result->names.size() == 0 ? 0 : &result->names[0] - &names[0];
+	result->vars = vars;
+	for (mapper& m : result->vars) {
+		m.ptr = m.ptr ? m.ptr->copy(CTX, this) : NULL;
+		m._name += d;
+	}
+	if (CTX && import_globs /* && (CTX->THR || CTX->forked()) */) {
+		bool locked = INTRP->GLOCK.try_lock();
+		std::map<std::string, value*>::iterator it = INTRP->GVars.begin();
+		result->first_writes = vector<clock_t>(vars.size(), 0);
+		result->last_reads = vector<clock_t>(vars.size(), 0);
+		while (it != INTRP->GVars.end()) {
+			if (it->first.length() && it->first[0] != '&') {
+				string new_name = it->first;
+				new_name.insert(0, 1, '*');
+				result->set(CTX, new_name.c_str(), it->second ? it->second->copy(CTX, this) : NULL);
+			}
+			it++;
+		}
+		if (locked) INTRP->GLOCK.unlock();
+	}
+	result->first_writes = vector<clock_t>(result->vars.size(), 0);
+	result->last_reads = vector<clock_t>(result->vars.size(), 0);
+	return result;
+}
+
+bool context::join(int K, frame_item* f, interpreter* INTRP) {
+	std::unique_lock<std::mutex> lock(pages_mutex);
+	if (CONTEXTS.size() == 0) {
+		lock.unlock();
+		return true;
+	}
+
+	context* C = this;
+	while (C && !C->THR)
+		C = C->parent;
+	bool forked = C && C->THR;
+
+	int joined = 0;
+	int success = 0;
+	vector<bool> joineds(CONTEXTS.size(), false);
+	std::set<string> names;
+	do {
+		vector<bool> stoppeds(CONTEXTS.size());
+		int stopped = std::count(joineds.begin(), joineds.end(), true);
+		while (stopped < CONTEXTS.size()) {
+			for (int i = 0; i < CONTEXTS.size(); i++)
+				if (!joineds[i] && !stoppeds[i] && CONTEXTS[i]->THR->is_stopped()) {
+					stoppeds[i] = true;
+					CONTEXTS[i]->FRAME.load()->add_local_names(names);
+					stopped++;
+				}
+			std::this_thread::yield();
+		}
+		// In not joineds search for winners
+		vector<vector<int>> M(CONTEXTS.size(), vector<int>(CONTEXTS.size(), 0));
+		for (const string& vname : names) {
+			// Conflict Matrix
+			for (int i = 0; i < CONTEXTS.size(); i++)
+				for (int j = i + 1; j < CONTEXTS.size(); j++)
+					if (stoppeds[i] && stoppeds[j]) {
+						clock_t fwi = CONTEXTS[i]->FRAME.load()->first_write(vname);
+						clock_t fwj = CONTEXTS[j]->FRAME.load()->first_write(vname);
+						clock_t lri = CONTEXTS[i]->FRAME.load()->last_read(vname);
+						clock_t lrj = CONTEXTS[j]->FRAME.load()->last_read(vname);
+						if (fwi || fwj) {
+							if (fwi && fwj)
+								M[i][j]++;
+							else if (fwi) {
+								if (lrj >= fwi)
+									M[i][j]++;
+							}
+							else {
+								if (lri >= fwj)
+									M[i][j]++;
+							}
+						}
+					}
+		}
+		// Decide
+		int first_winner = -1;
+		std::set<int> other_winners;
+		for (int i = 0; i < CONTEXTS.size(); i++)
+			if (stoppeds[i]) {
+				std::set<int> parallels;
+				for (int j = 0; j < i; j++) {
+					if (stoppeds[j] && M[j][i] == 0)
+						parallels.insert(j);
+				}
+				for (int j = i + 1; j < CONTEXTS.size(); j++) {
+					if (stoppeds[j] && M[i][j] == 0)
+						parallels.insert(j);
+				}
+				if (parallels.size() > other_winners.size()) {
+					other_winners = parallels;
+					first_winner = i;
+				}
+			}
+		if (first_winner < 0) {
+			clock_t min_time = 0;
+			for (const string& vname : names) {
+				for (int i = 0; i < CONTEXTS.size(); i++)
+					if (stoppeds[i]) {
+						clock_t tm = CONTEXTS[i]->FRAME.load()->first_write(vname);
+						if (tm && (!min_time || tm < min_time)) {
+							first_winner = i;
+							min_time = tm;
+						}
+					}
+			}
+			for (int i = 0; first_winner < 0 && i < CONTEXTS.size(); i++)
+				if (stoppeds[i])
+					first_winner = i;
+		}
+		// Set vars by threads with non-zero first_writes
+		for (const string& vname : names) {
+			int winner = -1;
+			if (CONTEXTS[first_winner]->FRAME.load()->first_write(vname))
+				winner = first_winner;
+			else {
+				for (int i : other_winners)
+					if (CONTEXTS[i]->FRAME.load()->first_write(vname)) {
+						winner = i;
+						break;
+					}
+			}
+			if (winner >= 0 && CONTEXTS[winner]->THR->get_result()) {
+				value* old = f->get(this, vname.c_str());
+				value* cur = CONTEXTS[winner]->FRAME.load()->get(CONTEXTS[winner], vname.c_str());
+				if (cur)
+					if (old && (vname.length() == 0 || vname[0] != '*')) {
+						if (!old->unify(this, f, cur))
+							CONTEXTS[winner]->THR->set_result(false);
+					}
+					else
+						f->set(this, vname.c_str(), cur);
+			}
+		}
+		// Join first_winner && other_winners
+		other_winners.insert(first_winner);
+		for (int i = 0; i < CONTEXTS.size(); i++)
+			if (stoppeds[i]) {
+				if (other_winners.find(i) == other_winners.end()) {
+					tframe_item* OLD = CONTEXTS[i]->FRAME.load();
+					CONTEXTS[i]->FRAME.store(f->tcopy(this, INTRP, false));
+					CONTEXTS[i]->THR->set_stopped(false);
+				}
+				else {
+					CONTEXTS[i]->THR->set_terminated(true);
+					CONTEXTS[i]->THR->set_stopped(false);
+					CONTEXTS[i]->THR->join();
+					joineds[i] = true;
+					if (CONTEXTS[i]->THR->get_result())
+						success++;
+					joined++;
+				}
+			}
+	} while (joined < CONTEXTS.size());
+
+	bool result = K < 0 && success == CONTEXTS.size() || K >= 0 && success >= K;
+
+	prolog->GLOCK.lock();
+	for (const string& vname : names) {
+		value* v = f->get(this, vname.c_str());
+		for (int i = 0; i < CONTEXTS.size(); i++)
+			CONTEXTS[i]->FRAME.load()->set(CONTEXTS[i], vname.c_str(), NULL);
+		if (!forked && v && vname.length() && vname[0] == '*') {
+			string src_name = vname.substr(1);
+			std::map<std::string, value*>::iterator it = prolog->GVars.find(src_name);
+			if (it != prolog->GVars.end()) {
+				it->second->free();
+			}
+			prolog->GVars[src_name] = v->copy(this, f);
+		}
+	}
+	prolog->GLOCK.unlock();
+
+	for (context* C : CONTEXTS)
+		delete C;
+	CONTEXTS.clear();
+
+	lock.unlock();
+	return result;
+}
+
+context* context::add_page(tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
+	std::unique_lock<std::mutex> plock(pages_mutex);
+
+	context* result = new context(100, this, f, starting, ending, prolog);
+
+	CONTEXTS.push_back(result);
+
+	result->THR = new tthread(CONTEXTS.size() - 1, result);
+
+	plock.unlock();
+
+	return result;
+}
+
+void tthread::body() {
+	tframe_item* OLD_FRAME = NULL;
+	set_stopped(false);
+	do {
+		terminated.clear();
+		delete OLD_FRAME;
+		while (OLD_FRAME == CONTEXT->FRAME.load())
+			std::this_thread::yield();
+		OLD_FRAME = CONTEXT->FRAME.load();
+		// Process
+		predicate_item* first = CONTEXT->starting;
+		vector<value*>* first_args = CONTEXT->prolog->accept(CONTEXT, OLD_FRAME, first);
+		set_result(CONTEXT->prolog->process(CONTEXT, false, first->get_parent(), first, OLD_FRAME, &first_args));
+		if (first_args) {
+			for (int j = 0; j < first_args->size(); j++)
+				first_args->at(j)->free();
+			delete first_args;
+		}
+
+		set_stopped(true);
+		while (is_stopped())
+			std::this_thread::yield();
+	} while (!terminated.test_and_set());
+}
+
 class string_atomizer {
 	map<string, unsigned int> hash;
 	vector<const string *> table;
+	bool forking;
+	std::mutex locker;
 public:
-	string_atomizer() { }
+	string_atomizer() { forking = false; }
+	void set_forking(bool v) { forking = v; }
 	unsigned int get_atom(const string & s) {
 		if (s.length() == 1)
 			return (unsigned char)s[0];
 		else if (s.length() == 2)
 			return (((unsigned char)s[1]) << 8) + (unsigned char)s[0];
 		else {
+			if (forking) locker.lock();
+			unsigned int result = 0;
 			map<string, unsigned int>::iterator it = hash.find(s);
 			if (it != hash.end())
-				return it->second;
+				result = it->second;
 			else {
 				if (table.size() == table.capacity()) {
 					table.reserve(table.size() + 2000);
@@ -565,8 +801,10 @@ public:
 					hash.insert(pair<string, unsigned int>(s, 0));
 				table.push_back(&itt.first->first);
 				itt.first->second = 65536 + table.size() - 1;
-				return itt.first->second;
+				result = itt.first->second;
 			}
+			if (forking) locker.unlock();
+			return result;
 		}
 	}
 	const string get_string(unsigned int atom) {
@@ -579,7 +817,10 @@ public:
 			return string(buf);
 		}
 		else {
-			return *table[atom - 65536];
+			if (forking) locker.lock();
+			string result = *table[atom - 65536];
+			if (forking) locker.unlock();
+			return result;
 		}
 	}
 };
@@ -590,11 +831,11 @@ class any : public value {
 public:
 	any() : value() { }
 
-	virtual void escape_vars(frame_item * ff) { }
+	virtual void escape_vars(context * CTX, frame_item * ff) { }
 
-	virtual value * fill(frame_item * vars) { return this; }
-	virtual value * copy(frame_item * f, int unwind = 0) { return new any(); }
-	virtual bool unify(frame_item * ff, value * from) {
+	virtual value * fill(context * CTX, frame_item * vars) { return this; }
+	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) { return new any(); }
+	virtual bool unify(context * CTX, frame_item * ff, value * from) {
 		return true;
 	}
 	virtual bool defined() {
@@ -609,28 +850,28 @@ class var : public value {
 public:
 	var(const string & _name) : value(), name(_name) { }
 
-	virtual void escape_vars(frame_item * ff) {
-		value * v = ff->get(name.c_str());
+	virtual void escape_vars(context * CTX, frame_item * ff) {
+		value * v = ff->get(CTX, name.c_str());
 		if (v) {
-			v->escape_vars(ff);
+			v->escape_vars(CTX, ff);
 		}
 		ff->escape(name.c_str(), '$');
 		name = "$" + name;
 	}
 
-	virtual value * fill(frame_item * vars) {
-		value * v = vars->get(name.c_str());
+	virtual value * fill(context * CTX, frame_item * vars) {
+		value * v = vars->get(CTX, name.c_str());
 		if (v)
-			return v->copy(vars);
+			return v->copy(CTX, vars);
 		else {
 			return this;
 		}
 	}
 
-	virtual value * copy(frame_item * f, int unwind = 0) {
-		value * v = f->get(name.c_str(), unwind);
+	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
+		value * v = f->get(CTX, name.c_str(), unwind);
 		if (v)
-			return v->copy(f);
+			return v->copy(CTX, f);
 		else
 			return new var(name);
 	}
@@ -641,14 +882,14 @@ public:
 
 	virtual const string & get_name() { return name; }
 
-	virtual bool unify(frame_item * ff, value * from) {
+	virtual bool unify(context * CTX, frame_item * ff, value * from) {
 		if (dynamic_cast<var *>(from) || dynamic_cast<any *>(from))
 			return true;
-		value * v = ff->get(name.c_str());
+		value * v = ff->get(CTX, name.c_str());
 		if (v)
-			return v->unify(ff, from);
+			return v->unify(CTX, ff, from);
 		else
-			ff->set(name.c_str(), from);
+			ff->set(CTX, name.c_str(), from);
 		return true;
 	}
 	
@@ -666,11 +907,11 @@ private:
 public:
 	int_number(long long _v) : value(), v(_v) { }
 
-	virtual void escape_vars(frame_item * ff) {	}
+	virtual void escape_vars(context * CTX, frame_item * ff) {	}
 
-	virtual value * fill(frame_item * vars) { return this; }
-	virtual value * copy(frame_item * f, int unwind = 0) { return new int_number(v); }
-	virtual bool unify(frame_item * ff, value * from);
+	virtual value * fill(context * CTX, frame_item * vars) { return this; }
+	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) { return new int_number(v); }
+	virtual bool unify(context * CTX, frame_item * ff, value * from);
 	virtual bool defined() {
 		return true;
 	};
@@ -694,13 +935,13 @@ private:
 public:
 	float_number(double _v) : value(), v(_v) { }
 
-	virtual void escape_vars(frame_item * ff) {	}
+	virtual void escape_vars(context * CTX, frame_item * ff) {	}
 
-	virtual value * fill(frame_item * vars) { return this; }
-	virtual value * copy(frame_item * f, int unwind = 0) { return new float_number(v); }
-	virtual bool unify(frame_item * ff, value * from) {
+	virtual value * fill(context * CTX, frame_item * vars) { return this; }
+	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) { return new float_number(v); }
+	virtual bool unify(context * CTX, frame_item * ff, value * from) {
 		if (dynamic_cast<any *>(from)) return true;
-		if (dynamic_cast<var *>(from)) { ff->set(((var *)from)->get_name().c_str(), this); return true; }
+		if (dynamic_cast<var *>(from)) { ff->set(CTX, ((var *)from)->get_name().c_str(), this); return true; }
 		if (dynamic_cast<float_number *>(from))
 			return v == ((float_number *)from)->v;
 		else if (dynamic_cast<int_number *>(from))
@@ -725,9 +966,9 @@ public:
 	void dec() { v--; }
 };
 
-bool int_number::unify(frame_item * ff, value * from) {
+bool int_number::unify(context * CTX, frame_item * ff, value * from) {
 	if (dynamic_cast<any *>(from)) return true;
-	if (dynamic_cast<var *>(from)) { ff->set(((var *)from)->get_name().c_str(), this); return true; }
+	if (dynamic_cast<var *>(from)) { ff->set(CTX, ((var *)from)->get_name().c_str(), this); return true; }
 	if (dynamic_cast<int_number *>(from))
 		return v == ((int_number *)from)->v;
 	else if (dynamic_cast<float_number *>(from))
@@ -768,44 +1009,44 @@ public:
 			args[i]->use();
 	}
 
-	virtual void escape_vars(frame_item * ff) {
+	virtual void escape_vars(context * CTX, frame_item * ff) {
 		for (int i = 0; i < args.size(); i++)
-			args[i]->escape_vars(ff);
+			args[i]->escape_vars(CTX, ff);
 	}
 
 	virtual const string get_name() { return atomizer.get_string(name); }
 
 	virtual const vector<value *> & get_args() { return args; }
 
-	virtual value * fill(frame_item * vars) {
+	virtual value * fill(context * CTX, frame_item * vars) {
 		for (int i = 0; i < args.size(); i++) {
 			value * old = args[i];
-			args[i] = args[i]->fill(vars);
+			args[i] = args[i]->fill(CTX, vars);
 			if (args[i] != old) old->free();
 		}
 		return this;
 	}
 
-	virtual void add_arg(frame_item * f, value * v, int unwind = 0) {
-		args.push_back(v->copy(f, unwind));
+	virtual void add_arg(context * CTX, frame_item * f, value * v, int unwind = 0) {
+		args.push_back(v->copy(CTX, f, unwind));
 	}
 
-	virtual value * copy(frame_item * f, int unwind = 0) {
+	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
 		term * result = new term(*this);
 		for (int i = 0; i < args.size(); i++)
-			result->add_arg(f, args[i], unwind);
+			result->add_arg(CTX, f, args[i], unwind);
 		return result;
 	}
 
-	virtual bool unify(frame_item * ff, value * from) {
+	virtual bool unify(context * CTX, frame_item * ff, value * from) {
 		if (dynamic_cast<any *>(from)) return true;
-		if (dynamic_cast<var *>(from)) { ff->set(((var *)from)->get_name().c_str(), this); return true; }
+		if (dynamic_cast<var *>(from)) { ff->set(CTX, ((var *)from)->get_name().c_str(), this); return true; }
 		if (dynamic_cast<term *>(from)) {
 			term * v2 = ((term *)from);
 			if (name != v2->name || args.size() != v2->args.size())
 				return false;
 			for (int i = 0; i < args.size(); i++)
-				if (!args[i]->unify(ff, v2->args[i]))
+				if (!args[i]->unify(CTX, ff, v2->args[i]))
 					return false;
 			return true;
 		}
@@ -942,22 +1183,22 @@ private:
 public:
 	indicator(const string & _name, int _arity) : value(), name(_name), arity(_arity) { }
 
-	virtual void escape_vars(frame_item * ff) {	}
+	virtual void escape_vars(context * CTX, frame_item * ff) {	}
 
 	virtual const string & get_name() { return name; }
 
 	virtual int get_arity() { return arity; }
 
-	virtual value * fill(frame_item * vars) {
+	virtual value * fill(context * CTX, frame_item * vars) {
 		return this;
 	}
 
-	virtual value * copy(frame_item * f, int unwind = 0) {
+	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
 		return new indicator(name, arity);
 	}
-	virtual bool unify(frame_item * ff, value * from) {
+	virtual bool unify(context * CTX, frame_item * ff, value * from) {
 		if (dynamic_cast<any *>(from)) return true;
-		if (dynamic_cast<var *>(from)) { ff->set(((var *)from)->get_name().c_str(), this); return true; }
+		if (dynamic_cast<var *>(from)) { ff->set(CTX, ((var *)from)->get_name().c_str(), this); return true; }
 		if (dynamic_cast<indicator *>(from)) {
 			indicator * v2 = ((indicator *)from);
 			return name == v2->name && arity == v2->arity;
@@ -1043,11 +1284,11 @@ public:
 		}
 	}
 
-	virtual void escape_vars(frame_item * ff) {
+	virtual void escape_vars(context * CTX, frame_item * ff) {
 		for (value * v : val)
-			v->escape_vars(ff);
+			v->escape_vars(CTX, ff);
 		if (tag)
-			tag->escape_vars(ff);
+			tag->escape_vars(CTX, ff);
 	}
 
 	int size() {
@@ -1107,6 +1348,41 @@ public:
 				return NULL;
 	}
 
+	bool set_nth(int n, value * v) {
+		if (n < 1) return false;
+
+		if (is_of_chars && n <= chars.size() || !is_of_chars && n <= val.size()) {
+			if (is_of_chars) {
+				term* t = dynamic_cast<term*>(v);
+				if (t && t->get_name().length() == 1) {
+					chars[n - 1] = t->get_name()[0];
+					return true;
+				}
+				else
+					return false;
+			}
+			else {
+				stack_container<value*>::iterator it = val.begin() + (n - 1);
+				(*it)->free();
+				(*it) = v;
+				v->use();
+				return true;
+			}
+		}
+		else
+			if (tag)
+				if (dynamic_cast<list*>(tag))
+					return ((list*)tag)->set_nth(is_of_chars ? n - chars.size() : n - val.size(), v);
+				else {
+					tag->free();
+					tag = v;
+					v->use();
+					return true;
+				}
+			else
+				return false;
+	}
+
 	void iterate(std::function<void(value *)> check) {
 		if (is_of_chars) {
 			term * t = new term("");
@@ -1130,7 +1406,7 @@ public:
 				check(tag);
 	}
 
-	void split(frame_item * f, int p, value * & L1, value * & L2) {
+	void split(context * CTX, frame_item * f, int p, value * & L1, value * & L2) {
 		if (is_of_chars && !tag) {
 			string S1 = chars.substr(0, p);
 			string S2 = chars.substr(p);
@@ -1138,21 +1414,21 @@ public:
 			L2 = new list(S2, NULL);
 		} else {
 			stack_container<value *> S, S1, S2;
-			get(f, &S);
+			get(CTX, f, &S);
 
 			stack_container<value *>::iterator it = S.begin();
 			S1.reserve(p);
 			for (int i = 0; i < p; i++)
-				S1.push_back((*it++)->copy(f));
+				S1.push_back((*it++)->copy(CTX, f));
 			S2.reserve(S.size() - p);
 			for (int i = p; i < S.size(); i++)
-				S2.push_back((*it++)->copy(f));
+				S2.push_back((*it++)->copy(CTX, f));
 			L1 = new list(S1, NULL);
 			L2 = new list(S2, NULL);
 		}
 	}
 
-	void const_split(frame_item * f, int p, value * & L1, value * & L2) {
+	void const_split(context * CTX, frame_item * f, int p, value * & L1, value * & L2) {
 		if (is_of_chars && !tag) {
 			string S1 = chars.substr(0, p);
 			string S2 = chars.substr(p);
@@ -1160,41 +1436,41 @@ public:
 			L2 = new list(S2, NULL);
 		}
 		else {
-			if (!defined()) return split(f, p, L1, L2);
+			if (!defined()) return split(CTX, f, p, L1, L2);
 			stack_container<value *> S, S1, S2;
-			get(f, &S);
+			get(CTX, f, &S);
 
 			stack_container<value *>::iterator it = S.begin();
 			S1.reserve(p);
 			for (int i = 0; i < p; i++)
-				S1.push_back((*it++)->const_copy(f));
+				S1.push_back((*it++)->const_copy(CTX, f));
 			S2.reserve(S.size() - p);
 			for (int i = p; i < S.size(); i++)
-				S2.push_back((*it++)->const_copy(f));
+				S2.push_back((*it++)->const_copy(CTX, f));
 			L1 = new list(S1, NULL);
 			L2 = new list(S2, NULL);
 		}
 	}
 
-	list * from(frame_item * f, stack_container<value *>::iterator starting) {
+	list * from(context * CTX, frame_item * f, stack_container<value *>::iterator starting) {
 		list * result = new list(stack_container<value *>(), NULL);
 		while (starting != val.end())
 		{
-			result->add((*starting)->copy(f));
+			result->add((*starting)->copy(CTX, f));
 			starting++;
 		}
-		if (tag) result->set_tag(tag->copy(f));
+		if (tag) result->set_tag(tag->copy(CTX, f));
 		return result;
 	}
 
-	list * from(frame_item * f, string::iterator starting) {
+	list * from(context * CTX, frame_item * f, string::iterator starting) {
 		list * result = new list(string(starting, chars.end()), NULL);
-		if (tag) result->set_tag(tag->copy(f));
+		if (tag) result->set_tag(tag->copy(CTX, f));
 		return result;
 	}
 
-	list * const_from(frame_item * f, stack_container<value *>::iterator starting) {
-		if (!defined()) return from(f, starting);
+	list * const_from(context * CTX, frame_item * f, stack_container<value *>::iterator starting) {
+		if (!defined()) return from(CTX, f, starting);
 		list * result = new list(stack_container<value *>(), NULL);
 		while (starting != val.end())
 		{
@@ -1209,8 +1485,8 @@ public:
 		return result;
 	}
 
-	list * const_from(frame_item * f, string::iterator starting) {
-		if (!defined()) return from(f, starting);
+	list * const_from(context * CTX, frame_item * f, string::iterator starting) {
+		if (!defined()) return from(CTX, f, starting);
 		list * result = new list(string(starting, chars.end()), NULL);
 		if (tag) {
 			tag->use();
@@ -1219,55 +1495,55 @@ public:
 		return result;
 	}
 
-	virtual value * fill(frame_item * vars) {
+	virtual value * fill(context * CTX, frame_item * vars) {
 		if (!is_of_chars) {
 			stack_container<value *>::iterator it = val.begin();
 			for (; it != val.end(); it++) {
 				value * old = *it;
-				*it = (*it)->fill(vars);
+				*it = (*it)->fill(CTX, vars);
 				if (*it != old) old->free();
 			}
 		}
 		if (tag) {
 			value * old = tag;
-			tag = tag->fill(vars);
+			tag = tag->fill(CTX, vars);
 			if (old && old != tag) old->free();
 		}
 		return this;
 	}
 
-	virtual list * append(frame_item * f, list * L2) {
+	virtual list * append(context * CTX, frame_item * f, list * L2) {
 		::list * result = NULL;
 		if (is_of_chars && !tag && L2->of_chars()) {
 			result = new ::list(chars + L2->get_chars(), NULL);
 		} else {
-			result = ((list *)copy(f));
+			result = ((list *)copy(CTX, f));
 			if (is_of_chars) convert_non_chars();
 			if (L2->of_chars()) {
 				for (char s : L2->get_chars())
 					result->add(new term(string(1, s)));
 			} else
 				for (value * v : L2->val) {
-					result->add(v->copy(f));
+					result->add(v->copy(CTX, f));
 				}
 		}
 		if (L2->tag)
 			if (dynamic_cast<::list *>(L2->tag))
-				return result->append(f, ((list*)L2->tag));
+				return result->append(CTX, f, ((list*)L2->tag));
 			else
-				result->add(L2->tag->copy(f));
+				result->add(L2->tag->copy(CTX, f));
 		return result;
 	}
 
-	virtual value * copy(frame_item * f, int unwind = 0) {
+	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
 		if (is_of_chars)
-			return new ::list(chars, tag ? tag->copy(f) : NULL);
+			return new ::list(chars, tag ? tag->copy(CTX, f) : NULL);
 		else {
 			stack_container<value *> new_val;
 			new_val.reserve(val.size());
 			for (value * v : val)
-				new_val.push_back(v->copy(f));
-			return new ::list(new_val, tag ? tag->copy(f) : NULL);
+				new_val.push_back(v->copy(CTX, f));
+			return new ::list(new_val, tag ? tag->copy(CTX, f) : NULL);
 		}
 	}
 
@@ -1308,35 +1584,35 @@ public:
 		if (new_tag) new_tag->use();
 	}
 
-	virtual bool get(frame_item * f, stack_container<value *> * dest) {
+	virtual bool get(context * CTX, frame_item * f, stack_container<value *> * dest) {
 		dest->clear();
 		if (is_of_chars) {
 			for (char s : chars)
 				dest->push_back(new term(string(1,s)));
 		} else
 			for (value * v : val)
-				dest->push_back(v->copy(f));
+				dest->push_back(v->copy(CTX, f));
 		if (tag) {
 			if (dynamic_cast<list *>(tag)) {
 				stack_container<value *> ltag;
-				if (((list *)tag)->get(f, &ltag)) {
+				if (((list *)tag)->get(CTX, f, &ltag)) {
 					for (value * v : ltag)
-						dest->push_back(v->copy(f));
+						dest->push_back(v->copy(CTX, f));
 					return true;
 				}
 				else
 					return false;
 			}
-			dest->push_back(tag->copy(f));
+			dest->push_back(tag->copy(CTX, f));
 			return true;
 		}
 		else return true;
 	}
 
-	virtual bool unify(frame_item * ff, value * from) {
+	virtual bool unify(context * CTX, frame_item * ff, value * from) {
 		if (dynamic_cast<any *>(from)) return true;
 		if (dynamic_cast<var *>(from)) {
-			ff->set(((var *)from)->get_name().c_str(), this);
+			ff->set(CTX, ((var *)from)->get_name().c_str(), this);
 			return true;
 		}
 		if (dynamic_cast<list *>(from)) {
@@ -1378,23 +1654,23 @@ public:
 				if (dynamic_cast<var *>(_from))
 					if (dynamic_cast<list *>(_to))
 						if (((list *)_to)->of_chars())
-							return _from->unify(ff, ((list *)_to)->const_from(ff, _to_it_s));
+							return _from->unify(CTX, ff, ((list *)_to)->const_from(CTX, ff, _to_it_s));
 						else
-							return _from->unify(ff, ((list *)_to)->const_from(ff, _to_it));
+							return _from->unify(CTX, ff, ((list *)_to)->const_from(CTX, ff, _to_it));
 					else if (_to)
-						return _from->unify(ff, _to);
+						return _from->unify(CTX, ff, _to);
 					else
-						return _from->unify(ff, new ::list(stack_container<value *>(), NULL));
+						return _from->unify(CTX, ff, new ::list(stack_container<value *>(), NULL));
 				if (dynamic_cast<var *>(_to))
 					if (dynamic_cast<list *>(_from))
 						if (((list *)_from)->of_chars())
-							return _to->unify(ff, ((list *)_from)->const_from(ff, _from_it_s));
+							return _to->unify(CTX, ff, ((list *)_from)->const_from(CTX, ff, _from_it_s));
 						else
-							return _to->unify(ff, ((list *)_from)->const_from(ff, _from_it));
+							return _to->unify(CTX, ff, ((list *)_from)->const_from(CTX, ff, _from_it));
 					else if (_from)
-						return _to->unify(ff, _from);
+						return _to->unify(CTX, ff, _from);
 					else
-						return _to->unify(ff, new ::list(stack_container<value *>(), NULL));
+						return _to->unify(CTX, ff, new ::list(stack_container<value *>(), NULL));
 				if (dynamic_cast<list *>(_from) && dynamic_cast<list *>(_to)) {
 					if (((list *)_from)->of_chars() && ((list *)_to)->of_chars())
 						if ((*_to_it_s++)!=(*_from_it_s++))
@@ -1404,7 +1680,7 @@ public:
 					else if (((list *)_from)->of_chars() != ((list *)_to)->of_chars()) {
 						if (((list *)_from)->of_chars()) {
 							term * fr = new term(string(1, *_from_it_s++));
-							if (!(*_to_it++)->unify(ff, fr)) {
+							if (!(*_to_it++)->unify(CTX, ff, fr)) {
 								fr->free();
 								return false;
 							} else
@@ -1412,7 +1688,7 @@ public:
 							fr->free();
 						} else {
 							term * t = new term(string(1, *_to_it_s++));
-							if (!(*_from_it++)->unify(ff, t)) {
+							if (!(*_from_it++)->unify(CTX, ff, t)) {
 								t->free();
 								return false;
 							}
@@ -1421,13 +1697,13 @@ public:
 							t->free();
 						}
 					} else
-						if (!(*_to_it++)->unify(ff, *_from_it++))
+						if (!(*_to_it++)->unify(CTX, ff, *_from_it++))
 							return false;
 						else
 							advanced = true;
 				}
 				if (!advanced)
-					return _to->unify(ff, _from);
+					return _to->unify(CTX, ff, _from);
 			}
 
 			return !_from && !_to;
@@ -1515,35 +1791,36 @@ public:
 	}
 };
 
-generated_vars * predicate_item_user::generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+generated_vars * predicate_item_user::generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 	generated_vars * result = new generated_vars();
 	if (user_p)
 		for (int i = 0; i < user_p->num_clauses(); i++) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 	else {
 		string iid = id;
 		term * dummy = NULL;
 		if (id.length() > 0 && id[0] >= 'A' && id[0] <= 'Z') {
-			dummy = dynamic_cast<term *>(f->get(id.c_str()));
+			dummy = dynamic_cast<term *>(f->get(CTX, id.c_str()));
 			if (dummy) {
-				dummy = dynamic_cast<term *>(dummy->copy(f, 1));
+				dummy = dynamic_cast<term *>(dummy->copy(CTX, f, 1));
 				iid = dummy->get_name();
 			}
 		}
 		else {
 			dummy = new term(id);
 			for (int j = 0; j < positional_vals->size(); j++) {
-				dummy->add_arg(f, positional_vals->at(j));
+				dummy->add_arg(CTX, f, positional_vals->at(j));
 			}
 		}
+		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 		if (dummy && prolog->DB.find(iid) != prolog->DB.end()) {
 			vector<term *> * terms = prolog->DB[iid];
 			for (int i = 0; i < terms->size(); i++) {
-				frame_item * ff = f->copy();
-				term * _dummy = (term *)dummy->copy(ff);
-				if (_dummy->unify(ff, terms->at(i)))
+				frame_item * ff = f->copy(CTX);
+				term * _dummy = (term *)dummy->copy(CTX, ff);
+				if (_dummy->unify(CTX, ff, terms->at(i)))
 					result->push_back(ff);
 				else
 					delete ff;
@@ -1555,6 +1832,7 @@ generated_vars * predicate_item_user::generate_variants(frame_item * f, vector<v
 			std::cout << "Predicate [" << id << "] is neither standard nor dynamic!" << endl;
 			exit(500);
 		}
+		lock.unlock();
 
 		if (result && once && result->size() > 1) {
 			for (int i = 1; i < result->size(); i++)
@@ -1571,34 +1849,37 @@ generated_vars * predicate_item_user::generate_variants(frame_item * f, vector<v
 	return result;
 }
 
-bool predicate_item_user::processing(bool line_neg, int variant, generated_vars * variants, vector<value *> ** positional_vals, frame_item * up_f) {
-	frame_item * f = new frame_item();
+bool predicate_item_user::processing(context * CONTEXT, bool line_neg, int variant, generated_vars * variants, vector<value *> ** positional_vals, frame_item * up_f, context * up_c) {
 	predicate_item * next = get_next(variant);
+
+	frame_item* f = new frame_item();
+
 	/**/
 	if (variant == 0) {
-		prolog->PARENT_CALLS.push(this);
-		prolog->PARENT_CALL_VARIANT.push(0);
-		prolog->CLAUSES.push(get_parent());
-		prolog->CALLS.push(next);
-		prolog->FRAMES.push(up_f->copy());
-		prolog->NEGS.push(line_neg);
-		prolog->_FLAGS.push((is_once() ? ::once_flag : 0) + (is_call() ? call_flag : 0));
+		CONTEXT->PARENT_CALLS.push(this);
+		CONTEXT->PARENT_CALL_VARIANT.push(0);
+		CONTEXT->CLAUSES.push(get_parent());
+		CONTEXT->CALLS.push(next);
+		CONTEXT->FRAMES.push(up_f->copy(CONTEXT));
+		CONTEXT->CTXS.push(up_c);
+		CONTEXT->NEGS.push(line_neg);
+		CONTEXT->_FLAGS.push((is_once() ? ::once_flag : 0) + (is_call() ? call_flag : 0));
 	}
 
-	prolog->PARENT_CALL_VARIANT.pop();
-	prolog->PARENT_CALL_VARIANT.push(variant);
+	CONTEXT->PARENT_CALL_VARIANT.pop();
+	CONTEXT->PARENT_CALL_VARIANT.push(variant);
 
-	if (prolog->retrieve(f, user_p->get_clause(variant), *positional_vals, true)) {
+	if (prolog->retrieve(CONTEXT, f, user_p->get_clause(variant), *positional_vals, true)) {
 		bool yes = user_p->get_clause(variant)->num_items() == 0;
 
 		if (yes) {
 			vector<value *> * v = NULL;
-			yes = prolog->process(neg, user_p->get_clause(variant), NULL, f, &v);
+			yes = prolog->process(CONTEXT, neg, user_p->get_clause(variant), NULL, f, &v);
 		}
 		else {
 			predicate_item * first = user_p->get_clause(variant)->get_item(0);
-			vector<value *> * first_args = prolog->accept(f, first);
-			yes = prolog->process(neg, user_p->get_clause(variant), first, f, &first_args);
+			vector<value *> * first_args = prolog->accept(CONTEXT, f, first);
+			yes = prolog->process(CONTEXT, neg, user_p->get_clause(variant), first, f, &first_args);
 			if (first_args) {
 				for (int j = 0; j < first_args->size(); j++)
 					first_args->at(j)->free();
@@ -1606,32 +1887,34 @@ bool predicate_item_user::processing(bool line_neg, int variant, generated_vars 
 			}
 		}
 
-		if ((yes || (!variants || !variants->has_variant(variant + 1))) && prolog->PARENT_CALLS.size() > 0 && prolog->PARENT_CALLS.top() == this) {
-			prolog->CALLS.pop();
-			prolog->PARENT_CALLS.pop();
-			prolog->PARENT_CALL_VARIANT.pop();
-			prolog->CLAUSES.pop();
-			prolog->FRAMES.pop();
-			prolog->NEGS.pop();
-			prolog->_FLAGS.pop();
+		if ((yes || (!variants || !variants->has_variant(variant + 1))) && (CONTEXT->PARENT_CALLS.size() > 0 && CONTEXT->PARENT_CALLS.top() == this)) {
+			CONTEXT->CALLS.pop();
+			CONTEXT->PARENT_CALLS.pop();
+			CONTEXT->PARENT_CALL_VARIANT.pop();
+			CONTEXT->CLAUSES.pop();
+			CONTEXT->FRAMES.pop();
+			CONTEXT->CTXS.pop();
+			CONTEXT->NEGS.pop();
+			CONTEXT->_FLAGS.pop();
 		}
 
-		if (yes && prolog->PARENT_CALLS.size() == 0)
-			up_f->sync(f);
+		if (yes && (CONTEXT == prolog->CONTEXT && CONTEXT->PARENT_CALLS.size() == 0))
+			up_f->sync(CONTEXT, f);
 
 		delete f;
 
 		return yes;
 	}
 	else {
-		if ((!variants || !variants->has_variant(variant + 1)) && prolog->PARENT_CALLS.size() > 0 && prolog->PARENT_CALLS.top() == this) {
-			prolog->CALLS.pop();
-			prolog->PARENT_CALLS.pop();
-			prolog->PARENT_CALL_VARIANT.pop();
-			prolog->CLAUSES.pop();
-			prolog->FRAMES.pop();
-			prolog->NEGS.pop();
-			prolog->_FLAGS.pop();
+		if ((!variants || !variants->has_variant(variant + 1)) && (CONTEXT->PARENT_CALLS.size() > 0 && CONTEXT->PARENT_CALLS.top() == this)) {
+			CONTEXT->CALLS.pop();
+			CONTEXT->PARENT_CALLS.pop();
+			CONTEXT->PARENT_CALL_VARIANT.pop();
+			CONTEXT->CLAUSES.pop();
+			CONTEXT->FRAMES.pop();
+			CONTEXT->CTXS.pop();
+			CONTEXT->NEGS.pop();
+			CONTEXT->_FLAGS.pop();
 		}
 
 		delete f;
@@ -1640,7 +1923,7 @@ bool predicate_item_user::processing(bool line_neg, int variant, generated_vars 
 	}
 }
 
-double interpreter::evaluate(frame_item * ff, const string & expression, int & p) {
+double interpreter::evaluate(context * CTX, frame_item * ff, const string & expression, int & p) {
 	string ops = "(+-*/";
 	int priors[5] = { 0, 1, 1, 2, 2 };
 
@@ -1679,7 +1962,7 @@ double interpreter::evaluate(frame_item * ff, const string & expression, int & p
 	};
 
 	auto get_arg = [&](int & p, char ending)->double {
-		double result = evaluate(ff, expression, p);
+		double result = evaluate(CTX, ff, expression, p);
 		if (p >= expression.length() || expression[p] != ending) {
 			std::cout << "Expression '" << expression << "' : '" << ending << "' expected!" << endl;
 			exit(105);
@@ -1723,7 +2006,7 @@ double interpreter::evaluate(frame_item * ff, const string & expression, int & p
 					sign = -1.0;
 					p++;
 				}
-				value * v = parse(false, false, ff, expression, p);
+				value * v = parse(CTX, false, false, ff, expression, p);
 				if (dynamic_cast<int_number *>(v)) {
 					pitem p = { false };
 					p.v = sign*dynamic_cast<int_number *>(v)->get_value();
@@ -1851,11 +2134,11 @@ public:
 		delete_from(k);
 	}
 
-	virtual frame_item * get_next_variant(int i) {
+	virtual frame_item * get_next_variant(context * CTX, int i) {
 		frame_item * result = this->at(i);
 
 		if (this->size() < max_num_variants) {
-			frame_item * next = p->get_next_variant(parent, internal_variant, positional_vals);
+			frame_item * next = p->get_next_variant(CTX, parent, internal_variant, positional_vals);
 			if (next)
 				this->push_back(next);
 		}
@@ -1907,9 +2190,9 @@ public:
 			return ending;
 	}
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 		return result;
 	}
@@ -1937,10 +2220,10 @@ public:
 		return branches[variant-1];
 	}
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		generated_vars * result = new generated_vars();
 		for (int i = 0; i <= branches.size(); i++) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		return result;
@@ -1958,9 +2241,9 @@ public:
 
 	predicate_left_bracket * get_corresponding() { return left_bracket; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 		return result;
 	}
@@ -1972,7 +2255,7 @@ public:
 
 	virtual const string get_id() { return "eq"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "eq(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -1985,21 +2268,21 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 		if (!a1 && !a2)
 		{
-			if (!positional_vals->at(0)->unify(r, positional_vals->at(1))) {
+			if (!positional_vals->at(0)->unify(CTX, r, positional_vals->at(1))) {
 				delete r;
 				delete result;
 				result = NULL;
 			}
 		}
 		else if (a1 && !a2) {
-			r->set(a1->get_name().c_str(), positional_vals->at(1));
+			r->set(CTX, a1->get_name().c_str(), positional_vals->at(1));
 		}
 		else if (!a1 && a2) {
-			r->set(a2->get_name().c_str(), positional_vals->at(0));
+			r->set(CTX, a2->get_name().c_str(), positional_vals->at(0));
 		}
 		return result;
 	}
@@ -2011,7 +2294,7 @@ public:
 
 	virtual const string get_id() { return "neq"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "neq(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -2024,9 +2307,9 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
-		if (positional_vals->at(0)->unify(r, positional_vals->at(1))) {
+		if (positional_vals->at(0)->unify(CTX, r, positional_vals->at(1))) {
 			delete r;
 			delete result;
 			result = NULL;
@@ -2041,7 +2324,7 @@ public:
 
 	virtual const string get_id() { return "less"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "less(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -2067,7 +2350,7 @@ public:
 			i1 && f2 && i1->get_value() < f2->get_value() ||
 			f1 && i2 && f1->get_value() < i2->get_value() ||
 			t1 && t2 && t1->get_args().size() == 0 && t2->get_args().size() == 0 && t1->get_name() < t2->get_name()) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		else {
@@ -2084,7 +2367,7 @@ public:
 
 	virtual const string get_id() { return "greater"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "greater(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -2110,7 +2393,7 @@ public:
 			i1 && f2 && i1->get_value() > f2->get_value() ||
 			f1 && i2 && f1->get_value() > i2->get_value() ||
 			t1 && t2 && t1->get_args().size() == 0 && t2->get_args().size() == 0 && t1->get_name() > t2->get_name()) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		else {
@@ -2127,7 +2410,7 @@ public:
 
 	virtual const string get_id() { return "inc"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "inc(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -2140,7 +2423,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 		if (!a1 && !a2)
 		{
@@ -2148,7 +2431,7 @@ public:
 			int_number * n2 = dynamic_cast<int_number *>(positional_vals->at(1));
 			n1->inc();
 
-			if (!n1 || !n2 || !n1->unify(r, n2)) {
+			if (!n1 || !n2 || !n1->unify(CTX, r, n2)) {
 				delete r;
 				delete result;
 				result = NULL;
@@ -2158,14 +2441,14 @@ public:
 			int_number * n2 = dynamic_cast<int_number *>(positional_vals->at(1));
 			n2->dec();
 
-			r->set(a1->get_name().c_str(), n2);
+			r->set(CTX, a1->get_name().c_str(), n2);
 			n2->free();
 		}
 		else if (!a1 && a2) {
 			int_number * n1 = dynamic_cast<int_number *>(positional_vals->at(0));
 			n1->inc();
 
-			r->set(a2->get_name().c_str(), n1);
+			r->set(CTX, a2->get_name().c_str(), n1);
 			n1->free();
 		}
 		return result;
@@ -2178,7 +2461,7 @@ public:
 
 	virtual const string get_id() { return "split(=..)"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "=..(term,[term_id,arg1,...,argN]) incorrect call!" << endl;
 			exit(-3);
@@ -2197,18 +2480,18 @@ public:
 				exit(-3);
 			}
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			stack_container<value *> LL;
 			LL.reserve(t1->get_args().size() + 1);
 			LL.push_back(new term(t1->get_name()));
 
 			for (int i = 0; i < t1->get_args().size(); i++)
-				LL.push_back(t1->get_args().at(i)->copy(r));
+				LL.push_back(t1->get_args().at(i)->copy(CTX, r));
 
 			::list * L2 = new ::list(LL, NULL);
 
-			if (t2->unify(r, L2)) {
+			if (t2->unify(CTX, r, L2)) {
 				result->push_back(r);
 			}
 			else {
@@ -2227,13 +2510,13 @@ public:
 				exit(-3);
 			}
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			term * TT = new term(dynamic_cast<term *>(L2->get_nth(1, false))->get_name());
 			for (int i = 2; i <= L2->size(); i++)
-				TT->add_arg(r, L2->get_nth(i, false)->copy(r));
+				TT->add_arg(CTX, r, L2->get_nth(i, false)->copy(CTX, r));
 
-			if (t1->unify(r, TT)) {
+			if (t1->unify(CTX, r, TT)) {
 				result->push_back(r);
 			}
 			else {
@@ -2254,7 +2537,7 @@ public:
 
 	virtual const string get_id() { return "functor"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "functor(indicator,name,pow) incorrect call!" << endl;
 			exit(-3);
@@ -2275,12 +2558,12 @@ public:
 				exit(-3);
 			}
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			int_number * N = new int_number(t1->get_args().size());
 			term * NM = new term(t1->get_name());
 
-			if (v2->unify(r, NM) && v3->unify(r, N)) {
+			if (v2->unify(CTX, r, NM) && v3->unify(CTX, r, N)) {
 				result->push_back(r);
 			}
 			else {
@@ -2301,14 +2584,14 @@ public:
 				exit(-3);
 			}
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			term * TT = new term(v2->get_name());
 			int NN = v3->get_value();
 			for (int i = 0; i < NN; i++)
-				TT->add_arg(r, new any());
+				TT->add_arg(CTX, r, new any());
 
-			if (t1->unify(r, TT)) {
+			if (t1->unify(CTX, r, TT)) {
 				result->push_back(r);
 			}
 			else {
@@ -2329,7 +2612,7 @@ public:
 
 	virtual const string get_id() { return "load_classes"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "load_classes(RootDir,ObjFactID,ObjLinkID) incorrect call!" << endl;
 			exit(-3);
@@ -2350,11 +2633,13 @@ public:
 		generated_vars * result = new generated_vars();
 		if (t1 && t2 && t3 && LoadModellingDesktop(L"", utf8_to_wstring(t1->get_name())) &&
 				prolog->LoadXPathing()) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			prolog->CLASSES_ROOT = t1->get_name();
 			prolog->SetXPathLoaded(true);
-			prolog->GVars[string(nameObjFactID)] = t2->copy(r);
-			prolog->GVars[string(nameObjLinkID)] = t3->copy(r);
+			std::unique_lock<std::mutex> glock(prolog->GLOCK);
+			prolog->GVars[string(nameObjFactID)] = t2->copy(CTX, r);
+			prolog->GVars[string(nameObjLinkID)] = t3->copy(CTX, r);
+			glock.unlock();
 			result->push_back(r);
 		}
 		else {
@@ -2372,7 +2657,7 @@ public:
 
 	virtual const string get_id() { return "init_xpathing"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "init_xpathing(Version) incorrect call!" << endl;
 			exit(-3);
@@ -2402,7 +2687,7 @@ public:
 				NULL, NULL, prolog->ENV(),
 				NULL
 				)) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			SetDeduceLogFile(log_fname.c_str());
 			prolog->SetXPathCompiled(true);
 			result->push_back(r);
@@ -2423,7 +2708,7 @@ public:
 
 	virtual const string get_id() { return "induct_xpathing"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 7) {
 			std::cout << "induct_xpathing(Interval,nCPU,InFName,OutFName,UseNNet,SimilarDirect,OnlyInduceModel) incorrect call!" << endl;
 			exit(-3);
@@ -2453,12 +2738,16 @@ public:
 
 		string IDS = "";
 		int n_objs = 0;
+		std::unique_lock<std::mutex> glock(prolog->GLOCK);
 		map<string, value *>::iterator itf = prolog->GVars.find("$ObjFactID");
 		if (itf != prolog->GVars.end()) {
+			std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 			map< string, vector<term *> *>::iterator itd = prolog->DB.find(itf->second->to_str());
 			if (itd != prolog->DB.end())
 				n_objs = itd->second->size();
+			lock.unlock();
 		}
+		glock.unlock();
 		for (int i = 1; i <= n_objs; i++) {
 			char Buf[128];
 			IDS += string(__ltoa(i, Buf, 10));
@@ -2498,7 +2787,7 @@ public:
 			IDS.c_str(),
 			OnlyInduceModel
 			)) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		else {
@@ -2516,7 +2805,7 @@ public:
 
 	virtual const string get_id() { return "import_model_after_induct"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "import_model_after_induct(ModelFileName) incorrect call!" << endl;
 			exit(-3);
@@ -2530,11 +2819,12 @@ public:
 
 		auto assertz = [&](term * t) {
 			string atid = t->get_name();
+			std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 			if (prolog->DB.find(atid) == prolog->DB.end())
 				prolog->DB[atid] = new vector<term *>();
 
 			vector<term *> * terms = prolog->DB[atid];
-			terms->push_back((term *)t->copy(f));
+			terms->push_back((term *)t->copy(CTX, f));
 
 			if (prolog->DBIndicators.find(t->get_name()) == prolog->DBIndicators.end()) {
 				set<int> * inds = new set<int>;
@@ -2545,6 +2835,7 @@ public:
 				set<int> * inds = prolog->DBIndicators[t->get_name()];
 				inds->insert(t->get_args().size());
 			}
+			lock.unlock();
 		};
 
 		auto Import = [&](const string & FName, value * _ObjFactID,
@@ -2556,44 +2847,48 @@ public:
 				string LinkFactID = dynamic_cast<term *>(_LinkFactID)->get_name();
 				wstring Lang;
 				S->LoadFromXML(Lang, utf8_to_wstring(FName));
+				std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 				if (prolog->DB.find(ObjFactID) != prolog->DB.end()) {
 					for (term * t : *prolog->DB[ObjFactID])
 						t->free();
 					prolog->DB[ObjFactID]->clear();
 				}
+				lock.unlock();
 				S->EnumerateObjs(
 					[&](TElement * E) {
 						term * t = new term(ObjFactID);
-						t->add_arg(f, new term(wstring_to_utf8(E->Ident)));
-						t->add_arg(f, new term(wstring_to_utf8(E->Ref->ClsID)));
+						t->add_arg(CTX, f, new term(wstring_to_utf8(E->Ident)));
+						t->add_arg(CTX, f, new term(wstring_to_utf8(E->Ref->ClsID)));
 						::list * L = new ::list(stack_container<value *>(), NULL);
 						map<wstring, wstring>::iterator it = E->Parameters.begin();
 						while (it != E->Parameters.end()) {
 							term * tL = new term("param");
-							tL->add_arg(f, new term(wstring_to_utf8(it->first)));
-							tL->add_arg(f, new term(wstring_to_utf8(it->second)));
+							tL->add_arg(CTX, f, new term(wstring_to_utf8(it->first)));
+							tL->add_arg(CTX, f, new term(wstring_to_utf8(it->second)));
 							L->add(tL);
 							it++;
 						}
-						t->add_arg(f, L);
-						t->add_arg(f, new term(""));
+						t->add_arg(CTX, f, L);
+						t->add_arg(CTX, f, new term(""));
 						assertz(t);
 						t->free();
 					}
 				);
+				lock.lock();
 				if (prolog->DB.find(LinkFactID) != prolog->DB.end()) {
 					for (term * t : *prolog->DB[LinkFactID])
 						t->free();
 					prolog->DB[LinkFactID]->clear();
 				}
+				lock.unlock();
 				S->EnumerateLinks(
 					[&](TLink * L) {
 						term * t = new term(LinkFactID);
-						t->add_arg(f, new term(wstring_to_utf8(L->_From->Owner->Ident)));
-						t->add_arg(f, new term(wstring_to_utf8(L->_From->Ref->CntID)));
-						t->add_arg(f, new term(wstring_to_utf8(L->_To->Owner->Ident)));
-						t->add_arg(f, new term(wstring_to_utf8(L->_To->Ref->CntID)));
-						t->add_arg(f, new term(L->Inform ? "t" : "f"));
+						t->add_arg(CTX, f, new term(wstring_to_utf8(L->_From->Owner->Ident)));
+						t->add_arg(CTX, f, new term(wstring_to_utf8(L->_From->Ref->CntID)));
+						t->add_arg(CTX, f, new term(wstring_to_utf8(L->_To->Owner->Ident)));
+						t->add_arg(CTX, f, new term(wstring_to_utf8(L->_To->Ref->CntID)));
+						t->add_arg(CTX, f, new term(L->Inform ? "t" : "f"));
 						assertz(t);
 						t->free();
 					}
@@ -2609,13 +2904,17 @@ public:
 		term * t1 = dynamic_cast<term *>(positional_vals->at(0));
 
 		generated_vars * result = new generated_vars();
+		std::unique_lock<std::mutex> glock(prolog->GLOCK);
+		value* OF = prolog->GVars[string(nameObjFactID)];
+		value* OL = prolog->GVars[string(nameObjLinkID)];
+		glock.unlock();
 		if (t1 && prolog->XPathLoaded() && Import(
 				t1->get_name(),
-				prolog->GVars[string(nameObjFactID)],
-				prolog->GVars[string(nameObjLinkID)]
+				OF,
+				OL
 				)
 			) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		else {
@@ -2633,7 +2932,7 @@ public:
 
 	virtual const string get_id() { return "unload_classes"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 0) {
 			std::cout << "unload_classes incorrect call!" << endl;
 			exit(-3);
@@ -2647,7 +2946,7 @@ public:
 			prolog->INDUCT_MODE = "";
 			prolog->SetXPathCompiled(false);
 			prolog->SetXPathLoaded(false);
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		catch (exception E) {
@@ -2664,7 +2963,7 @@ public:
 
 	virtual const string get_id() { return "var"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "var(V) incorrect call!" << endl;
 			exit(-3);
@@ -2673,7 +2972,7 @@ public:
 		bool d1 = positional_vals->at(0)->defined();
 		generated_vars * result = new generated_vars();
 		if (!d1) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		else {
@@ -2690,7 +2989,7 @@ public:
 
 	virtual const string get_id() { return "nonvar"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "nonvar(V) incorrect call!" << endl;
 			exit(-3);
@@ -2699,7 +2998,7 @@ public:
 		bool d1 = positional_vals->at(0)->defined();
 		generated_vars * result = new generated_vars();
 		if (d1) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			result->push_back(r);
 		}
 		else {
@@ -2721,7 +3020,7 @@ public:
 
 	virtual const string get_id() { return "get_(i/o)contacts"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "get_icontacts(ID,ContList) incorrect call!" << endl;
 			exit(-3);
@@ -2733,7 +3032,7 @@ public:
 		value * v2 = dynamic_cast<value *>(positional_vals->at(1));
 		generated_vars * result = new generated_vars();
 		if (d1 && !d2 && t1) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			vector<TContactReg *> Contacts;
 			GetContactsRegByClassID(
 				utf8_to_wstring(t1->get_name()),
@@ -2743,11 +3042,11 @@ public:
 			for (TContactReg * C : Contacts) {
 				term * t = new ::term("contact");
 				char Buf[128];
-				t->add_arg(r, new term(wstring_to_utf8(C->CntID)));
-				t->add_arg(r, new term(__itoa(rand(), Buf, 10)));
+				t->add_arg(CTX, r, new term(wstring_to_utf8(C->CntID)));
+				t->add_arg(CTX, r, new term(__itoa(rand(), Buf, 10)));
 				received->add(t);
 			}
-			if (v2->unify(r, received))
+			if (v2->unify(CTX, r, received))
 				result->push_back(r);
 			else {
 				delete result;
@@ -2770,23 +3069,88 @@ public:
 
 	virtual const string get_id() { return "g_assign"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "g_assign(Name,Val) incorrect call!" << endl;
 			exit(-3);
 		}
 		term * a1 = dynamic_cast<term *>(positional_vals->at(0));
 		value * a2 = dynamic_cast<value *>(positional_vals->at(1));
-		if (!a1 || !a1->defined() || a1->get_args().size() > 0 || !a2 || !a2->defined()) {
+		if (!a1 || !a1->defined() || a1->get_args().size() > 0 || !a2) {
 			std::cout << "g_assign(Name,Val) indeterminated!" << endl;
 			exit(-3);
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
-		prolog->GVars[a1->get_name()] = a2->copy(r);
+		string new_name = a1->get_name();
+		if (CTX->forked() && (new_name.length() == 0 || new_name[0] != '&')) {
+			new_name.insert(0, 1, '*');
+			r->set(CTX, new_name.c_str(), a2->copy(CTX, r));
+		}
+		else {
+			std::unique_lock<std::mutex> glock(prolog->GLOCK);
+			std::map<std::string, value*>::iterator it = prolog->GVars.find(a1->get_name());
+			if (it != prolog->GVars.end())
+				it->second->free();
+			prolog->GVars[a1->get_name()] = a2->copy(CTX, r);
+			glock.unlock();
+		}
+
+		return result;
+	}
+};
+
+class predicate_item_g_assign_nth : public predicate_item {
+public:
+	predicate_item_g_assign_nth(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "g_assign_nth"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << "g_assign_nth(Name,N,Val) incorrect call!" << endl;
+			exit(-3);
+		}
+		term* a1 = dynamic_cast<term*>(positional_vals->at(0));
+		int_number* a2 = dynamic_cast<int_number*>(positional_vals->at(1));
+		value* a3 = dynamic_cast<value*>(positional_vals->at(2));
+		if (!a1 || !a1->defined() || a1->get_args().size() > 0 || !a2 || !a2->defined() || !a3 || !a3->defined()) {
+			std::cout << "g_assign_nth(Name,N,Val) indeterminated!" << endl;
+			exit(-3);
+		}
+
+		generated_vars* result = new generated_vars();
+		frame_item* r = f->copy(CTX);
+
+		string new_name = a1->get_name();
+		if (CTX->forked() && (new_name.length() == 0 || new_name[0] != '&')) {
+			new_name.insert(0, 1, '*');
+			::list* L = dynamic_cast<::list*>(r->get(CTX, new_name.c_str()));
+			if (L && L->set_nth(a2->get_value(), a3->copy(CTX, r))) {
+				r->register_write(new_name);
+				result->push_back(r);
+			}
+			else {
+				delete r;
+				delete result;
+				result = NULL;
+			}
+		}
+		else {
+			std::unique_lock<std::mutex> glock(prolog->GLOCK);
+			::list* L = dynamic_cast<::list*>(prolog->GVars[a1->get_name()]);
+			if (L && L->set_nth(a2->get_value(), a3->copy(CTX, r)))
+				result->push_back(r);
+			else {
+				delete r;
+				delete result;
+				result = NULL;
+			}
+			glock.unlock();
+		}
 
 		return result;
 	}
@@ -2798,7 +3162,7 @@ public:
 
 	virtual const string get_id() { return "g_read"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "g_read(Name,A) incorrect call!" << endl;
 			exit(-3);
@@ -2811,25 +3175,83 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
-		map<string, value *>::iterator it = prolog->GVars.find(a1->get_name());
-		if (it == prolog->GVars.end()) {
-			value * v = new int_number(0);
-			if (!a2->unify(r, v)) {
-				delete result;
-				result = NULL;
-				delete r;
+		string new_name = a1->get_name();
+		if (CTX->forked() && (new_name.length() == 0 || new_name[0] != '&')) {
+			new_name.insert(0, 1, '*');
+			value* v = r->get(CTX, new_name.c_str());
+			if (v) {
+				if (!a2->unify(CTX, r, v)) {
+					delete result;
+					result = NULL;
+					delete r;
+				}
 			}
-			v->free();
+			else {
+				v = new int_number(0);
+				if (!a2->unify(CTX, r, v)) {
+					delete result;
+					result = NULL;
+					delete r;
+				}
+				v->free();
+			}
 		}
 		else {
-			if (!a2->unify(r, it->second)) {
-				delete result;
-				result = NULL;
-				delete r;
+			std::unique_lock<std::mutex> glock(prolog->GLOCK);
+			map<string, value*>::iterator it = prolog->GVars.find(a1->get_name());
+			if (it == prolog->GVars.end()) {
+				value* v = new int_number(0);
+				if (!a2->unify(CTX, r, v)) {
+					delete result;
+					result = NULL;
+					delete r;
+				}
+				v->free();
 			}
+			else {
+				if (!a2->unify(CTX, r, it->second)) {
+					delete result;
+					result = NULL;
+					delete r;
+				}
+			}
+			glock.unlock();
+		}
+
+		return result;
+	}
+};
+
+class predicate_item_page_id : public predicate_item {
+public:
+	predicate_item_page_id(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "page_id"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 1) {
+			std::cout << "page_id(ID) incorrect call!" << endl;
+			exit(-3);
+		}
+		value* a = dynamic_cast<value*>(positional_vals->at(0));
+		if (!a) {
+			std::cout << "page_id(ID) indeterminated!" << endl;
+			exit(-3);
+		}
+
+		generated_vars* result = new generated_vars();
+		frame_item* r = f->copy(CTX);
+
+		int_number* id = new int_number(CTX->THR ? CTX->THR->get_nthread() : -1);
+		if (id && a->unify(CTX, r, id))
+			result->push_back(r);
+		else {
+			delete r;
+			delete result;
+			result = NULL;
 		}
 
 		return result;
@@ -2846,10 +3268,10 @@ public:
 
 	virtual const string get_id() { return "cut(!)"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
-		prolog->block_process(false, true, frontier);
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
+		prolog->block_process(CTX, false, true, frontier);
 		generated_vars * result = new generated_vars();
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 		return result;
 	}
 };
@@ -2867,7 +3289,7 @@ public:
 
 	virtual const string & get_expression() { return expression; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		generated_vars * result = new generated_vars();
 		value * res;
 		if (expression.length() && expression[0] == '\'') {
@@ -2883,7 +3305,7 @@ public:
 		} else {
 			// Evaluate expression
 			int p = 0;
-			double _res = prolog->evaluate(f, expression, p);
+			double _res = prolog->evaluate(CTX, f, expression, p);
 
 			if (p < expression.length()) {
 				std::cout << "'is' evaluation : can't understand the following : '" << expression.substr(p) << "'" << endl;
@@ -2895,12 +3317,12 @@ public:
 			else
 				res = new float_number(_res);
 		}
-		frame_item * ff = f->copy();
-		value * v = f->get(var_name.c_str());
+		frame_item * ff = f->copy(CTX);
+		value * v = f->get(CTX, var_name.c_str());
 		if (!v || !v->defined()) {
-			ff->set(var_name.c_str(), res);
+			ff->set(CTX, var_name.c_str(), res);
 			result->push_back(ff);
-		} else if (v->unify(ff, res))
+		} else if (v->unify(CTX, ff, res))
 			result->push_back(ff);
 		else {
 			delete ff;
@@ -2920,7 +3342,7 @@ public:
 
 	virtual const string get_id() { return "fail"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		return NULL;
 	}
 };
@@ -2931,9 +3353,9 @@ public:
 
 	virtual const string get_id() { return "true"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		generated_vars * result = new generated_vars();
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 		return result;
 	}
 };
@@ -2945,7 +3367,7 @@ public:
 
 	virtual const string get_id() { return "append"; }
 
-	virtual frame_item * get_next_variant(frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
+	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
 
 		if (d1 && d2 && d3 && internal_variant == 0) {
@@ -2954,9 +3376,9 @@ public:
 			::list * L3 = dynamic_cast<::list *>(positional_vals->at(2));
 
 			if (L1 && L2 && L3) {
-				::list * conc = L1->append(f, L2);
-				frame_item * r = f->copy();
-				if (conc->unify(r, L3))
+				::list * conc = L1->append(CTX, f, L2);
+				frame_item * r = f->copy(CTX);
+				if (conc->unify(CTX, r, L3))
 					result = r;
 				else {
 					delete r;
@@ -2971,9 +3393,9 @@ public:
 			value * L3 = dynamic_cast<::value *>(positional_vals->at(2));
 
 			if (L1 && L2 && L3) {
-				::list * conc = L1->append(f, L2);
-				frame_item * r = f->copy();
-				if (L3->unify(r, conc))
+				::list * conc = L1->append(CTX, f, L2);
+				frame_item * r = f->copy(CTX);
+				if (L3->unify(CTX, r, conc))
 					result = r;
 				else {
 					delete r;
@@ -2991,11 +3413,11 @@ public:
 				internal_variant = L1->size();
 				value * K1 = NULL;
 				value * K2 = NULL;
-				L3->const_split(f, internal_variant, K1, K2);
+				L3->const_split(CTX, f, internal_variant, K1, K2);
 
-				frame_item * r = f->copy();
+				frame_item * r = f->copy(CTX);
 
-				if (L1->unify(r, K1) && L2->unify(r, K2))
+				if (L1->unify(CTX, r, K1) && L2->unify(CTX, r, K2))
 					result = r;
 				else {
 					delete r;
@@ -3016,11 +3438,11 @@ public:
 				internal_variant = L3->size() - L2->size();
 				value * K1;
 				value * K2;
-				L3->const_split(f, internal_variant, K1, K2);
+				L3->const_split(CTX, f, internal_variant, K1, K2);
 
-				frame_item * r = f->copy();
+				frame_item * r = f->copy(CTX);
 
-				if (L1->unify(r, K1) && L2->unify(r, K2))
+				if (L1->unify(CTX, r, K1) && L2->unify(CTX, r, K2))
 					result = r;
 				else {
 					delete r;
@@ -3041,11 +3463,11 @@ public:
 				for (; !result && internal_variant <= L3->size(); internal_variant++) {
 					value * K1 = new ::list(stack_container<value*>(), NULL);
 					value * K2 = new ::list(stack_container<value*>(), NULL);
-					L3->const_split(f, internal_variant, K1, K2);
+					L3->const_split(CTX, f, internal_variant, K1, K2);
 
-					frame_item * r = f->copy();
+					frame_item * r = f->copy(CTX);
 
-					if (L1->unify(r, K1) && L2->unify(r, K2))
+					if (L1->unify(CTX, r, K1) && L2->unify(CTX, r, K2))
 						result = r;
 					else {
 						delete r;
@@ -3058,7 +3480,7 @@ public:
 		return result;
 	}
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3 && positional_vals->size() != 1) {
 			std::cout << "append(A,B,C)/append(F) incorrect call!" << endl;
 			exit(-3);
@@ -3069,7 +3491,7 @@ public:
 			d3 = positional_vals->at(2)->defined();
 
 			int internal_ptr = 0;
-			frame_item * first = get_next_variant(f, internal_ptr, positional_vals);
+			frame_item * first = get_next_variant(CTX, f, internal_ptr, positional_vals);
 		
 			if (first)
 				return new lazy_generated_vars(f, this, positional_vals, first, internal_ptr, once ? 1 : 0xFFFFFFFF);
@@ -3086,7 +3508,7 @@ public:
 
 			generated_vars * result = new generated_vars();
 
-			result->push_back(f->copy());
+			result->push_back(f->copy(CTX));
 
 			return result;
 		}
@@ -3100,7 +3522,7 @@ public:
 
 	virtual const string get_id() { return "sublist"; }
 
-	virtual frame_item * get_next_variant(frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
+	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
 
 		if (d1 && d2 && internal_variant == 0) {
@@ -3109,12 +3531,12 @@ public:
 
 			if (L1 && L2) {
 				stack_values LL1;
-				L1->get(f, &LL1);
+				L1->get(CTX, f, &LL1);
 				int p = 0;
-				frame_item * r = f->copy();
+				frame_item * r = f->copy(CTX);
 				L2->iterate([&](value * v) {
 					if (p < LL1.size()) {
-						if (LL1[p]->unify(r, v))
+						if (LL1[p]->unify(CTX, r, v))
 							p++;
 					}
 				});
@@ -3142,9 +3564,9 @@ public:
 					}
 					::list * K = new ::list(SUBSET, NULL);
 
-					frame_item * r = f->copy();
+					frame_item * r = f->copy(CTX);
 
-					if (V1->unify(r, K))
+					if (V1->unify(CTX, r, K))
 						result = r;
 					else {
 						delete r;
@@ -3157,7 +3579,7 @@ public:
 		return result;
 	}
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "sublist(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -3166,7 +3588,7 @@ public:
 		d2 = positional_vals->at(1)->defined();
 
 		int internal_ptr = 0;
-		frame_item * first = get_next_variant(f, internal_ptr, positional_vals);
+		frame_item * first = get_next_variant(CTX, f, internal_ptr, positional_vals);
 
 		if (first)
 			return new lazy_generated_vars(f, this, positional_vals, first, internal_ptr, once ? 1 : 0xFFFFFFFF);
@@ -3182,7 +3604,7 @@ public:
 
 	virtual const string get_id() { return "atom_concat"; }
 
-	virtual frame_item * get_next_variant(frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
+	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
 
 		if (d1 && d2 && d3 && internal_variant == 0) {
@@ -3191,8 +3613,8 @@ public:
 			::term * L3 = dynamic_cast<::term *>(positional_vals->at(2));
 
 			::term * conc = new term(L1->make_str() + L2->make_str());
-			frame_item * r = f->copy();
-			if (conc->unify(r, L3))
+			frame_item * r = f->copy(CTX);
+			if (conc->unify(CTX, r, L3))
 				result = r;
 			else {
 				delete r;
@@ -3206,8 +3628,8 @@ public:
 			value * L3 = dynamic_cast<::value *>(positional_vals->at(2));
 
 			::term * conc = new term(L1->make_str() + L2->make_str());
-			frame_item * r = f->copy();
-			if (L3->unify(r, conc))
+			frame_item * r = f->copy(CTX);
+			if (L3->unify(CTX, r, conc))
 				result = r;
 			else {
 				delete r;
@@ -3228,9 +3650,9 @@ public:
 				value * K1 = new term(LL3S.substr(0, internal_variant));
 				value * K2 = new term(LL3S.substr(internal_variant, LL3S.length() - internal_variant));
 
-				frame_item * r = f->copy();
+				frame_item * r = f->copy(CTX);
 
-				if (L1->unify(r, K1) && L2->unify(r, K2))
+				if (L1->unify(CTX, r, K1) && L2->unify(CTX, r, K2))
 					result = r;
 				else {
 					delete r;
@@ -3256,9 +3678,9 @@ public:
 				value * K1 = new term(LL3S.substr(0, internal_variant));
 				value * K2 = new term(LL3S.substr(internal_variant, LL3S.length() - internal_variant));
 
-				frame_item * r = f->copy();
+				frame_item * r = f->copy(CTX);
 
-				if (L1->unify(r, K1) && L2->unify(r, K2))
+				if (L1->unify(CTX, r, K1) && L2->unify(CTX, r, K2))
 					result = r;
 				else {
 					delete r;
@@ -3281,9 +3703,9 @@ public:
 				value * K1 = new term(LL3S.substr(0, internal_variant));
 				value * K2 = new term(LL3S.substr(internal_variant, LL3S.length() - internal_variant));
 
-				frame_item * r = f->copy();
+				frame_item * r = f->copy(CTX);
 
-				if (L1->unify(r, K1) && L2->unify(r, K2))
+				if (L1->unify(CTX, r, K1) && L2->unify(CTX, r, K2))
 					result = r;
 				else {
 					delete r;
@@ -3296,7 +3718,7 @@ public:
 		return result;
 	}
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "atom_concat(A,B,C) incorrect call!" << endl;
 			exit(-3);
@@ -3310,7 +3732,7 @@ public:
 		}
 
 		int internal_ptr = 0;
-		frame_item * first = get_next_variant(f, internal_ptr, positional_vals);
+		frame_item * first = get_next_variant(CTX, f, internal_ptr, positional_vals);
 
 		if (first)
 			return new lazy_generated_vars(f, this, positional_vals, first, internal_ptr, once ? 1 : 0xFFFFFFFF);
@@ -3325,7 +3747,7 @@ public:
 
 	virtual const string get_id() { return "delete"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "delete(A,B,C) incorrect call!" << endl;
 			exit(-3);
@@ -3345,14 +3767,14 @@ public:
 			::list * L3 = dynamic_cast<::list *>(positional_vals->at(2));
 
 			stack_values LL1;
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			L1->iterate([&](value * v) {
-				if (!V2->unify(r, v))
-					LL1.push_back(v->copy(r));
+				if (!V2->unify(CTX, r, v))
+					LL1.push_back(v->copy(CTX, r));
 			});
 			::list * LL3 = new ::list(LL1, NULL);
 
-			if (L3->unify(r, LL3))
+			if (L3->unify(CTX, r, LL3))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3367,14 +3789,14 @@ public:
 			value * V3 = positional_vals->at(2);
 
 			stack_values LL1;
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			L1->iterate([&](value * v) {
-				if (!V2->unify(r, v))
-					LL1.push_back(v->copy(r));
+				if (!V2->unify(CTX, r, v))
+					LL1.push_back(v->copy(CTX, r));
 			});
 			::list * LL3 = new ::list(LL1, NULL);
 
-			if (V3->unify(r, LL3))
+			if (V3->unify(CTX, r, LL3))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3388,9 +3810,9 @@ public:
 			value * A2 = dynamic_cast<::value *>(positional_vals->at(1));
 			::list * L3 = dynamic_cast<::list *>(positional_vals->at(2));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
-			if (A1->unify(r, L3))
+			if (A1->unify(CTX, r, L3))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3413,7 +3835,7 @@ public:
 
 	virtual const string get_id() { return "atom_chars"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "atom_chars(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -3432,7 +3854,7 @@ public:
 
 			string S2 = L2->make_str();
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			if (A1->make_str() == S2)
 				result->push_back(r);
 			else {
@@ -3446,7 +3868,7 @@ public:
 			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
 			value * L2 = dynamic_cast<::value *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			::list * L = NULL;
 
@@ -3458,7 +3880,7 @@ public:
 				L = new ::list(S, NULL);
 			}
 
-			if (L2->unify(r, L))
+			if (L2->unify(CTX, r, L))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3471,12 +3893,12 @@ public:
 			value * A1 = dynamic_cast<::value *>(positional_vals->at(0));
 			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			string S = L2->make_str();
 			term * tt = new ::term(S);
 
-			if (A1->unify(r, tt))
+			if (A1->unify(CTX, r, tt))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3496,7 +3918,7 @@ public:
 
 	virtual const string get_id() { return "atom_codes"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "atom_codes(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -3519,7 +3941,7 @@ public:
 				if (n) S2 += (char) (0.5 + n->get_value());
 			});
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			if (A1->make_str() == S2)
 				result->push_back(r);
 			else {
@@ -3533,7 +3955,7 @@ public:
 			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
 			value * L2 = dynamic_cast<::value *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			::list * L = new ::list(stack_container<value *>(), NULL);
 
@@ -3546,7 +3968,7 @@ public:
 					L->add(new int_number(c));
 			}
 
-			if (L2->unify(r, L))
+			if (L2->unify(CTX, r, L))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3559,7 +3981,7 @@ public:
 			value * A1 = dynamic_cast<::value *>(positional_vals->at(0));
 			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			string S;
 			L2->iterate([&](value * v) {
@@ -3568,7 +3990,7 @@ public:
 			});
 			term * tt = new ::term(S);
 
-			if (A1->unify(r, tt))
+			if (A1->unify(CTX, r, tt))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3592,7 +4014,7 @@ public:
 
 	virtual const string get_id() { return "atom_hex[s]"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "atom_hex[s](A,B) incorrect call!" << endl;
 			exit(-3);
@@ -3611,7 +4033,7 @@ public:
 
 			string S2 = A2->from_hex(SEP);
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			if (A1->make_str() == S2)
 				result->push_back(r);
 			else {
@@ -3624,11 +4046,11 @@ public:
 			::term * A1 = dynamic_cast<::term *>(positional_vals->at(0));
 			value * L2 = dynamic_cast<::value *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			::term * H = new ::term(A1->to_hex(SEP));
 
-			if (L2->unify(r, H))
+			if (L2->unify(CTX, r, H))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3641,12 +4063,12 @@ public:
 			value * A1 = dynamic_cast<::value *>(positional_vals->at(0));
 			::term * H2 = dynamic_cast<::term *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			string S = H2->from_hex(SEP);
 			term * tt = new ::term(S);
 
-			if (A1->unify(r, tt))
+			if (A1->unify(CTX, r, tt))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3666,7 +4088,7 @@ public:
 
 	virtual const string get_id() { return "number_atom"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "number_atom(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -3684,7 +4106,7 @@ public:
 			::float_number * F1 = dynamic_cast<::float_number *>(positional_vals->at(0));
 			::term * A2 = dynamic_cast<::term *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			if (F1 && F1->make_str() == A2->make_str() || N1 && N1->make_str() == A2->make_str())
 				result->push_back(r);
 			else {
@@ -3698,11 +4120,11 @@ public:
 			::float_number * F1 = dynamic_cast<::float_number *>(positional_vals->at(0));
 			value * A2 = dynamic_cast<::value *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			::term * S = new ::term(F1 ? F1->make_str() : N1->make_str());
 
-			if (A2->unify(r, S))
+			if (A2->unify(CTX, r, S))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3715,12 +4137,12 @@ public:
 			value * N1 = dynamic_cast<::value *>(positional_vals->at(0));
 			::term * A2 = dynamic_cast<::term *>(positional_vals->at(1));
 
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			int p = 0;
-			value * S = prolog->parse(false, true, r, A2->make_str(), p);
+			value * S = prolog->parse(CTX, false, true, r, A2->make_str(), p);
 
-			if ((dynamic_cast<int_number *>(S) || dynamic_cast<float_number *>(S)) && N1->unify(r, S))
+			if ((dynamic_cast<int_number *>(S) || dynamic_cast<float_number *>(S)) && N1->unify(CTX, r, S))
 				result->push_back(r);
 			else {
 				delete result;
@@ -3740,7 +4162,7 @@ public:
 
 	virtual const string get_id() { return "number"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "number(A) incorrect call!" << endl;
 			exit(-3);
@@ -3752,7 +4174,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		if (dynamic_cast<int_number *>(positional_vals->at(0)) || dynamic_cast<float_number *>(positional_vals->at(0)))
 			result->push_back(r);
 		else {
@@ -3771,7 +4193,7 @@ public:
 
 	virtual const string get_id() { return "change_directory"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "change_directory(Dir) incorrect call!" << endl;
 			exit(-3);
@@ -3783,7 +4205,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
 		term * A = dynamic_cast<::term *>(positional_vals->at(0));
@@ -3805,7 +4227,7 @@ public:
 
 	virtual const string get_id() { return "open_url"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "open_url(URL|URLList) incorrect call!" << endl;
 			exit(-3);
@@ -3817,7 +4239,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
 		::list * L = dynamic_cast<::list *>(positional_vals->at(0));
@@ -3860,7 +4282,7 @@ public:
 
 	virtual const string get_id() { return "track_post"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "track_post(ID|IDList) incorrect call!" << endl;
 			exit(-3);
@@ -3872,7 +4294,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
 		::list * L = dynamic_cast<::list *>(positional_vals->at(0));
@@ -3917,7 +4339,7 @@ public:
 
 	virtual const string get_id() { return "consistency"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "consistency(PrefixesList) incorrect call!" << endl;
 			exit(-3);
@@ -3943,7 +4365,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 		if (prolog->check_consistency(L))
-			result->push_back(f->copy());
+			result->push_back(f->copy(CTX));
 		else {
 			delete result;
 			result = NULL;
@@ -3959,7 +4381,7 @@ public:
 
 	virtual const string get_id() { return "last"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "last(L,A) incorrect call!" << endl;
 			exit(-3);
@@ -3982,8 +4404,8 @@ public:
 		::value * LAST = ((::list *)L1)->get_last();
 
 		if (LAST) {
-			frame_item * r = f->copy();
-			if (V2->unify(r, LAST))
+			frame_item * r = f->copy(CTX);
+			if (V2->unify(CTX, r, LAST))
 				result->push_back(r);
 			else {
 				delete result;
@@ -4007,7 +4429,7 @@ public:
 
 	virtual const string get_id() { return "reverse"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "reverse(A,B) incorrect call!" << endl;
 			exit(-3);
@@ -4036,14 +4458,14 @@ public:
 			swap(V1, V2);
 		}
 
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		stack_container<value *> REV1;
-		L1->get(r, &REV1);
+		L1->get(CTX, r, &REV1);
 		reverse(REV1.begin(), REV1.end());
 
 		::list * R1 = new ::list(REV1, NULL);
 
-		if (V2->unify(r, R1))
+		if (V2->unify(CTX, r, R1))
 			result->push_back(r);
 		else {
 			delete result;
@@ -4064,15 +4486,15 @@ public:
 
 	virtual const string get_id() { return "member"; }
 
-	virtual frame_item * get_next_variant(frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
+	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
 
 		::value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
 
 		for (; !result && internal_variant < L2->size(); internal_variant++) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
-			if (L2->get_nth(internal_variant + 1, false)->unify(r, V1))
+			if (L2->get_nth(internal_variant + 1, false)->unify(CTX, r, V1))
 				result = r;
 			else
 				delete r;
@@ -4081,7 +4503,7 @@ public:
 		return result;
 	}
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "member(A,L) incorrect call!" << endl;
 			exit(-3);
@@ -4095,7 +4517,7 @@ public:
 		}
 
 		int internal_ptr = 0;
-		frame_item * first = get_next_variant(f, internal_ptr, positional_vals);
+		frame_item * first = get_next_variant(CTX, f, internal_ptr, positional_vals);
 
 		if (first)
 			return new lazy_generated_vars(f, this, positional_vals, first, internal_ptr, once ? 1 : 0xFFFFFFFF);
@@ -4113,15 +4535,15 @@ public:
 
 	virtual const string get_id() { return "for"; }
 
-	virtual frame_item * get_next_variant(frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
+	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
 
 		::value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
 
 		for (; !result && internal_variant < last - first + 1; internal_variant++) {
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 			int_number * N = new int_number(first + internal_variant);
-			if (V->unify(r, N))
+			if (V->unify(CTX, r, N))
 				result = r;
 			else
 				delete r;
@@ -4131,7 +4553,7 @@ public:
 		return result;
 	}
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "for(V,From,To) incorrect call!" << endl;
 			exit(-3);
@@ -4153,7 +4575,7 @@ public:
 		last = (int)(0.5 + TO->get_value());
 
 		int internal_ptr = 0;
-		frame_item * _first = get_next_variant(f, internal_ptr, positional_vals);
+		frame_item * _first = get_next_variant(CTX, f, internal_ptr, positional_vals);
 
 		if (_first)
 			return new lazy_generated_vars(f, this, positional_vals, _first, internal_ptr, once ? 1 : 0xFFFFFFFF);
@@ -4168,7 +4590,7 @@ public:
 
 	virtual const string get_id() { return "length"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "length(L,A) incorrect call!" << endl;
 			exit(-3);
@@ -4191,8 +4613,8 @@ public:
 		::value * L = new int_number(L1->size());
 
 		if (L) {
-			frame_item * r = f->copy();
-			if (V2->unify(r, L))
+			frame_item * r = f->copy(CTX);
+			if (V2->unify(CTX, r, L))
 				result->push_back(r);
 			else {
 				delete result;
@@ -4216,7 +4638,7 @@ public:
 
 	virtual const string get_id() { return "max__list"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "max_list(L,A) incorrect call!" << endl;
 			exit(-3);
@@ -4268,8 +4690,8 @@ public:
 				::value * L = new float_number(MAX);
 
 				if (L) {
-					frame_item * r = f->copy();
-					if (V2->unify(r, L))
+					frame_item * r = f->copy(CTX);
+					if (V2->unify(CTX, r, L))
 						result->push_back(r);
 					else {
 						delete result;
@@ -4295,7 +4717,7 @@ public:
 
 	virtual const string get_id() { return "atom_length"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "atom_length(A,N) incorrect call!" << endl;
 			exit(-3);
@@ -4318,8 +4740,8 @@ public:
 		::value * L = new int_number(T1->get_name().length());
 
 		if (L) {
-			frame_item * r = f->copy();
-			if (V2->unify(r, L))
+			frame_item * r = f->copy(CTX);
+			if (V2->unify(CTX, r, L))
 				result->push_back(r);
 			else {
 				delete result;
@@ -4343,7 +4765,7 @@ public:
 
 	virtual const string get_id() { return "nth"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "nth(Index,L,A) incorrect call!" << endl;
 			exit(-3);
@@ -4369,16 +4791,16 @@ public:
 			exit(-3);
 		}
 
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 
 		if (ANY1 || VAR1) { // Search
 			int n = 1;
 			auto check = [&](value * item) {
-				if (V3->unify(r, item)) {
+				if (V3->unify(CTX, r, item)) {
 					::int_number * NN = new ::int_number(n);
-					if (V1->unify(r, NN)) {
+					if (V1->unify(CTX, r, NN)) {
 						result->push_back(r);
-						r = f->copy();
+						r = f->copy(CTX);
 					}
 					NN->free();
 				}
@@ -4393,7 +4815,7 @@ public:
 		}
 		else { // Unify nth-element
 			value * V = L2->get_nth(NUM1->get_value(), true);
-			if (V && V3->unify(r, V))
+			if (V && V3->unify(CTX, r, V))
 				result->push_back(r);
 			else {
 				delete result;
@@ -4419,7 +4841,7 @@ public:
 
 	virtual const string get_id() { return "listing"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 1) {
 			std::cout << "listing/listing(A/n) incorrect call!" << endl;
 			exit(-3);
@@ -4439,9 +4861,10 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
+		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 		map< string, vector<term *> *>::iterator it = prolog->DB.begin();
 		while (it != prolog->DB.end()) {
 			if (!t || it->first == t->get_name())
@@ -4458,6 +4881,7 @@ public:
 					}
 			it++;
 		}
+		lock.unlock();
 
 		return result;
 	}
@@ -4469,7 +4893,7 @@ public:
 
 	virtual const string get_id() { return "current_predicate"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "current_predicate(A/n) incorrect call!" << endl;
 			exit(-3);
@@ -4485,23 +4909,26 @@ public:
 				std::cout << "current_predicate(A/n) has incorrect parameter!" << endl;
 				exit(-3);
 			}
+			std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 			map< string, vector<term *> *>::iterator it = prolog->DB.begin();
 			while (it != prolog->DB.end()) {
 				if (it->first == t->get_name())
 					for (int i = 0; i < it->second->size(); i++)
 						if (it->second->at(i)->get_args().size() == t->get_arity()) {
-							frame_item * r = f->copy();
+							frame_item * r = f->copy(CTX);
 							result->push_back(r);
 
 							return result;
 						}
 				it++;
 			}
+			lock.unlock();
 			delete result;
 
 			return NULL;
 		}
 
+		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 		map< string, vector<term *> *>::iterator it = prolog->DB.begin();
 		value * t = dynamic_cast<value *>(positional_vals->at(0));
 		while (it != prolog->DB.end()) {
@@ -4509,9 +4936,9 @@ public:
 			for (int i = 0; i < it->second->size(); i++) {
 				int n = it->second->at(i)->get_args().size();
 				if (seen.find(n) == seen.end()) {
-					frame_item * r = f->copy();
+					frame_item * r = f->copy(CTX);
 					indicator * tt = new indicator(it->first, n);
-					if (t->unify(r, tt)) {
+					if (t->unify(CTX, r, tt)) {
 						result->push_back(r);
 					}
 					else
@@ -4522,6 +4949,7 @@ public:
 			}
 			it++;
 		}
+		lock.unlock();
 		if (result->size() == 0) {
 			delete result;
 			result = NULL;
@@ -4543,7 +4971,7 @@ public:
 
 	virtual const string get_id() { return "findall"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "findall(Template,Term,Result) incorrect call!" << endl;
 			exit(-3);
@@ -4560,22 +4988,23 @@ public:
 		generated_vars * result = new generated_vars();
 
 		if (v) {
-			t = dynamic_cast<term *>(f->get(v->get_name().c_str()));
+			t = dynamic_cast<term *>(f->get(CTX, v->get_name().c_str()));
 			if (t) {
-				t = dynamic_cast<term *>(t->copy(f, 1));
+				t = dynamic_cast<term *>(t->copy(CTX, f, 1));
 			} else {
 				std::cout << "findall(Template,Term,Result) has incorrect parameters!" << endl;
 				exit(-3);
 			}
 		}
+		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 		if (t && prolog->DB.find(t->get_name()) != prolog->DB.end()) {
 			vector<term *> * terms = prolog->DB[t->get_name()];
 			stack_container<value *> L;
 			for (int i = 0; i < terms->size(); i++) {
-				frame_item * ff = f->copy();
-				term * _dummy = (term *)t->copy(ff);
-				if (_dummy->unify(ff, terms->at(i))) {
-					value * item = positional_vals->at(0)->copy(ff);
+				frame_item * ff = f->copy(CTX);
+				term * _dummy = (term *)t->copy(CTX, ff);
+				if (_dummy->unify(CTX, ff, terms->at(i))) {
+					value * item = positional_vals->at(0)->copy(CTX, ff);
 					L.push_back(item);
 				}
 				delete ff;
@@ -4583,8 +5012,8 @@ public:
 			}
 			if (v) t->free();
 			::list * LL = new ::list(L, NULL);
-			frame_item * ff = f->copy();
-			if (positional_vals->at(2)->unify(ff, LL))
+			frame_item * ff = f->copy(CTX);
+			if (positional_vals->at(2)->unify(CTX, ff, LL))
 				result->push_back(ff);
 			else {
 				delete ff;
@@ -4592,6 +5021,7 @@ public:
 				result = NULL;
 			}
 			LL->free();
+			lock.unlock();
 		}
 		else {
 			std::cout << "Predicate [" << t->get_name() << "] is neither standard nor dynamic!" << endl;
@@ -4608,22 +5038,24 @@ public:
 
 	virtual const string get_id() { return "predicate_property"; }
 
-	virtual generated_vars * _generate_variants(frame_item * f, term * signature, value * & prop) {
+	virtual generated_vars * _generate_variants(context * CTX, frame_item * f, term * signature, value * & prop) {
 		generated_vars * result = new generated_vars();
 
+		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 		map< string, set<int> *>::iterator it = prolog->DBIndicators.find(signature->get_name());
 		term * prop_val = new term("dynamic");
 		int n = signature->get_args().size();
 		if (it != prolog->DBIndicators.end()) {
 			if (it->second->find(n) != it->second->end()) {
-				frame_item * r = f->copy();
-				if (prop->unify(r, prop_val)) {
+				frame_item * r = f->copy(CTX);
+				if (prop->unify(CTX, r, prop_val)) {
 					result->push_back(r);
 				}
 				else
 					delete r;
 			}
 		}
+		lock.unlock();
 		prop_val->free();
 		if (result->size() == 0) {
 			delete result;
@@ -4639,7 +5071,7 @@ public:
 	predicate_item_predicate_property(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
 		predicate_item_internal_predicate_property(_neg, _once, _call, num, c, _prolog) { }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "predicate_property(pred(_,...,_),Prop) incorrect call!" << endl;
 			exit(-3);
@@ -4649,8 +5081,8 @@ public:
 		if (tt) {
 			term * functor = new term(tt->get_name());
 			for (int i = 0; i < tt->get_args().size(); i++)
-				functor->add_arg(f, new any());
-			generated_vars * result = _generate_variants(f, functor, positional_vals->at(1));
+				functor->add_arg(CTX, f, new any());
+			generated_vars * result = _generate_variants(CTX, f, functor, positional_vals->at(1));
 			functor->free();
 			return result;
 		}
@@ -4666,7 +5098,7 @@ public:
 
 	virtual const string get_id() { return "$predicate_property_pi"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "'$predicate_property_pi'(A/n,Prop) incorrect call!" << endl;
 			exit(-3);
@@ -4676,8 +5108,8 @@ public:
 		if (tt) {
 			term * t = new term(tt->get_name());
 			for (int i = 0; i < tt->get_arity(); i++)
-				t->add_arg(f, new any());
-			generated_vars * result = _generate_variants(f, t, positional_vals->at(1));
+				t->add_arg(CTX, f, new any());
+			generated_vars * result = _generate_variants(CTX, f, t, positional_vals->at(1));
 			t->free();
 			return result;
 		}
@@ -4692,7 +5124,7 @@ public:
 
 	virtual const string get_id() { return "consult"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "consult(FName) incorrect call!" << endl;
 			exit(-3);
@@ -4704,7 +5136,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 
 		prolog->consult(positional_vals->at(0)->make_str(), true);
 
@@ -4720,7 +5152,7 @@ public:
 
 	virtual const string get_id() { return "open"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "open(fName,mode,S) incorrect call!" << endl;
 			exit(-3);
@@ -4739,8 +5171,8 @@ public:
 		::value * S = dynamic_cast<::value *>(positional_vals->at(2));
 
 		::term * id = new term(prolog->open_file(fName->make_str(), mode->make_str()));
-		frame_item * r = f->copy();
-		if (S->unify(r, id))
+		frame_item * r = f->copy(CTX);
+		if (S->unify(CTX, r, id))
 			result->push_back(r);
 		else {
 			delete result;
@@ -4758,7 +5190,7 @@ public:
 
 	virtual const string get_id() { return "close"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "close(S) incorrect call!" << endl;
 			exit(-3);
@@ -4773,7 +5205,7 @@ public:
 		::term * S = dynamic_cast<::term *>(positional_vals->at(0));
 
 		prolog->close_file(S->make_str());
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
 		return result;
@@ -4786,7 +5218,7 @@ public:
 
 	virtual const string get_id() { return "mars"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "mars(A) incorrect call!" << endl;
 			exit(-3);
@@ -4855,7 +5287,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -4867,7 +5299,7 @@ public:
 
 	virtual const string get_id() { return "mars_decode"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "mars_decode(FName) incorrect call!" << endl;
 			exit(-3);
@@ -4950,9 +5382,43 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
+	}
+};
+
+class predicate_item_unset : public predicate_item {
+public:
+	predicate_item_unset(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "unset"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 1) {
+			std::cout << "unset(A) incorrect call!" << endl;
+			exit(-3);
+		}
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "unset(A) indeterminated!" << endl;
+			exit(-3);
+		}
+
+		term* t = dynamic_cast<term*>(positional_vals->at(0));
+		if (t && t->get_args().size() == 0) {
+			frame_item* r = f->copy(CTX);
+
+			r->unset(CTX, t->get_name().c_str());
+
+			generated_vars* result = new generated_vars();
+
+			result->push_back(r);
+
+			return result;
+		}
+		else
+			return NULL;
 	}
 };
 
@@ -4962,7 +5428,7 @@ public:
 
 	virtual const string get_id() { return "write"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() < 1 || positional_vals->size() > 2) {
 			std::cout << "write(A)/write(S,A) incorrect call!" << endl;
 			exit(-3);
@@ -4985,7 +5451,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -4997,7 +5463,7 @@ public:
 
 	virtual const string get_id() { return "write_to_atom"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "write_to_atom(A,What) incorrect call!" << endl;
 			exit(-3);
@@ -5007,10 +5473,10 @@ public:
 			std::cout << "write_to_atom(A,What) indeterminated!" << endl;
 			exit(-3);
 		}
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 		term * t = new term(positional_vals->at(1)->to_str());
 		generated_vars * result = NULL;
-		if (positional_vals->at(0)->unify(ff, t)) {
+		if (positional_vals->at(0)->unify(CTX, ff, t)) {
 			result = new generated_vars();
 
 			result->push_back(ff);
@@ -5029,16 +5495,16 @@ public:
 
 	virtual const string get_id() { return "write_term"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() < 2 || positional_vals->size() > 3) {
 			std::cout << "write_term(A,[opts])/write(S,A,[opts]) incorrect call!" << endl;
 			exit(-3);
 		}
 		bool d1 = positional_vals->at(0)->defined();
 		bool d2 = positional_vals->at(1)->defined();
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 		term * quoted = new term("quoted");
-		quoted->add_arg(ff, new term("true"));
+		quoted->add_arg(CTX, ff, new term("true"));
 		stack_container<value *> LL;
 		LL.push_back(quoted);
 		::list * LQ = new ::list(LL, NULL);
@@ -5047,8 +5513,8 @@ public:
 			std::cout << "write_term(A,[opts])/write(S,A,[opts]) indeterminated!" << endl;
 			exit(-3);
 		}
-		if (positional_vals->size() == 2 && LQ->unify(ff, positional_vals->at(1)) ||
-			positional_vals->size() == 3 && LQ->unify(ff, positional_vals->at(2)))
+		if (positional_vals->size() == 2 && LQ->unify(CTX, ff, positional_vals->at(1)) ||
+			positional_vals->size() == 3 && LQ->unify(CTX, ff, positional_vals->at(2)))
 			if (positional_vals->size() == 2)
 				if (prolog->out_buf.size() == 0)
 					(*prolog->outs) << (positional_vals->at(0)->export_str());
@@ -5087,16 +5553,16 @@ public:
 
 	virtual const string get_id() { return "write_term_to_atom"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 3) {
 			std::cout << "write_term_to_atom(A,What,[opts]) incorrect call!" << endl;
 			exit(-3);
 		}
 		bool d2 = positional_vals->at(1)->defined();
 		bool d3 = positional_vals->at(2)->defined();
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 		term * quoted = new term("quoted");
-		quoted->add_arg(ff, new term("true"));
+		quoted->add_arg(CTX, ff, new term("true"));
 		stack_container<value *> LL;
 		LL.push_back(quoted);
 		::list * LQ = new ::list(LL, NULL);
@@ -5105,13 +5571,13 @@ public:
 			exit(-3);
 		}
 		std::string What;
-		if (LQ->unify(ff, positional_vals->at(2)))
+		if (LQ->unify(CTX, ff, positional_vals->at(2)))
 			What = positional_vals->at(1)->export_str();
 		else
 			What = positional_vals->at(1)->to_str();
 		term * W = new term(What);
 		generated_vars * result = NULL;
-		if (positional_vals->at(0)->unify(ff, W)) {
+		if (positional_vals->at(0)->unify(CTX, ff, W)) {
 			result = new generated_vars();
 
 			result->push_back(ff);
@@ -5130,7 +5596,7 @@ public:
 
 	virtual const string get_id() { return "nl"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 1) {
 			std::cout << "nl/nl(S) incorrect call!" << endl;
 			exit(-3);
@@ -5149,7 +5615,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -5161,7 +5627,7 @@ public:
 
 	virtual const string get_id() { return "file_exists"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "file_exists(F) incorrect call!" << endl;
 			exit(-3);
@@ -5175,7 +5641,7 @@ public:
 		if (t && exists(t->get_name())) {
 			generated_vars * result = new generated_vars();
 
-			result->push_back(f->copy());
+			result->push_back(f->copy(CTX));
 
 			return result;
 		} else
@@ -5189,7 +5655,7 @@ public:
 
 	virtual const string get_id() { return "unlink"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "unlink(F) incorrect call!" << endl;
 			exit(-3);
@@ -5206,7 +5672,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -5218,7 +5684,7 @@ public:
 
 	virtual const string get_id() { return "rename_file"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "rename_file(Old,New) incorrect call!" << endl;
 			exit(-3);
@@ -5241,7 +5707,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -5253,7 +5719,7 @@ public:
 
 	virtual const string get_id() { return "tell"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 1) {
 			std::cout << "tell(FName) incorrect call!" << endl;
 			exit(-3);
@@ -5272,7 +5738,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -5284,7 +5750,7 @@ public:
 
 	virtual const string get_id() { return "see"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 1) {
 			std::cout << "see(FName) incorrect call!" << endl;
 			exit(-3);
@@ -5303,7 +5769,7 @@ public:
 
 		generated_vars * result = new generated_vars();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -5315,7 +5781,7 @@ public:
 
 	virtual const string get_id() { return "telling"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 1) {
 			std::cout << "telling(FName) incorrect call!" << endl;
 			exit(-3);
@@ -5324,9 +5790,9 @@ public:
 		::term * S = new term(prolog->current_output);
 
 		generated_vars * result = new generated_vars();
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 
-		if (positional_vals->at(0)->unify(ff, S))
+		if (positional_vals->at(0)->unify(CTX, ff, S))
 			result->push_back(ff);
 		else {
 			delete ff;
@@ -5346,7 +5812,7 @@ public:
 
 	virtual const string get_id() { return "seeing"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 1) {
 			std::cout << "seeing(FName) incorrect call!" << endl;
 			exit(-3);
@@ -5355,9 +5821,9 @@ public:
 		::term * S = new term(prolog->current_input);
 
 		generated_vars * result = new generated_vars();
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 
-		if (positional_vals->at(0)->unify(ff, S))
+		if (positional_vals->at(0)->unify(CTX, ff, S))
 			result->push_back(ff);
 		else {
 			delete ff;
@@ -5377,7 +5843,7 @@ public:
 
 	virtual const string get_id() { return "told"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 0) {
 			std::cout << "told/0 incorrect call!" << endl;
 			exit(-3);
@@ -5389,7 +5855,7 @@ public:
 		prolog->current_output = STD_OUTPUT;
 
 		generated_vars * result = new generated_vars();
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 
 		result->push_back(ff);
 
@@ -5403,7 +5869,7 @@ public:
 
 	virtual const string get_id() { return "seen"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() > 0) {
 			std::cout << "seen/0 incorrect call!" << endl;
 			exit(-3);
@@ -5415,7 +5881,7 @@ public:
 		prolog->current_input = STD_INPUT;
 
 		generated_vars * result = new generated_vars();
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 
 		result->push_back(ff);
 
@@ -5431,7 +5897,7 @@ public:
 
 	virtual const string get_id() { return peek ? "peek_char" : "get_char"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << (peek ? "peek" : "get") << "_char(S,A) incorrect call!" << endl;
 			exit(-3);
@@ -5466,9 +5932,9 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 
-		if (positional_vals->at(1)->unify(r, v))
+		if (positional_vals->at(1)->unify(CTX, r, v))
 			result->push_back(r);
 		else {
 			delete result;
@@ -5488,7 +5954,7 @@ public:
 
 	virtual const string get_id() { return "at_end_of_stream"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "at_end_of_stream(S) incorrect call!" << endl;
 			exit(-3);
@@ -5506,7 +5972,7 @@ public:
 
 		if (ff.peek() == EOF) {
 			generated_vars * result = new generated_vars();
-			frame_item * r = f->copy();
+			frame_item * r = f->copy(CTX);
 
 			result->push_back(r);
 
@@ -5524,7 +5990,7 @@ public:
 
 	virtual const string get_id() { return "get_code"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "get_code(S,N) incorrect call!" << endl;
 			exit(-3);
@@ -5549,9 +6015,9 @@ public:
 			v = new int_number(C);
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 
-		if (positional_vals->at(1)->unify(r, v))
+		if (positional_vals->at(1)->unify(CTX, r, v))
 			result->push_back(r);
 		else {
 			delete result;
@@ -5572,7 +6038,7 @@ public:
 
 	virtual const string get_id() { return "char_code"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "char_code(S,C) incorrect call!" << endl;
 			exit(-3);
@@ -5585,7 +6051,7 @@ public:
 		}
 
 		generated_vars * result = NULL;
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 
 		if (d1) {
 			::term * S = dynamic_cast<::term *>(positional_vals->at(0));
@@ -5595,7 +6061,7 @@ public:
 				exit(-4);
 			}
 			int_number * v = new int_number(SC[0]);
-			if (positional_vals->at(1)->unify(r, v)) {
+			if (positional_vals->at(1)->unify(CTX, r, v)) {
 				result = new generated_vars();
 				result->push_back(r);
 			} else
@@ -5609,7 +6075,7 @@ public:
 				exit(-4);
 			}
 			term * v = new term(string(1, (char)(0.5 + C->get_value())));
-			if (positional_vals->at(0)->unify(r, v)) {
+			if (positional_vals->at(0)->unify(CTX, r, v)) {
 				result = new generated_vars();
 				result->push_back(r);
 			}
@@ -5628,7 +6094,7 @@ public:
 
 	virtual const string get_id() { return "random"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1 && positional_vals->size() != 3) {
 			std::cout << "random(R)/random(Base,Max,Number) incorrect call!" << endl;
 			exit(-3);
@@ -5636,9 +6102,9 @@ public:
 		generated_vars * result = NULL;
 		if (positional_vals->size() == 1) {
 			value * a = dynamic_cast<value *>(positional_vals->at(0));
-			frame_item * ff = f->copy();
+			frame_item * ff = f->copy(CTX);
 			float_number * fv = new float_number(1.0*rand()/RAND_MAX);
-			if (a->unify(ff, fv)) {
+			if (a->unify(CTX, ff, fv)) {
 				result = new generated_vars();
 				result->push_back(ff);
 			} else {
@@ -5660,9 +6126,9 @@ public:
 				std::cout << "random(Base,Max,Number) error call!" << endl;
 				exit(-3);
 			}
-			frame_item * ff = f->copy();
+			frame_item * ff = f->copy(CTX);
 			int_number * iv = new int_number(((long long)base->get_value() + rand() % ((long long)max->get_value() - (long long)base->get_value())));
-			if (a->unify(ff, iv)) {
+			if (a->unify(CTX, ff, iv)) {
 				result = new generated_vars();
 				result->push_back(ff);
 			}
@@ -5682,13 +6148,13 @@ public:
 
 	virtual const string get_id() { return "randomize"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 0) {
 			std::cout << "randomize: extra arguments!" << endl;
 			exit(-3);
 		}
 		generated_vars * result = new generated_vars();
-		frame_item * ff = f->copy();
+		frame_item * ff = f->copy(CTX);
 		srand((unsigned int)time(NULL) ^ (unsigned int)clock());
 		result->push_back(ff);
 
@@ -5702,7 +6168,7 @@ public:
 	predicate_item_read_token_common(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
 		predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
-	virtual generated_vars * get_token(frame_item * f, vector<value *> * & positional_vals, int arg_num, std::basic_istream<char> & ff) {
+	virtual generated_vars * get_token(context * CTX, frame_item * f, vector<value *> * & positional_vals, int arg_num, std::basic_istream<char> & ff) {
 		streampos beg;
 		string line;
 		int p = 0;
@@ -5717,21 +6183,21 @@ public:
 		value * v = NULL;
 		if (p < line.length())
 			if (line[p] >= '0' && line[p] <= '9') {
-				v = prolog->parse(false, true, dummy, line, p);
+				v = prolog->parse(CTX, false, true, dummy, line, p);
 				ff.seekg(beg + (streamoff)p);
 			}
 			else if (line[p] == '\'' || line[p] == '"') {
-				v = prolog->parse(false, true, dummy, line, p);
+				v = prolog->parse(CTX, false, true, dummy, line, p);
 				term * _v = new term("string");
-				_v->add_arg(dummy, new term(unescape(v->make_str())));
+				_v->add_arg(CTX, dummy, new term(unescape(v->make_str())));
 				v->free();
 				v = _v;
 				ff.seekg(beg + (streamoff)p);
 			}
 			else if (line[p] >= 'A' && line[p] <= 'Z') {
-				v = prolog->parse(false, true, dummy, line, p);
+				v = prolog->parse(CTX, false, true, dummy, line, p);
 				term * _v = new term("var");
-				_v->add_arg(dummy, new term(((var *)v)->get_name()));
+				_v->add_arg(CTX, dummy, new term(((var *)v)->get_name()));
 				v->free();
 				v = _v;
 				ff.seekg(beg + (streamoff)p);
@@ -5754,23 +6220,23 @@ public:
 				ff.get(C[0]);
 				v = new term("punct");
 				if (!ff.eof()) {
-					((term *)v)->add_arg(dummy, new term(C));
+					((term *)v)->add_arg(CTX, dummy, new term(C));
 				}
 				else {
-					((term *)v)->add_arg(dummy, new term("end_of_file"));
+					((term *)v)->add_arg(CTX, dummy, new term("end_of_file"));
 				}
 			}
 		else {
 			v = new term("punct");
-			((term *)v)->add_arg(dummy, new term("end_of_file"));
+			((term *)v)->add_arg(CTX, dummy, new term("end_of_file"));
 		}
 
 		generated_vars * result = new generated_vars();
-		frame_item * r = f->copy();
+		frame_item * r = f->copy(CTX);
 
 		delete dummy;
 
-		if (v && positional_vals->at(arg_num)->unify(r, v))
+		if (v && positional_vals->at(arg_num)->unify(CTX, r, v))
 			result->push_back(r);
 		else {
 			delete result;
@@ -5791,7 +6257,7 @@ public:
 
 	virtual const string get_id() { return "read_token"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1 && positional_vals->size() != 2) {
 			std::cout << "read_token(A)/read_token(S,A) incorrect call!" << endl;
 			exit(-3);
@@ -5809,9 +6275,9 @@ public:
 			int fn;
 			std::basic_fstream<char> & ff = prolog->get_file(S->make_str(), fn);
 
-			return get_token(f, positional_vals, 1, ff);
+			return get_token(CTX, f, positional_vals, 1, ff);
 		} else {
-			return get_token(f, positional_vals, 0, *(prolog->ins));
+			return get_token(CTX, f, positional_vals, 0, *(prolog->ins));
 		}
 	}
 };
@@ -5824,7 +6290,7 @@ public:
 
 	virtual const string get_id() { return "read_token_from_atom"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 2) {
 			std::cout << "read_token_from_atom(A,T) incorrect call!" << endl;
 			exit(-3);
@@ -5840,7 +6306,7 @@ public:
 
 		std::stringstream ff(A->make_str());
 
-		return get_token(f, positional_vals, 1, ff);
+		return get_token(CTX, f, positional_vals, 1, ff);
 	}
 };
 
@@ -5852,7 +6318,7 @@ public:
 
 	virtual const string get_id() { return z ? "assertz" : "asserta"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "assert(A) incorrect call!" << endl;
 			exit(-3);
@@ -5871,14 +6337,15 @@ public:
 		}
 
 		string atid = t->get_name();
+		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 		if (prolog->DB.find(atid) == prolog->DB.end())
 			prolog->DB[atid] = new vector<term *>();
 		
 		vector<term *> * terms = prolog->DB[atid];
 		if (z)
-			terms->push_back((term *)t->copy(f));
+			terms->push_back((term *)t->copy(CTX, f));
 		else
-			terms->insert(terms->begin(), (term *)t->copy(f));
+			terms->insert(terms->begin(), (term *)t->copy(CTX, f));
 
 		if (prolog->DBIndicators.find(t->get_name()) == prolog->DBIndicators.end()) {
 			set<int> * inds = new set<int>;
@@ -5889,8 +6356,9 @@ public:
 			set<int> * inds = prolog->DBIndicators[t->get_name()];
 			inds->insert(t->get_args().size());
 		}
+		lock.unlock();
 
-		result->push_back(f->copy());
+		result->push_back(f->copy(CTX));
 
 		return result;
 	}
@@ -5899,40 +6367,41 @@ public:
 class predicate_item_retract : public predicate_item {
 	bool all;
 public:
-	predicate_item_retract(bool _all, bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
+	predicate_item_retract(bool _all, bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) :
 		predicate_item(_neg, _once, _call, num, c, _prolog), all(_all) { }
 
 	virtual const string get_id() { return all ? "retractall" : "retract"; }
 
-	virtual generated_vars * generate_variants(frame_item * f, vector<value *> * & positional_vals) {
+	virtual generated_vars* generate_variants(context * CTX, frame_item* f, vector<value*>*& positional_vals) {
 		if (positional_vals->size() != 1) {
 			std::cout << "retract[all](A) incorrect call!" << endl;
 			exit(-3);
 		}
 
-		generated_vars * result = new generated_vars();
-		term * t = dynamic_cast<term *>(positional_vals->at(0));
+		generated_vars* result = new generated_vars();
+		term* t = dynamic_cast<term*>(positional_vals->at(0));
 		if (!t) {
 			std::cout << "retract[all](A) : A is not a term!" << endl;
 			exit(-3);
 		}
 
+		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
 		if (prolog->DB.find(t->get_name()) == prolog->DB.end())
-			prolog->DB[t->get_name()] = new vector<term *>();
+			prolog->DB[t->get_name()] = new vector<term*>();
 
-		vector<term *> * terms = prolog->DB[t->get_name()];
-		vector<term *>::iterator it = terms->begin();
+		vector<term*>* terms = prolog->DB[t->get_name()];
+		vector<term*>::iterator it = terms->begin();
 		while (it != terms->end()) {
-			term * tt = (term *)t->copy(f);
-			if (tt->unify(f, *it)) {
+			term* tt = (term*)t->copy(CTX, f);
+			if (tt->unify(CTX, f, *it)) {
 				if (all) it = terms->erase(it);
 				else {
-					frame_item * ff = f->copy();
-					value * v1 = new int_number((long long)(*it));
-					ff->set("$RETRACTOR$", v1);
+					frame_item* ff = f->copy(CTX);
+					value* v1 = new int_number((long long)(*it));
+					ff->set(CTX, "$RETRACTOR$", v1);
 					v1->free();
-					value * v2 = new int_number((long long)terms);
-					ff->set("$VECTOR$", v2);
+					value* v2 = new int_number((long long)terms);
+					ff->set(CTX, "$VECTOR$", v2);
 					v2->free();
 					result->push_back(ff);
 					it++;
@@ -5944,7 +6413,8 @@ public:
 		}
 
 		if (all)
-			result->push_back(f->copy());
+			result->push_back(f->copy(CTX));
+		lock.unlock();
 
 		if (result && once && result->size() > 1) {
 			for (int i = 1; i < result->size(); i++)
@@ -5955,15 +6425,15 @@ public:
 		return result;
 	}
 
-	virtual bool execute(frame_item * f) {
+	virtual bool execute(context * CTX, frame_item* f) {
 		if (all) return true;
 
-		term * v = (term *)((long long)(0.5 + ((int_number *)f->get("$RETRACTOR$"))->get_value()));
-		f->get("$RETRACTOR$")->free();
-		vector<term *> * db = (vector<term *> *)((long long)(0.5+((int_number *)f->get("$VECTOR$"))->get_value()));
-		f->get("$VECTOR$")->free();
+		term* v = (term*)((long long)(0.5 + ((int_number*)f->get(CTX, "$RETRACTOR$"))->get_value()));
+		f->get(CTX, "$RETRACTOR$")->free();
+		vector<term*>* db = (vector<term*> *)((long long)(0.5 + ((int_number*)f->get(CTX, "$VECTOR$"))->get_value()));
+		f->get(CTX, "$VECTOR$")->free();
 		if (v && db) {
-			vector<term *>::iterator it = find(db->begin(), db->end(), v);
+			vector<term*>::iterator it = find(db->begin(), db->end(), v);
 			if (it != db->end())
 				db->erase(it);
 			return true;
@@ -5973,22 +6443,180 @@ public:
 	}
 };
 
-void interpreter::block_process(bool clear_flag, bool cut_flag, predicate_item * frontier) {
-	std::list<int>::iterator itf = FLAGS.end();
-	bool passed_frontier = false;
-	int nn = TRACE.size() - 1;
-	while (nn >= 0) {
-		generated_vars * T = TRACE[nn];
-		vector<value *> ** A = TRACEARGS[nn];
-		predicate_item * WHO = TRACERS[nn];
-		int n = ptrTRACE[nn];
-		int flags = *(--itf);
-		int level = LEVELS[nn];
+class predicate_item_fork : public predicate_item {
+	// predicate_item* start; // Starts from get_start()
+	int ending_number;
+	value * n_threads;
+public:
+	predicate_item_fork(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) :
+		predicate_item(_neg, _once, _call, num, c, _prolog) {
+		n_threads = new int_number(1);
+	}
+	virtual ~predicate_item_fork() {
+		if (n_threads)
+			n_threads->free();
+	}
 
-		if (cut_flag && frontier && PARENT_CALLS.top()->get_parent() &&
-			WHO && WHO->get_parent() == PARENT_CALLS.top()->get_parent() &&
-			n == PARENT_CALL_VARIANT.top() &&
-			level == PARENT_CALLS.size() - 1)
+	virtual const string get_id() { return "fork"; }
+
+	virtual generated_vars* generate_variants(context * CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 0) {
+			std::cout << "fork branch incorrect call!" << endl;
+			exit(-3);
+		}
+
+		generated_vars* result = new generated_vars();
+
+		frame_item* ff = f->copy(CTX);
+		result->push_back(ff);
+
+		return result;
+	}
+
+	virtual void set_n_threads(value* v) {
+		if (n_threads)
+			n_threads->free();
+		n_threads = v;
+	}
+
+	virtual void set_end(int end) {
+		ending_number = end;
+	}
+
+	virtual predicate_item* get_next(int variant) {
+		return parent->get_item(ending_number);
+	}
+
+	virtual predicate_item* get_start(int variant) {
+		return predicate_item::get_next(variant);
+	}
+
+	virtual bool execute(context * CTX, frame_item* f) {
+		int N = 1;
+		int_number* ni = NULL;
+
+		var* nv = dynamic_cast<var*>(n_threads);
+		if (nv) {
+			value* v = f->get(CTX, nv->get_name().c_str());
+
+			if (!v || !v->defined()) {
+				std::cout << "Number of threads [" << nv->get_name() << "] is not defined!" << endl;
+				exit(-3);
+			}
+
+			ni = dynamic_cast<int_number*>(v);
+
+			if (ni == NULL) {
+				std::cout << "Value of number of threads [" << nv->get_name() << "] is not int!" << endl;
+				exit(-3);
+			}
+		}
+		else {
+			ni = dynamic_cast<int_number*>(n_threads);
+			if (ni == NULL) {
+				std::cout << "Number of threads must be a variable or int!" << endl;
+				exit(-3);
+			}
+		}
+		if (ni->get_value() >= 0)
+			N = (int)(0.5 + ni->get_value());
+		else
+			N = (int)(-0.5 + ni->get_value());
+		if (N < 1) {
+			std::cout << "Incorrect number of threads [" << N << "] !" << endl;
+			exit(-3);
+		}
+		// Process
+		for (int i = 0; i < N; i++) {
+			CTX->add_page(f->tcopy(CTX, prolog, true), parent->get_item(self_number+1), parent->get_item(ending_number), prolog);
+		}
+
+		return true;
+	}
+};
+
+class predicate_item_join : public predicate_item {
+	value* k;
+	bool ending;
+public:
+	predicate_item_join(bool _ending, value * _k, bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) :
+		predicate_item(_neg, _once, _call, num, c, _prolog) {
+		ending = _ending;
+		k = _k;
+	}
+	virtual ~predicate_item_join() {
+		if (k)
+			k->free();
+	}
+
+	virtual const string get_id() { return "join"; }
+
+	virtual generated_vars* generate_variants(context * CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 0) {
+			std::cout << "join branches incorrect call!" << endl;
+			exit(-3);
+		}
+
+		generated_vars* result = new generated_vars();
+
+		frame_item* ff = f->copy(CTX);
+		result->push_back(ff);
+
+		return result;
+	}
+
+	virtual bool execute(context * CTX, frame_item* f) {
+		int K = -1;
+		int_number* ni = NULL;
+
+		var* nv = dynamic_cast<var*>(k);
+		if (nv) {
+			value* v = f->get(CTX, nv->get_name().c_str());
+
+			if (!v || !v->defined()) {
+				std::cout << "Number of &-joined threads [" << nv->get_name() << "] is not defined!" << endl;
+				exit(-3);
+			}
+
+			ni = dynamic_cast<int_number*>(v);
+
+			if (ni == NULL) {
+				std::cout << "Value of number of &-joined threads [" << nv->get_name() << "] is not int!" << endl;
+				exit(-3);
+			}
+		}
+		else {
+			ni = dynamic_cast<int_number*>(k);
+			if (ni == NULL) {
+				std::cout << "Number of &-joined threads must be a variable or int!" << endl;
+				exit(-3);
+			}
+		}
+		if (ni->get_value() >= 0)
+			K = (int)(0.5 + ni->get_value());
+		else
+			K = (int)(-0.5 + ni->get_value());
+		// Process
+		return CTX->join(K, f, prolog);
+	}
+};
+
+void interpreter::block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier) {
+	std::list<int>::iterator itf = CNT->FLAGS.end();
+	bool passed_frontier = false;
+	int nn = CNT->TRACE.size() - 1;
+	while (nn >= 0) {
+		generated_vars * T = CNT->TRACE[nn];
+		vector<value *> ** A = CNT->TRACEARGS[nn];
+		predicate_item * WHO = CNT->TRACERS[nn];
+		int n = CNT->ptrTRACE[nn];
+		int flags = *(--itf);
+		int level = CNT->LEVELS[nn];
+
+		if (cut_flag && frontier && CNT->PARENT_CALLS.size() && CNT->PARENT_CALLS.top()->get_parent() &&
+			WHO && WHO->get_parent() == CNT->PARENT_CALLS.top()->get_parent() &&
+			n == CNT->PARENT_CALL_VARIANT.top() &&
+			level == CNT->PARENT_CALLS.size() - 1)
 			break;
 
 		if (cut_flag) {
@@ -6006,28 +6634,28 @@ void interpreter::block_process(bool clear_flag, bool cut_flag, predicate_item *
 			break;
 		}
 
-		if (cut_flag && PARENT_CALLS.top()->get_parent() &&
-			WHO && WHO->get_parent() == PARENT_CALLS.top()->get_parent() &&
-			n == PARENT_CALL_VARIANT.top() &&
-			level == PARENT_CALLS.size()-1)
+		if (cut_flag && CNT->PARENT_CALLS.size() && CNT->PARENT_CALLS.top()->get_parent() &&
+			WHO && WHO->get_parent() == CNT->PARENT_CALLS.top()->get_parent() &&
+			n == CNT->PARENT_CALL_VARIANT.top() &&
+			level == CNT->PARENT_CALLS.size()-1)
 			break;
 
 		if (cut_flag && passed_frontier &&
 			WHO && dynamic_cast<predicate_left_bracket *>(WHO) &&
 			!dynamic_cast<predicate_left_bracket *>(WHO)->is_inserted() &&
-			level == PARENT_CALLS.size())
+			level == CNT->PARENT_CALLS.size())
 			break;
 
 		if (cut_flag && !passed_frontier && frontier &&
 			WHO == frontier &&
-			level == PARENT_CALLS.size())
+			level == CNT->PARENT_CALLS.size())
 			passed_frontier = true;
 
 		nn--;
 	}
 }
 
-value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_item * ff, const string & s, int & p) {
+value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex_terms, frame_item * ff, const string & s, int & p) {
 	if (p < s.length()) {
 		value * result = NULL;
 
@@ -6098,7 +6726,7 @@ value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_i
 			bypass_spaces(s, p);
 			int oldp = p;
 			while (p < s.length() && s[p] != ']' && s[p] != '|') {
-				value * v = parse(exit_on_error, true, ff, s, p);
+				value * v = parse(CTX, exit_on_error, true, ff, s, p);
 				if (p >= s.length() || v == NULL) {
 					if (exit_on_error) {
 						std::cout << "[" << s.substr(oldp, p - oldp) << "] : incorrect list!" << endl;
@@ -6128,7 +6756,7 @@ value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_i
 			}
 			if (s[p] == '|') {
 				p++;
-				value * t = parse(exit_on_error, true, ff, s, p);
+				value * t = parse(CTX, exit_on_error, true, ff, s, p);
 				if (p >= s.length() || t == NULL) {
 					if (exit_on_error) {
 						std::cout << "[" << s.substr(oldp, p - oldp) << "] : incorrect tag of list!" << endl;
@@ -6160,7 +6788,7 @@ value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_i
 			bool found = false;
 			int it = ff->find(st.c_str(), found);
 			if (found)
-				result = ff->at(it)->copy(ff);
+				result = ff->at(it)->copy(CTX, ff);
 			else
 				result = new var(st);
 		}
@@ -6195,7 +6823,7 @@ value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_i
 					int oldp = p;
 					bypass_spaces(s, p);
 					while (p < s.length() && s[p] != ')') {
-						value * v = parse(exit_on_error, true, ff, s, p);
+						value * v = parse(CTX, exit_on_error, true, ff, s, p);
 						if (p >= s.length() || v == NULL) {
 							if (exit_on_error) {
 								std::cout << "(" << s.substr(oldp, p - oldp) << ") : incorrect term!" << endl;
@@ -6204,7 +6832,7 @@ value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_i
 							else
 								return NULL;
 						}
-						((term *)result)->add_arg(ff, v);
+						((term *)result)->add_arg(CTX, ff, v);
 						v->free();
 						if (!bypass_spaces(s, p)) {
 							if (exit_on_error) {
@@ -6241,128 +6869,147 @@ value * interpreter::parse(bool exit_on_error, bool parse_complex_terms, frame_i
 	}
 }
 
-bool interpreter::unify(frame_item * ff, value * from, value * to) {
-	return to->unify(ff, from);
+bool interpreter::unify(context * CTX, frame_item * ff, value * from, value * to) {
+	return to->unify(CTX, ff, from);
 }
 
-vector<value *> * interpreter::accept(frame_item * ff, predicate_item * current) {
+vector<value *> * interpreter::accept(context * CTX, frame_item * ff, predicate_item * current) {
 	vector<value *> * result = new vector<value *>();
-
+	if (forking) current->lock();
 	if (current->get_args()->size() > current->_get_args()->size())
 		for (const string & s : *current->get_args()) {
 			frame_item * empty = new frame_item();
 			int p = 0;
-			value * item = parse(true, true, empty, s, p);
+			value * item = parse(CTX, true, true, empty, s, p);
 			current->push_cashed_arg(item);
-			value * _item = item->copy(ff);
+			value * _item = item->copy(CTX, ff);
 			item->free();
-			_item = _item->fill(ff); // Собираем item из доступных значений
+			_item = _item->fill(CTX, ff); // Собираем item из доступных значений
 
 			result->push_back(_item);
 			delete empty;
 		}
 	else {
-		for (value * v : *current->_get_args())
-			result->push_back(v->const_copy(ff));
+		if (CTX && CTX->forked())
+			for (value* v : *current->_get_args())
+				result->push_back(v->copy(CTX, ff));
+		else
+			for (value * v : *current->_get_args())
+				result->push_back(v->const_copy(CTX, ff));
 	}
+	if (forking) current->unlock();
 
 	return result;
 }
 
-bool interpreter::retrieve(frame_item * ff, clause * current, vector<value *> * vals, bool escape_vars) {
+bool interpreter::retrieve(context * CTX, frame_item * ff, clause * current, vector<value *> * vals, bool escape_vars) {
 	bool result = true;
 
 	if (escape_vars)
 		for (value * v : *vals)
-			v->escape_vars(ff);
+			v->escape_vars(CTX, ff);
 
 	int k = 0;
+	if (forking) current->lock();
 	if (current->get_args()->size() > current->_get_args()->size())
 		for (const string & s : *current->get_args()) {
 			frame_item * empty = new frame_item();
 			int p = 0;
-			value * item = parse(true, true, empty, s, p);
+			value * item = parse(CTX, true, true, empty, s, p);
 			current->push_cashed_arg(item);
-			value * _item = item->copy(ff);
+			value * _item = item->copy(CTX, ff);
 			item->free();
-			if (!unify(ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
+			if (!unify(CTX, ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
+				result = false;
+			_item->free();
+			delete empty;
+		}
+	else {
+		bool not_const = CTX && CTX->forked();
+		for (value * proto : *current->_get_args()) {
+			value * _item = not_const ? proto->copy(CTX, ff) : proto->const_copy(CTX, ff);
+			if (!unify(CTX, ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
+				result = false;
+			_item->free();
+		}
+	}
+	if (forking) current->unlock();
+
+	return result;
+}
+
+vector<value *> * interpreter::accept(context * CTX, frame_item * ff, clause * current) {
+	vector<value *> * result = new vector<value *>();
+	if (forking) current->lock();
+	if (current->get_args()->size() > current->_get_args()->size())
+		for (const string & s : *current->get_args()) {
+			frame_item * empty = new frame_item();
+			int p = 0;
+			value * item = parse(CTX, true, true, empty, s, p);
+			current->push_cashed_arg(item);
+			value * _item = item->copy(CTX, ff);
+			item->free();
+			_item = _item->fill(CTX, ff); // Собираем item из доступных значений
+
+			result->push_back(_item);
+			delete empty;
+		}
+	else {
+		if (CTX && CTX->forked())
+			for (value* v : *current->_get_args())
+				result->push_back(v->copy(CTX, ff));
+		else
+			for (value* v : *current->_get_args())
+				result->push_back(v->const_copy(CTX, ff));
+	}
+	if (forking) current->unlock();
+
+	return result;
+}
+
+bool interpreter::retrieve(context * CTX, frame_item * ff, predicate_item * current, vector<value *> * vals, bool escape_vars) {
+	bool result = true;
+
+	if (escape_vars)
+		for (value * v : *vals)
+			v->escape_vars(CTX, ff);
+
+	int k = 0;
+	if (forking) current->lock();
+	if (current->get_args()->size() > current->_get_args()->size())
+		for (const string & s : *current->get_args()) {
+			frame_item * empty = new frame_item();
+			int p = 0;
+			value * item = parse(CTX, true, true, empty, s, p);
+			current->push_cashed_arg(item);
+			value * _item = item->copy(CTX, ff);
+			item->free();
+			if (!unify(CTX, ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
 				result = false;
 			_item->free();
 			delete empty;
 		}
 	else {
 		for (value * proto : *current->_get_args()) {
-			value * _item = proto->const_copy(ff);
-			if (!unify(ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
+			value * _item = proto->copy(CTX, ff);
+			if (!unify(CTX, ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
 				result = false;
 			_item->free();
 		}
 	}
+	if (forking) current->unlock();
 
 	return result;
 }
 
-vector<value *> * interpreter::accept(frame_item * ff, clause * current) {
-	vector<value *> * result = new vector<value *>();
-
-	if (current->get_args()->size() > current->_get_args()->size())
-		for (const string & s : *current->get_args()) {
-			frame_item * empty = new frame_item();
-			int p = 0;
-			value * item = parse(true, true, empty, s, p);
-			current->push_cashed_arg(item);
-			value * _item = item->copy(ff);
-			item->free();
-			_item = _item->fill(ff); // Собираем item из доступных значений
-
-			result->push_back(_item);
-			delete empty;
-		}
-	else {
-		for (value * v : *current->_get_args())
-			result->push_back(v->copy(ff));
-	}
-
-	return result;
-}
-
-bool interpreter::retrieve(frame_item * ff, predicate_item * current, vector<value *> * vals, bool escape_vars) {
-	bool result = true;
-
-	if (escape_vars)
-		for (value * v : *vals)
-			v->escape_vars(ff);
-
-	int k = 0;
-	if (current->get_args()->size() > current->_get_args()->size())
-		for (const string & s : *current->get_args()) {
-			frame_item * empty = new frame_item();
-			int p = 0;
-			value * item = parse(true, true, empty, s, p);
-			current->push_cashed_arg(item);
-			value * _item = item->copy(ff);
-			item->free();
-			if (!unify(ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
-				result = false;
-			_item->free();
-			delete empty;
-		}
-	else {
-		for (value * proto : *current->_get_args()) {
-			value * _item = proto->copy(ff);
-			if (!unify(ff, vals->at(k++), _item)) // Заполняем item, попутно заполняются унифицированные переменные
-				result = false;
-			_item->free();
-		}
-	}
-
-	return result;
-}
-
-bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, frame_item * f, vector<value *> ** positional_vals) {
+bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, predicate_item * p, frame_item * f, vector<value *> ** positional_vals) {
 	predicate_item_user * user = dynamic_cast<predicate_item_user *>(p);
 
-	generated_vars * variants = p ? p->generate_variants(f, *positional_vals) : new generated_vars(1, f->copy());
+	predicate* user_p = user ? user->get_user_predicate() : NULL;
+
+	context* CNT = user_p && user_p->is_forking() ? new context(100, CONTEXT, NULL, NULL, NULL, this) : CONTEXT;
+
+	generated_vars * variants = p ? p->generate_variants(CNT, f, *positional_vals) : new generated_vars(1, f->copy(CNT));
 	/*
 	if (p) {
 		cout << p->get_id() << "(";
@@ -6377,25 +7024,30 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 	bool neg_standard = !(user && !user->is_dynamic()) && p && p->is_negated();
 	int i = 0;
 	if (variants || neg_standard) {
-		FLAGS.push_back((p && p->is_once() ? ::once_flag : 0) + (p && p->is_call() ? call_flag : 0));
-		LEVELS.push(PARENT_CALLS.size());
-		TRACE.push(variants);
-		TRACEARGS.push(positional_vals);
-		TRACERS.push(p);
+		CNT->FLAGS.push_back((p && p->is_once() ? ::once_flag : 0) + (p && p->is_call() ? call_flag : 0));
+		CNT->LEVELS.push(CNT->PARENT_CALLS.size());
+		CNT->TRACE.push(variants);
+		CNT->TRACEARGS.push(positional_vals);
+		CNT->TRACERS.push(p);
 		for (i = 0; neg_standard || variants && variants->has_variant(i); i++) {
-			predicate_item * next = p ? p->get_next(i) : NULL;
-			frame_item * ff = variants ? variants->get_next_variant(i) : f->copy();
+			predicate_item * next =
+				p ? (
+					CNT->ending == NULL || CNT->ending != p->get_next(i) ?
+						p->get_next(i) :
+						NULL
+				) : NULL;
+			frame_item * ff = variants ? variants->get_next_variant(CNT, i) : f->copy(CNT);
 			bool success = false;
-			ptrTRACE.push(i);
+			CNT->ptrTRACE.push(i);
 			if (user && !user->is_dynamic()) {
 				if (!user->is_negated()) {
-					if (user->processing(neg, i, variants, positional_vals, ff)) {
-						TRACE.pop();
-						TRACEARGS.pop();
-						TRACERS.pop();
-						FLAGS.pop_back();
-						LEVELS.pop();
-						ptrTRACE.pop();
+					if (user->processing(CNT, neg, i, variants, positional_vals, ff, CONTEXT)) {
+						CNT->TRACE.pop();
+						CNT->TRACEARGS.pop();
+						CNT->TRACERS.pop();
+						CNT->FLAGS.pop_back();
+						CNT->LEVELS.pop();
+						CNT->ptrTRACE.pop();
 
 						if (variants)
 							variants->delete_from(i);
@@ -6403,16 +7055,19 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 							delete ff;
 
 						delete variants;
+
+						if (CNT != CONTEXT)
+							delete CNT;
 
 						return true;
 					}
 					else if (!variants->has_variant(i+1)) {
-						ptrTRACE.pop();
-						FLAGS.pop_back();
-						LEVELS.pop();
-						TRACE.pop();
-						TRACEARGS.pop();
-						TRACERS.pop();
+						CNT->ptrTRACE.pop();
+						CNT->FLAGS.pop_back();
+						CNT->LEVELS.pop();
+						CNT->TRACE.pop();
+						CNT->TRACEARGS.pop();
+						CNT->TRACERS.pop();
 
 						if (variants)
 							variants->delete_from(i);
@@ -6420,24 +7075,30 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 							delete ff;
 
 						delete variants;
+
+						if (CNT != CONTEXT)
+							delete CNT;
 
 						return false;
 					}
 				}
 				else {
-					if (user->processing(neg, i, variants, positional_vals, ff)) {
-						TRACE.pop();
-						TRACEARGS.pop();
-						TRACERS.pop();
-						FLAGS.pop_back();
-						LEVELS.pop();
-						ptrTRACE.pop();
+					if (user->processing(CNT, neg, i, variants, positional_vals, ff, CONTEXT)) {
+						CNT->TRACE.pop();
+						CNT->TRACEARGS.pop();
+						CNT->TRACERS.pop();
+						CNT->FLAGS.pop_back();
+						CNT->LEVELS.pop();
+						CNT->ptrTRACE.pop();
 
 						if (variants)
 							variants->delete_from(i);
 						else
 							delete ff;
 						delete variants;
+
+						if (CNT != CONTEXT)
+							delete CNT;
 
 						return false;
 					}
@@ -6448,13 +7109,13 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 			}
 			else {
 				if (neg_standard) {
-					if (variants && variants->had_variants() && (!p || p->execute(ff))) {
-						TRACE.pop();
-						TRACEARGS.pop();
-						TRACERS.pop();
-						FLAGS.pop_back();
-						LEVELS.pop();
-						ptrTRACE.pop();
+					if (variants && variants->had_variants() && (!p || p->execute(CNT, ff))) {
+						CNT->TRACE.pop();
+						CNT->TRACEARGS.pop();
+						CNT->TRACERS.pop();
+						CNT->FLAGS.pop_back();
+						CNT->LEVELS.pop();
+						CNT->ptrTRACE.pop();
 
 						if (variants)
 							variants->delete_from(i);
@@ -6462,11 +7123,14 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 							delete ff;
 						delete variants;
 
+						if (CNT != CONTEXT)
+							delete CNT;
+
 						return false;
 					}
 					neg_standard = false;
 				}
-				success = !p || p->execute(ff);
+				success = !p || p->execute(CNT, ff);
 			}
 
 			if (success) {
@@ -6478,16 +7142,16 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 				bool rbo = rb && rb->get_corresponding()->is_once();
 
 				if (rbc || rbo) {
-					block_process(true, rbo, NULL);
+					block_process(CNT, true, rbo, NULL);
 				}
 				else if (!user && !lb && p && (p->is_call() || p->is_once())) {
-					FLAGS.back() &= ~(call_flag | ::once_flag);
+					CNT->FLAGS.back() &= ~(call_flag | ::once_flag);
 					if (variants && p->is_once())
 						variants->trunc_from(i+1);
 				}
 
 				if (!yes) {
-					vector<value *> * next_args = accept(ff, next);
+					vector<value *> * next_args = accept(CNT, ff, next);
 					if (next_args) {
 						if (*positional_vals && !(neg_standard || variants && variants->has_variant(i + 1))) {
 							for (int j = 0; j < (*positional_vals)->size(); j++)
@@ -6495,28 +7159,31 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 							delete (*positional_vals);
 							(*positional_vals) = NULL;
 						}
-						yes = process(neg, this_clause, next, ff, &next_args);
+						yes = process(CNT, neg, this_clause, next, ff, &next_args);
 						if (next_args) {
 							for (int j = 0; j < next_args->size(); j++)
 								next_args->at(j)->free();
 							delete next_args;
 						}
 						if (yes) {
-							TRACE.pop();
-							TRACEARGS.pop();
-							TRACERS.pop();
-							FLAGS.pop_back();
-							LEVELS.pop();
-							ptrTRACE.pop();
+							CNT->TRACE.pop();
+							CNT->TRACEARGS.pop();
+							CNT->TRACERS.pop();
+							CNT->FLAGS.pop_back();
+							CNT->LEVELS.pop();
+							CNT->ptrTRACE.pop();
 
-							if (PARENT_CALLS.size() == 0)
-								f->sync(ff);
+							if (CNT->PARENT_CALLS.size() == 0)
+								f->sync(CNT, ff);
 
 							if (variants)
 								variants->delete_from(i);
 							else
 								delete ff;
 							delete variants;
+
+							if (CNT != CONTEXT)
+								delete CNT;
 
 							return true;
 						}
@@ -6531,34 +7198,37 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 					bool next_neg = false;
 					int _flags = 0;
 					int old_variant = 0;
-					bool got = CALLS.size() > 0;
+					bool got = CNT->CALLS.size() > 0;
 					if (got) {
-						next_clause_call = CALLS.top();
-						CALLS.pop();
-						next_clause = CLAUSES.top();
-						CLAUSES.pop();
-						parent_call = PARENT_CALLS.top();
-						PARENT_CALLS.pop();
-						old_variant = PARENT_CALL_VARIANT.top();
-						PARENT_CALL_VARIANT.pop();
-						next_neg = NEGS.top();
-						NEGS.pop();
-						_flags = _FLAGS.top();
-						_FLAGS.pop();
+						next_clause_call = CNT->CALLS.top();
+						CNT->CALLS.pop();
+						next_clause = CNT->CLAUSES.top();
+						CNT->CLAUSES.pop();
+						parent_call = CNT->PARENT_CALLS.top();
+						CNT->PARENT_CALLS.pop();
+						old_variant = CNT->PARENT_CALL_VARIANT.top();
+						CNT->PARENT_CALL_VARIANT.pop();
+						next_neg = CNT->NEGS.top();
+						CNT->NEGS.pop();
+						_flags = CNT->_FLAGS.top();
+						CNT->_FLAGS.pop();
 					}
 
 					if (got) {
 						frame_item * up_ff = NULL;
-						if (FRAMES.size() > 0) {
-							up_ff = FRAMES.top();
-							FRAMES.pop();
+						context* up_c = NULL;
+						if (CNT->FRAMES.size() > 0) {
+							up_ff = CNT->FRAMES.top();
+							CNT->FRAMES.pop();
+							up_c = CNT->CTXS.top();
+							CNT->CTXS.pop();
 						}
-						frame_item * _up_ff = !got /* next_clause == this_clause */ ? ff->copy() : up_ff->copy();
+						frame_item * _up_ff = !got /* next_clause == this_clause */ ? ff->copy(CNT) : up_ff->copy(CNT);
 
 						if (this_clause) {
-							vector<value *> * up_args = accept(ff, this_clause);
+							vector<value *> * up_args = accept(CNT, ff, this_clause);
 							if (up_args) {
-								retrieve(_up_ff, parent_call, up_args, false);
+								retrieve(CNT, _up_ff, parent_call, up_args, false);
 								for (int j = 0; j < up_args->size(); j++)
 									up_args->at(j)->free();
 								delete up_args;
@@ -6566,12 +7236,12 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 						}
 
 						if (neg) {
-							TRACE.pop();
-							TRACEARGS.pop();
-							TRACERS.pop();
-							FLAGS.pop_back();
-							LEVELS.pop();
-							ptrTRACE.pop();
+							CNT->TRACE.pop();
+							CNT->TRACEARGS.pop();
+							CNT->TRACERS.pop();
+							CNT->FLAGS.pop_back();
+							CNT->LEVELS.pop();
+							CNT->ptrTRACE.pop();
 
 							if (variants)
 								variants->delete_from(i);
@@ -6580,15 +7250,18 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 							delete variants;
 							delete _up_ff;
 
+							if (CNT != CONTEXT)
+								delete CNT;
+
 							return true;
 						}
 
 						if (_flags & (call_flag | ::once_flag)) {
-							block_process(true, (_flags & ::once_flag) != 0, NULL);
+							block_process(CNT, true, (_flags & ::once_flag) != 0, NULL);
 						}
 
 						vector<value *> * next_args =
-							next_clause_call ? accept(_up_ff, next_clause_call) : new vector<value *>();
+							next_clause_call ? accept(CNT, _up_ff, next_clause_call) : new vector<value *>();
 						if (next_args) {
 							if (*positional_vals && !(neg_standard || variants && variants->has_variant(i + 1))) {
 								for (int j = 0; j < (*positional_vals)->size(); j++)
@@ -6596,15 +7269,16 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 								delete (*positional_vals);
 								(*positional_vals) = NULL;
 							}
-							yes = process(next_neg, next_clause, next_clause_call, _up_ff, &next_args);
+							yes = process(up_c, next_neg, next_clause, next_clause_call, _up_ff, &next_args);
 							if (!yes) {
-								PARENT_CALLS.push(dynamic_cast<predicate_item_user *>(parent_call));
-								PARENT_CALL_VARIANT.push(old_variant);
-								CLAUSES.push(next_clause);
-								CALLS.push(next_clause_call);
-								FRAMES.push(up_ff);
-								NEGS.push(next_neg);
-								_FLAGS.push(_flags);
+								CNT->PARENT_CALLS.push(dynamic_cast<predicate_item_user *>(parent_call));
+								CNT->PARENT_CALL_VARIANT.push(old_variant);
+								CNT->CLAUSES.push(next_clause);
+								CNT->CALLS.push(next_clause_call);
+								CNT->FRAMES.push(up_ff);
+								CNT->CTXS.push(up_c);
+								CNT->NEGS.push(next_neg);
+								CNT->_FLAGS.push(_flags);
 							}
 							if (next_args) {
 								for (int j = 0; j < next_args->size(); j++)
@@ -6612,12 +7286,12 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 								delete next_args;
 							}
 							if (yes) {
-								TRACE.pop();
-								TRACEARGS.pop();
-								TRACERS.pop();
-								FLAGS.pop_back();
-								LEVELS.pop();
-								ptrTRACE.pop();
+								CNT->TRACE.pop();
+								CNT->TRACEARGS.pop();
+								CNT->TRACERS.pop();
+								CNT->FLAGS.pop_back();
+								CNT->LEVELS.pop();
+								CNT->ptrTRACE.pop();
 
 								if (variants)
 									variants->delete_from(i);
@@ -6626,18 +7300,21 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 								delete variants;
 								delete _up_ff;
 
+								if (CNT != CONTEXT)
+									delete CNT;
+
 								return true;
 							}
 						}
 						delete _up_ff;
 					}
 					else {
-						TRACE.pop();
-						TRACEARGS.pop();
-						TRACERS.pop();
-						FLAGS.pop_back();
-						LEVELS.pop();
-						ptrTRACE.pop();
+						CNT->TRACE.pop();
+						CNT->TRACEARGS.pop();
+						CNT->TRACERS.pop();
+						CNT->FLAGS.pop_back();
+						CNT->LEVELS.pop();
+						CNT->ptrTRACE.pop();
 
 						if (variants)
 							variants->delete_from(i);
@@ -6645,31 +7322,40 @@ bool interpreter::process(bool neg, clause * this_clause, predicate_item * p, fr
 							delete ff;
 						delete variants;
 
+						if (CNT != CONTEXT)
+							delete CNT;
+
 						return true;
 					}
 				}
 			}
-			ptrTRACE.pop();
+			CNT->ptrTRACE.pop();
 			delete ff;
 		}
-		FLAGS.pop_back();
-		LEVELS.pop();
-		TRACE.pop();
-		TRACEARGS.pop();
-		TRACERS.pop();
+		CNT->FLAGS.pop_back();
+		CNT->LEVELS.pop();
+		CNT->TRACE.pop();
+		CNT->TRACEARGS.pop();
+		CNT->TRACERS.pop();
 	}
 
 	if (variants)
 		variants->delete_from(i);
 	delete variants;
 
+	if (CNT != CONTEXT)
+		delete CNT;
+
 	return false;
 }
 
-void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string & s, int & p) {
+void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item * ff, string & s, int & p) {
 	stack<predicate_left_bracket *> brackets;
 	stack< stack<predicate_or *> > ors;
 	stack<int> or_levels;
+	stack<predicate_item_fork*> fork_stack;
+	int bracket_level = 0;
+	stack<int> fork_bracket_levels;
 	bool or_branch = false;
 
 	bypass_spaces(s, p);
@@ -6740,7 +7426,7 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 		p++;
 		while (p < s.length() && s[p] != ')') {
 			int oldp = p;
-			value * dummy = parse(true, true, ff, s, p);
+			value * dummy = parse(CTX, true, true, ff, s, p);
 			if (dummy) {
 				dummy->free();
 				cl->add_arg(s.substr(oldp, p - oldp));
@@ -6775,6 +7461,9 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 
 		predicate_item * prev_pi = NULL;
 
+		cl->set_forking(false);
+		bool bracket_inserted = false;
+
 		do {
 			predicate_item * pi = NULL;
 
@@ -6791,474 +7480,586 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				p += 2;
 			}
 
-			bypass_spaces(s, p);
-			if (s.substr(p, 5) == "once(") {
-				if (neg) {
-					p += 4;
-				}
-				else {
-					once = true;
-					brackets.push(NULL);
-					p += 5;
-				}
-			}
-			else if (s.substr(p, 5) == "call(") {
-				if (!neg) call = true;
-				p += 4;
-			}
-
-			bypass_spaces(s, p);
-
-			if (p + 1 < s.length() && s[p] == '\\' && s[p + 1] == '+') {
-				neg = true;
-				p += 2;
-				if (once) {
-					s.insert(p, "(");
-					brackets.pop();
-				}
-				once = false;
-			}
-
-			bypass_spaces(s, p);
-			if (p+2 < s.length() && s[p] == '\'' && s[p+1] == ',' && s[p+2] == '\'')
-				p+=3;
-			else if (p < s.length() && s[p] == ';') {
-				or_request = true;
+			if (p < s.length() && s[p] == '{') {
 				p++;
-			}
-
-			bypass_spaces(s, p);
-			if (s[p] == '!') {
-				pi = new predicate_item_cut(NULL, num, cl, this);
-				p++;
-			}
-			else if (s[p] == '(') {
-				if (neg) {
-					predicate_item * _pi = new predicate_left_bracket(false, false, false, true, num++, cl, this);
-					if (or_branch) {
-						brackets.top()->push_branch(_pi);
-						or_branch = false;
-					}
-					cl->add_item(_pi);
-					brackets.push((predicate_left_bracket *)_pi);
-					ors.push(stack<predicate_or *>());
-				}
-				p++;
-				pi = new predicate_left_bracket(brackets.size() == 0, neg, once, call, num, cl, this);
-				if (or_branch) {
-					brackets.top()->push_branch(pi);
-					or_branch = false;
-				}
-				brackets.push((predicate_left_bracket *)pi);
-				ors.push(stack<predicate_or *>());
-				if (or_request) {
-					or_levels.push(brackets.size());
-					or_request = false;
-				}
-			}
-			else if (s[p] == ')') {
-				p++;
-				if (!brackets.top()) {
-					brackets.pop();
-				}
-				else {
-					bool neg = brackets.top()->is_negated();
-					brackets.top()->clear_negated();
-
-					if (or_levels.size() > 0 && or_levels.top() == brackets.size()) {
-						or_levels.pop();
-					}
-
-					pi = new predicate_right_bracket(brackets.top(), num, cl, this);
-					if (or_branch) {
-						brackets.top()->push_branch(pi);
-						or_branch = false;
-					}
-					brackets.pop();
-					stack<predicate_or *> & or_items = ors.top();
-					while (!or_items.empty()) {
-						or_items.top()->set_ending(pi);
-						or_items.pop();
-					}
-					ors.pop();
-
-					if (neg) {
-						cl->add_item(pi);
-						num++;
-						predicate_right_bracket * _pi = new predicate_right_bracket(brackets.top(), num + 4, cl, this);
-						pi = new predicate_item_cut(NULL, num++, cl, this);
-						cl->add_item(pi);
-						pi = new predicate_item_fail(false, false, false, num++, cl, this);
-						cl->add_item(pi);
-						pi = new predicate_or(num++, cl, this);
-						ors.top().push((predicate_or *)pi);
-
-						cl->add_item(pi);
-						pi = new predicate_item_true(false, false, false, num++, cl, this);
-						cl->add_item(pi);
-						brackets.top()->push_branch(pi);
-
-						stack<predicate_or *> & or_items = ors.top();
-						while (!or_items.empty()) {
-							or_items.top()->set_ending(_pi);
-							or_items.pop();
-						}
-						brackets.pop();
-						ors.pop();
-
-						pi = _pi;
-					}
-				}
-			}
-			else {
-				string iid;
-				bypass_spaces(s, p);
-
-				if (p + 2 < s.length() && s[p] == '=' && s[p + 1] == '.' && s[p + 2] == '.') {
-					iid = "term_split";
-					p += 3;
-				}
-				else if (p+1 < s.length() && s[p] == '=' && s[p+1] == '=') {
-					iid = "eq";
-					p+=2;
-				}
-				else if (p < s.length() && s[p] == '=') {
-					iid = "eq";
-					p++;
-				}
-				else if (p < s.length() && s[p] == '<') {
-					iid = "less";
-					p++;
-				}
-				else if (p < s.length() && s[p] == '>') {
-					iid = "greater";
-					p++;
-				}
-				else if (p + 1 < s.length() && s[p] == '\\' && s[p + 1] == '=') {
-					iid = "neq";
-					p += 2;
-				}
-				else {
-					int start = p;
-					value * dummy = parse(false, false, ff, s, p);
-					term * t = dynamic_cast<term *>(dummy);
-					iid = t && t->get_args().size() == 0 ? t->get_name() : s.substr(start, p - start);
-					dummy->free();
-				}
-
-				if (iid.length() == 0) {
-					std::cout << id << " : " << s.substr(p,10) << " : strange item call!" << endl;
-					exit(2);
-				}
-
-				bypass_spaces(s, p);
-				if (s.substr(p, 2) == "is" || p < s.length() && (s[p] == '>' || s[p] == '<')) {
-					string op = s[p] == '>' ? "greater" : (s[p] == '<' ? "less" : "is");
-					if (op == "is")
-						p += 2;
-					else
+				if (p < s.length()) {
+					if (p + 1 < s.length() && s[p] == '=' && s[p+1] != '(') {
 						p++;
-					bypass_spaces(s, p);
-					string expr_chars = "\"'+-*/\\()<>^=!";
-					string expr;
-					bool in_quote = false;
-					int br_level = 0;
-					while (p < s.length() && (
-							(in_quote || s[p] == '_' || isspace(s[p]) || isalnum(s[p]) || expr_chars.find(s[p]) != string::npos) ||
-							s[p] == ',' && br_level ||
-							p+1 < s.length() && s[p] == '.' && isdigit(s[p+1])
-						)) {
-						if (in_quote && s[p] == '\\') p++;
-						else if (s[p] == '\'') in_quote = !in_quote;
-						else if (!in_quote) {
-							if (s[p] == '(') br_level++;
-							else if (s[p] == ')')
-								if (br_level)
-									br_level--;
-								else
-									break;
+						// {=} or {=N}
+						// Handle '}'!
+						value* v = NULL;
+						bypass_spaces(s, p);
+						if (p < s.length() && s[p] != '}') {
+							v = parse(CTX, false, false, ff, s, p);
+							if (!v) {
+								std::cout << "Variable or int expected after '{=' [" << s.substr(p - 30, 100) << "]!" << endl;
+								exit(2);
+							}
 						}
-						expr += s[p];
-						p++;
-					}
-					if (op == "is")
-						pi = new predicate_item_is(iid, expr, neg, once, call, num, cl, this);
-					else if (op == "less") {
-						pi = new predicate_item_less(neg, once, call, num, cl, this);
-						pi->add_arg(iid);
-						pi->add_arg(expr);
-					}
-					else if (op == "greater") {
-						pi = new predicate_item_greater(neg, once, call, num, cl, this);
-						pi->add_arg(iid);
-						pi->add_arg(expr);
-					}
-				}
-				else if (iid == "append") {
-					pi = new predicate_item_append(neg, once, call, num, cl, this);
-				}
-				else if (iid == "sublist") {
-					pi = new predicate_item_sublist(neg, once, call, num, cl, this);
-				}
-				else if (iid == "delete") {
-					pi = new predicate_item_delete(neg, once, call, num, cl, this);
-				}
-				else if (iid == "member") {
-					pi = new predicate_item_member(neg, once, call, num, cl, this);
-				}
-				else if (iid == "last") {
-					pi = new predicate_item_last(neg, once, call, num, cl, this);
-				}
-				else if (iid == "reverse") {
-					pi = new predicate_item_reverse(neg, once, call, num, cl, this);
-				}
-				else if (iid == "for") {
-					pi = new predicate_item_for(neg, once, call, num, cl, this);
-				}
-				else if (iid == "length") {
-					pi = new predicate_item_length(neg, once, call, num, cl, this);
-				}
-				else if (iid == "max_list") {
-					pi = new predicate_item_max_list(neg, once, call, num, cl, this);
-				}
-				else if (iid == "atom_length") {
-					pi = new predicate_item_atom_length(neg, once, call, num, cl, this);
-				}
-				else if (iid == "nth") {
-					pi = new predicate_item_nth(neg, once, call, num, cl, this);
-				}
-				else if (iid == "atom_concat") {
-					pi = new predicate_item_atom_concat(neg, once, call, num, cl, this);
-				}
-				else if (iid == "atom_chars") {
-					pi = new predicate_item_atom_chars(neg, once, call, num, cl, this);
-				}
-				else if (iid == "atom_codes") {
-					pi = new predicate_item_atom_codes(neg, once, call, num, cl, this);
-				}
-				else if (iid == "atom_hex") {
-					pi = new predicate_item_atom_hex(0, neg, once, call, num, cl, this);
-				}
-				else if (iid == "atom_hexs") {
-					pi = new predicate_item_atom_hex(' ', neg, once, call, num, cl, this);
-				}
-				else if (iid == "number_atom") {
-					pi = new predicate_item_number_atom(neg, once, call, num, cl, this);
-				}
-				else if (iid == "number") {
-					pi = new predicate_item_number(neg, once, call, num, cl, this);
-				}
-				else if (iid == "consistency") {
-					pi = new predicate_item_consistency(neg, once, call, num, cl, this);
-				}
-				else if (iid == "listing") {
-					pi = new predicate_item_listing(neg, once, call, num, cl, this);
-				}
-				else if (iid == "current_predicate") {
-					pi = new predicate_item_current_predicate(neg, once, call, num, cl, this);
-				}
-				else if (iid == "findall") {
-					pi = new predicate_item_findall(neg, once, call, num, cl, this);
-				}
-				else if (iid == "functor") {
-					pi = new predicate_item_functor(neg, once, call, num, cl, this);
-				}
-				else if (iid == "predicate_property") {
-					pi = new predicate_item_predicate_property(neg, once, call, num, cl, this);
-				}
-				else if (iid == "$predicate_property_pi") {
-					pi = new predicate_item_predicate_property_pi(neg, once, call, num, cl, this);
-				}
-				else if (iid == "eq" || iid == "=") {
-					pi = new predicate_item_eq(neg, once, call, num, cl, this);
-				}
-				else if (iid == "neq" || iid == "\\=") {
-					pi = new predicate_item_neq(neg, once, call, num, cl, this);
-				}
-				else if (iid == "less" || iid == "<") {
-					pi = new predicate_item_less(neg, once, call, num, cl, this);
-				}
-				else if (iid == "greater" || iid == ">") {
-					pi = new predicate_item_greater(neg, once, call, num, cl, this);
-				}
-				else if (iid == "term_split" || iid == "..") {
-					pi = new predicate_item_term_split(neg, once, call, num, cl, this);
-				}
-				else if (iid == "g_assign") {
-					pi = new predicate_item_g_assign(neg, once, call, num, cl, this);
-				}
-				else if (iid == "g_read") {
-					pi = new predicate_item_g_read(neg, once, call, num, cl, this);
-				}
-				else if (iid == "fail") {
-					pi = new predicate_item_fail(neg, once, call, num, cl, this);
-				}
-				else if (iid == "true") {
-					pi = new predicate_item_true(neg, once, call, num, cl, this);
-				}
-				else if (iid == "change_directory") {
-					pi = new predicate_item_change_directory(neg, once, call, num, cl, this);
-				}
-				else if (iid == "open") {
-					pi = new predicate_item_open(neg, once, call, num, cl, this);
-				}
-				else if (iid == "close") {
-					pi = new predicate_item_close(neg, once, call, num, cl, this);
-				}
-				else if (iid == "get_char") {
-					pi = new predicate_item_get_or_peek_char(false, neg, once, call, num, cl, this);
-				}
-				else if (iid == "peek_char") {
-					pi = new predicate_item_get_or_peek_char(true, neg, once, call, num, cl, this);
-				}
-				else if (iid == "read_token") {
-					pi = new predicate_item_read_token(neg, once, call, num, cl, this);
-				}
-				else if (iid == "read_token_from_atom") {
-					pi = new predicate_item_read_token_from_atom(neg, once, call, num, cl, this);
-				}
-				else if (iid == "mars") {
-					pi = new predicate_item_mars(neg, once, call, num, cl, this);
-				}
-				else if (iid == "mars_decode") {
-					pi = new predicate_item_mars_decode(neg, once, call, num, cl, this);
-				}
-				else if (iid == "write") {
-					pi = new predicate_item_write(neg, once, call, num, cl, this);
-				}
-				else if (iid == "write_to_atom") {
-					pi = new predicate_item_write_to_atom(neg, once, call, num, cl, this);
-				}
-				else if (iid == "write_term") {
-					pi = new predicate_item_write_term(neg, once, call, num, cl, this);
-				}
-				else if (iid == "write_term_to_atom") {
-					pi = new predicate_item_write_term_to_atom(neg, once, call, num, cl, this);
-				}
-				else if (iid == "nl") {
-					pi = new predicate_item_nl(neg, once, call, num, cl, this);
-				}
-				else if (iid == "file_exists") {
-					pi = new predicate_item_file_exists(neg, once, call, num, cl, this);
-				}
-				else if (iid == "unlink") {
-					pi = new predicate_item_unlink(neg, once, call, num, cl, this);
-				}
-				else if (iid == "rename_file") {
-					pi = new predicate_item_rename_file(neg, once, call, num, cl, this);
-				}
-				else if (iid == "seeing") {
-					pi = new predicate_item_seeing(neg, once, call, num, cl, this);
-				}
-				else if (iid == "telling") {
-					pi = new predicate_item_telling(neg, once, call, num, cl, this);
-				}
-				else if (iid == "seen") {
-					pi = new predicate_item_seen(neg, once, call, num, cl, this);
-				}
-				else if (iid == "told") {
-					pi = new predicate_item_told(neg, once, call, num, cl, this);
-				}
-				else if (iid == "see") {
-					pi = new predicate_item_see(neg, once, call, num, cl, this);
-				}
-				else if (iid == "tell") {
-					pi = new predicate_item_tell(neg, once, call, num, cl, this);
-				}
-				else if (iid == "random") {
-					pi = new predicate_item_random(neg, once, call, num, cl, this);
-				}
-				else if (iid == "randomize") {
-					pi = new predicate_item_randomize(neg, once, call, num, cl, this);
-				}
-				else if (iid == "char_code") {
-					pi = new predicate_item_char_code(neg, once, call, num, cl, this);
-				}
-				else if (iid == "get_code") {
-					pi = new predicate_item_get_code(neg, once, call, num, cl, this);
-				}
-				else if (iid == "at_end_of_stream") {
-					pi = new predicate_item_at_end_of_stream(neg, once, call, num, cl, this);
-				}
-				else if (iid == "open_url") {
-					pi = new predicate_item_open_url(neg, once, call, num, cl, this);
-				}
-				else if (iid == "track_post") {
-					pi = new predicate_item_track_post(neg, once, call, num, cl, this);
-				}
-				else if (iid == "consult") {
-					pi = new predicate_item_consult(neg, once, call, num, cl, this);
-				}
-				else if (iid == "assert" || iid == "asserta" || iid == "assertz") {
-					pi = new predicate_item_assert(iid != "asserta", neg, once, call, num, cl, this);
-				}
-				else if (iid == "retract") {
-					pi = new predicate_item_retract(false, neg, once, call, num, cl, this);
-				}
-				else if (iid == "retractall") {
-					pi = new predicate_item_retract(true, neg, once, call, num, cl, this);
-				}
-				else if (iid == "inc") {
-					pi = new predicate_item_inc(neg, once, call, num, cl, this);
-				}
-				else if (iid == "halt") {
-					exit(0);
-				}
-				else if (iid == "load_classes") {
-					pi = new predicate_item_load_classes(neg, once, call, num, cl, this);
-				}
-				else if (iid == "init_xpathing") {
-					pi = new predicate_item_init_xpathing(neg, once, call, num, cl, this);
-				}
-				else if (iid == "induct_xpathing") {
-					pi = new predicate_item_induct_xpathing(neg, once, call, num, cl, this);
-				}
-				else if (iid == "import_model_after_induct") {
-					pi = new predicate_item_import_model_after_induct(neg, once, call, num, cl, this);
-				}
-				else if (iid == "unload_classes") {
-					pi = new predicate_item_unload_classes(neg, once, call, num, cl, this);
-				}
-				else if (iid == "var") {
-					pi = new predicate_item_var(neg, once, call, num, cl, this);
-				}
-				else if (iid == "nonvar") {
-					pi = new predicate_item_nonvar(neg, once, call, num, cl, this);
-				}
-				else if (iid == "get_icontacts") {
-					pi = new predicate_item_get_contacts(dirInput, neg, once, call, num, cl, this);
-				}
-				else if (iid == "get_ocontacts") {
-					pi = new predicate_item_get_contacts(dirOutput, neg, once, call, num, cl, this);
-				}
-				else {
-					pi = new predicate_item_user(neg, once, call, num, cl, this, iid);
-				}
-
-				if (p < s.length() && s[p] == '(') {
-					p++;
-					while (p < s.length() && s[p] != ')') {
-						int oldp = p;
-						value * dummy = parse(true, true, ff, s, p);
-						if (dummy) {
-							dummy->free();
-							pi->add_arg(s.substr(oldp, p - oldp));
+						if (p < s.length() && s[p] == '}') {
+							p++;
+							if (!v)
+								v = new int_number(1);
+							pi = new predicate_item_join(false, v, false, false, false, num, cl, this);
 						}
 						else {
-							std::cout << id << ":" << iid << " : strange call head!" << endl;
-							exit(2);
-						}
-						if (!bypass_spaces(s, p)) {
-							std::cout << id << ":" << iid << " : strange call head!" << endl;
-							exit(2);
-						}
-						if (s[p] == ',') p++;
-						else if (s[p] != ')') {
-							std::cout << id << ":" << iid << " : unexpected '" << s[p] << "' in call head!" << endl;
+							std::cout << "'}' expected after '{=' or '{=N' [" << s.substr(p - 30, 100) << "]!" << endl;
 							exit(2);
 						}
 					}
+					else if (s[p] == '&') {
+						p++;
+						if (p < s.length() && s[p] == '}') {
+							p++;
+							// {&}
+							pi = new predicate_item_join(false, new int_number(-1), false, false, false, num, cl, this);
+						} else {
+							std::cout << "Clause [" << s.substr(p - 30, 100) << "] : premature end of file!" << endl;
+							exit(2);
+						}
+					}
+					else {
+						// {...
+						pi = new predicate_item_fork(false, false, false, num, cl, this);
+						fork_stack.push(dynamic_cast<predicate_item_fork *>(pi));
+						fork_bracket_levels.push(bracket_level);
+						cl->set_forking(true);
+						pr->set_forking(true);
+						atomizer.set_forking(true);
+						forking = true;
+						bypass_spaces(s, p);
+						s.insert(s.begin() + p, 1, '(');
+					}
+				}
+				else {
+					std::cout << "Clause [" << s.substr(p - 30, 100) << "] : premature end of file!" << endl;
+					exit(2);
+				}
+			}
+			else if (p < s.length() && s[p] == '}')
+				if (bracket_inserted) {
+					bracket_inserted = false;
 					p++;
+					// }
+					if (fork_stack.size() == 0) {
+						std::cout << "'}' without corresponding '{' [" << s.substr(p - 30, 100) << "]!" << endl;
+						exit(2);
+					}
+					if (fork_bracket_levels.top() != bracket_level) {
+						std::cout << "Mangled '( / }' structure [" << s.substr(p - 30, 100) << "]!" << endl;
+						exit(2);
+					}
+					// Handle
+					fork_stack.top()->set_end(num);
+					bypass_spaces(s, p);
+					if (p < s.length() && s[p] == '*') {
+						p++;
+						bypass_spaces(s, p);
+						value* v = parse(CTX, false, false, ff, s, p);
+						if (v)
+							fork_stack.top()->set_n_threads(v);
+						else {
+							std::cout << "Variable or int expected after '}*' [" << s.substr(p - 30, 100) << "]!" << endl;
+							exit(2);
+						}
+					}
+					if (p < s.length() && s[p] == '}') {
+						// Do not p++
+						pi = new predicate_item_join(true, new int_number(-1), false, false, false, num, cl, this);
+					}
+					fork_stack.pop();
+					fork_bracket_levels.pop();
+
+					bypass_spaces(s, p);
+					if (p < s.length() && s[p] == '{')
+						s.insert(s.begin() + p, 1, ',');
+				}
+				else {
+					s.insert(s.begin() + p, 1, ')');
+					bracket_inserted = true;
+				}
+			else {
+				bypass_spaces(s, p);
+				if (s.substr(p, 5) == "once(") {
+					if (neg) {
+						p += 4;
+					}
+					else {
+						once = true;
+						brackets.push(NULL);
+						p += 5;
+						bracket_level++;
+					}
+				}
+				else if (s.substr(p, 5) == "call(") {
+					if (!neg) call = true;
+					p += 4;
+				}
+
+				bypass_spaces(s, p);
+
+				if (p + 1 < s.length() && s[p] == '\\' && s[p + 1] == '+') {
+					neg = true;
+					p += 2;
+					if (once) {
+						s.insert(p, "(");
+						brackets.pop();
+					}
+					once = false;
+				}
+
+				bypass_spaces(s, p);
+				if (p + 2 < s.length() && s[p] == '\'' && s[p + 1] == ',' && s[p + 2] == '\'')
+					p += 3;
+				else if (p < s.length() && s[p] == ';') {
+					or_request = true;
+					p++;
+				}
+
+				bypass_spaces(s, p);
+				if (s[p] == '!') {
+					pi = new predicate_item_cut(NULL, num, cl, this);
+					p++;
+				}
+				else if (s[p] == '(') {
+					bracket_level++;
+					if (neg) {
+						predicate_item* _pi = new predicate_left_bracket(false, false, false, true, num++, cl, this);
+						if (or_branch) {
+							brackets.top()->push_branch(_pi);
+							or_branch = false;
+						}
+						cl->add_item(_pi);
+						brackets.push((predicate_left_bracket*)_pi);
+						ors.push(stack<predicate_or*>());
+					}
+					p++;
+					pi = new predicate_left_bracket(brackets.size() == 0, neg, once, call, num, cl, this);
+					if (or_branch) {
+						brackets.top()->push_branch(pi);
+						or_branch = false;
+					}
+					brackets.push((predicate_left_bracket*)pi);
+					ors.push(stack<predicate_or*>());
+					if (or_request) {
+						or_levels.push(brackets.size());
+						or_request = false;
+					}
+				}
+				else if (s[p] == ')') {
+					bracket_level--;
+					p++;
+					if (!brackets.top()) {
+						brackets.pop();
+					}
+					else {
+						bool neg = brackets.top()->is_negated();
+						brackets.top()->clear_negated();
+
+						if (or_levels.size() > 0 && or_levels.top() == brackets.size()) {
+							or_levels.pop();
+						}
+
+						pi = new predicate_right_bracket(brackets.top(), num, cl, this);
+						if (or_branch) {
+							brackets.top()->push_branch(pi);
+							or_branch = false;
+						}
+						brackets.pop();
+						stack<predicate_or*>& or_items = ors.top();
+						while (!or_items.empty()) {
+							or_items.top()->set_ending(pi);
+							or_items.pop();
+						}
+						ors.pop();
+
+						if (neg) {
+							cl->add_item(pi);
+							num++;
+							predicate_right_bracket* _pi = new predicate_right_bracket(brackets.top(), num + 4, cl, this);
+							pi = new predicate_item_cut(NULL, num++, cl, this);
+							cl->add_item(pi);
+							pi = new predicate_item_fail(false, false, false, num++, cl, this);
+							cl->add_item(pi);
+							pi = new predicate_or(num++, cl, this);
+							ors.top().push((predicate_or*)pi);
+
+							cl->add_item(pi);
+							pi = new predicate_item_true(false, false, false, num++, cl, this);
+							cl->add_item(pi);
+							brackets.top()->push_branch(pi);
+
+							stack<predicate_or*>& or_items = ors.top();
+							while (!or_items.empty()) {
+								or_items.top()->set_ending(_pi);
+								or_items.pop();
+							}
+							brackets.pop();
+							ors.pop();
+
+							pi = _pi;
+						}
+					}
+				}
+				else {
+					string iid;
+					bypass_spaces(s, p);
+
+					if (p + 2 < s.length() && s[p] == '=' && s[p + 1] == '.' && s[p + 2] == '.') {
+						iid = "term_split";
+						p += 3;
+					}
+					else if (p + 1 < s.length() && s[p] == '=' && s[p + 1] == '=') {
+						iid = "eq";
+						p += 2;
+					}
+					else if (p < s.length() && s[p] == '=') {
+						iid = "eq";
+						p++;
+					}
+					else if (p < s.length() && s[p] == '<') {
+						iid = "less";
+						p++;
+					}
+					else if (p < s.length() && s[p] == '>') {
+						iid = "greater";
+						p++;
+					}
+					else if (p + 1 < s.length() && s[p] == '\\' && s[p + 1] == '=') {
+						iid = "neq";
+						p += 2;
+					}
+					else {
+						int start = p;
+						value* dummy = parse(CTX, false, false, ff, s, p);
+						term* t = dynamic_cast<term*>(dummy);
+						iid = t && t->get_args().size() == 0 ? t->get_name() : s.substr(start, p - start);
+						dummy->free();
+					}
+
+					if (iid.length() == 0) {
+						std::cout << id << " : " << s.substr(p, 10) << " : strange item call!" << endl;
+						exit(2);
+					}
+
+					bypass_spaces(s, p);
+					if (s.substr(p, 2) == "is" || p < s.length() && (s[p] == '>' || s[p] == '<')) {
+						string op = s[p] == '>' ? "greater" : (s[p] == '<' ? "less" : "is");
+						if (op == "is")
+							p += 2;
+						else
+							p++;
+						bypass_spaces(s, p);
+						string expr_chars = "\"'+-*/\\()<>^=!";
+						string expr;
+						bool in_quote = false;
+						int br_level = 0;
+						while (p < s.length() && (
+							(in_quote || s[p] == '_' || isspace(s[p]) || isalnum(s[p]) || expr_chars.find(s[p]) != string::npos) ||
+							s[p] == ',' && br_level ||
+							p + 1 < s.length() && s[p] == '.' && isdigit(s[p + 1])
+							)) {
+							if (in_quote && s[p] == '\\') p++;
+							else if (s[p] == '\'') in_quote = !in_quote;
+							else if (!in_quote) {
+								if (s[p] == '(') br_level++;
+								else if (s[p] == ')')
+									if (br_level)
+										br_level--;
+									else
+										break;
+							}
+							expr += s[p];
+							p++;
+						}
+						if (op == "is")
+							pi = new predicate_item_is(iid, expr, neg, once, call, num, cl, this);
+						else if (op == "less") {
+							pi = new predicate_item_less(neg, once, call, num, cl, this);
+							pi->add_arg(iid);
+							pi->add_arg(expr);
+						}
+						else if (op == "greater") {
+							pi = new predicate_item_greater(neg, once, call, num, cl, this);
+							pi->add_arg(iid);
+							pi->add_arg(expr);
+						}
+					}
+					else if (iid == "append") {
+						pi = new predicate_item_append(neg, once, call, num, cl, this);
+					}
+					else if (iid == "sublist") {
+						pi = new predicate_item_sublist(neg, once, call, num, cl, this);
+					}
+					else if (iid == "delete") {
+						pi = new predicate_item_delete(neg, once, call, num, cl, this);
+					}
+					else if (iid == "member") {
+						pi = new predicate_item_member(neg, once, call, num, cl, this);
+					}
+					else if (iid == "last") {
+						pi = new predicate_item_last(neg, once, call, num, cl, this);
+					}
+					else if (iid == "reverse") {
+						pi = new predicate_item_reverse(neg, once, call, num, cl, this);
+					}
+					else if (iid == "for") {
+						pi = new predicate_item_for(neg, once, call, num, cl, this);
+					}
+					else if (iid == "length") {
+						pi = new predicate_item_length(neg, once, call, num, cl, this);
+					}
+					else if (iid == "max_list") {
+						pi = new predicate_item_max_list(neg, once, call, num, cl, this);
+					}
+					else if (iid == "atom_length") {
+						pi = new predicate_item_atom_length(neg, once, call, num, cl, this);
+					}
+					else if (iid == "nth") {
+						pi = new predicate_item_nth(neg, once, call, num, cl, this);
+					}
+					else if (iid == "page_id") {
+						pi = new predicate_item_page_id(neg, once, call, num, cl, this);
+					}
+					else if (iid == "atom_concat") {
+						pi = new predicate_item_atom_concat(neg, once, call, num, cl, this);
+					}
+					else if (iid == "atom_chars") {
+						pi = new predicate_item_atom_chars(neg, once, call, num, cl, this);
+					}
+					else if (iid == "atom_codes") {
+						pi = new predicate_item_atom_codes(neg, once, call, num, cl, this);
+					}
+					else if (iid == "atom_hex") {
+						pi = new predicate_item_atom_hex(0, neg, once, call, num, cl, this);
+					}
+					else if (iid == "atom_hexs") {
+						pi = new predicate_item_atom_hex(' ', neg, once, call, num, cl, this);
+					}
+					else if (iid == "number_atom") {
+						pi = new predicate_item_number_atom(neg, once, call, num, cl, this);
+					}
+					else if (iid == "number") {
+						pi = new predicate_item_number(neg, once, call, num, cl, this);
+					}
+					else if (iid == "consistency") {
+						pi = new predicate_item_consistency(neg, once, call, num, cl, this);
+					}
+					else if (iid == "listing") {
+						pi = new predicate_item_listing(neg, once, call, num, cl, this);
+					}
+					else if (iid == "current_predicate") {
+						pi = new predicate_item_current_predicate(neg, once, call, num, cl, this);
+					}
+					else if (iid == "findall") {
+						pi = new predicate_item_findall(neg, once, call, num, cl, this);
+					}
+					else if (iid == "functor") {
+						pi = new predicate_item_functor(neg, once, call, num, cl, this);
+					}
+					else if (iid == "predicate_property") {
+						pi = new predicate_item_predicate_property(neg, once, call, num, cl, this);
+					}
+					else if (iid == "$predicate_property_pi") {
+						pi = new predicate_item_predicate_property_pi(neg, once, call, num, cl, this);
+					}
+					else if (iid == "eq" || iid == "=") {
+						pi = new predicate_item_eq(neg, once, call, num, cl, this);
+					}
+					else if (iid == "neq" || iid == "\\=") {
+						pi = new predicate_item_neq(neg, once, call, num, cl, this);
+					}
+					else if (iid == "less" || iid == "<") {
+						pi = new predicate_item_less(neg, once, call, num, cl, this);
+					}
+					else if (iid == "greater" || iid == ">") {
+						pi = new predicate_item_greater(neg, once, call, num, cl, this);
+					}
+					else if (iid == "term_split" || iid == "..") {
+						pi = new predicate_item_term_split(neg, once, call, num, cl, this);
+					}
+					else if (iid == "g_assign") {
+						pi = new predicate_item_g_assign(neg, once, call, num, cl, this);
+					}
+					else if (iid == "g_assign_nth") {
+						pi = new predicate_item_g_assign_nth(neg, once, call, num, cl, this);
+					}
+					else if (iid == "g_read") {
+						pi = new predicate_item_g_read(neg, once, call, num, cl, this);
+					}
+					else if (iid == "fail") {
+						pi = new predicate_item_fail(neg, once, call, num, cl, this);
+					}
+					else if (iid == "true") {
+						pi = new predicate_item_true(neg, once, call, num, cl, this);
+					}
+					else if (iid == "change_directory") {
+						pi = new predicate_item_change_directory(neg, once, call, num, cl, this);
+					}
+					else if (iid == "open") {
+						pi = new predicate_item_open(neg, once, call, num, cl, this);
+					}
+					else if (iid == "close") {
+						pi = new predicate_item_close(neg, once, call, num, cl, this);
+					}
+					else if (iid == "get_char") {
+						pi = new predicate_item_get_or_peek_char(false, neg, once, call, num, cl, this);
+					}
+					else if (iid == "peek_char") {
+						pi = new predicate_item_get_or_peek_char(true, neg, once, call, num, cl, this);
+					}
+					else if (iid == "read_token") {
+						pi = new predicate_item_read_token(neg, once, call, num, cl, this);
+					}
+					else if (iid == "read_token_from_atom") {
+						pi = new predicate_item_read_token_from_atom(neg, once, call, num, cl, this);
+					}
+					else if (iid == "mars") {
+						pi = new predicate_item_mars(neg, once, call, num, cl, this);
+					}
+					else if (iid == "mars_decode") {
+						pi = new predicate_item_mars_decode(neg, once, call, num, cl, this);
+					}
+					else if (iid == "unset") {
+						pi = new predicate_item_unset(neg, once, call, num, cl, this);
+					}
+					else if (iid == "write") {
+						pi = new predicate_item_write(neg, once, call, num, cl, this);
+						}
+					else if (iid == "write_to_atom") {
+						pi = new predicate_item_write_to_atom(neg, once, call, num, cl, this);
+					}
+					else if (iid == "write_term") {
+						pi = new predicate_item_write_term(neg, once, call, num, cl, this);
+					}
+					else if (iid == "write_term_to_atom") {
+						pi = new predicate_item_write_term_to_atom(neg, once, call, num, cl, this);
+					}
+					else if (iid == "nl") {
+						pi = new predicate_item_nl(neg, once, call, num, cl, this);
+					}
+					else if (iid == "file_exists") {
+						pi = new predicate_item_file_exists(neg, once, call, num, cl, this);
+					}
+					else if (iid == "unlink") {
+						pi = new predicate_item_unlink(neg, once, call, num, cl, this);
+					}
+					else if (iid == "rename_file") {
+						pi = new predicate_item_rename_file(neg, once, call, num, cl, this);
+					}
+					else if (iid == "seeing") {
+						pi = new predicate_item_seeing(neg, once, call, num, cl, this);
+					}
+					else if (iid == "telling") {
+						pi = new predicate_item_telling(neg, once, call, num, cl, this);
+					}
+					else if (iid == "seen") {
+						pi = new predicate_item_seen(neg, once, call, num, cl, this);
+					}
+					else if (iid == "told") {
+						pi = new predicate_item_told(neg, once, call, num, cl, this);
+					}
+					else if (iid == "see") {
+						pi = new predicate_item_see(neg, once, call, num, cl, this);
+					}
+					else if (iid == "tell") {
+						pi = new predicate_item_tell(neg, once, call, num, cl, this);
+					}
+					else if (iid == "random") {
+						pi = new predicate_item_random(neg, once, call, num, cl, this);
+					}
+					else if (iid == "randomize") {
+						pi = new predicate_item_randomize(neg, once, call, num, cl, this);
+					}
+					else if (iid == "char_code") {
+						pi = new predicate_item_char_code(neg, once, call, num, cl, this);
+					}
+					else if (iid == "get_code") {
+						pi = new predicate_item_get_code(neg, once, call, num, cl, this);
+					}
+					else if (iid == "at_end_of_stream") {
+						pi = new predicate_item_at_end_of_stream(neg, once, call, num, cl, this);
+					}
+					else if (iid == "open_url") {
+						pi = new predicate_item_open_url(neg, once, call, num, cl, this);
+					}
+					else if (iid == "track_post") {
+						pi = new predicate_item_track_post(neg, once, call, num, cl, this);
+					}
+					else if (iid == "consult") {
+						pi = new predicate_item_consult(neg, once, call, num, cl, this);
+					}
+					else if (iid == "assert" || iid == "asserta" || iid == "assertz") {
+						pi = new predicate_item_assert(iid != "asserta", neg, once, call, num, cl, this);
+					}
+					else if (iid == "retract") {
+						pi = new predicate_item_retract(false, neg, once, call, num, cl, this);
+					}
+					else if (iid == "retractall") {
+						pi = new predicate_item_retract(true, neg, once, call, num, cl, this);
+					}
+					else if (iid == "inc") {
+						pi = new predicate_item_inc(neg, once, call, num, cl, this);
+					}
+					else if (iid == "halt") {
+						exit(0);
+					}
+					else if (iid == "load_classes") {
+						pi = new predicate_item_load_classes(neg, once, call, num, cl, this);
+					}
+					else if (iid == "init_xpathing") {
+						pi = new predicate_item_init_xpathing(neg, once, call, num, cl, this);
+					}
+					else if (iid == "induct_xpathing") {
+						pi = new predicate_item_induct_xpathing(neg, once, call, num, cl, this);
+					}
+					else if (iid == "import_model_after_induct") {
+						pi = new predicate_item_import_model_after_induct(neg, once, call, num, cl, this);
+					}
+					else if (iid == "unload_classes") {
+						pi = new predicate_item_unload_classes(neg, once, call, num, cl, this);
+					}
+					else if (iid == "var") {
+						pi = new predicate_item_var(neg, once, call, num, cl, this);
+					}
+					else if (iid == "nonvar") {
+						pi = new predicate_item_nonvar(neg, once, call, num, cl, this);
+					}
+					else if (iid == "get_icontacts") {
+						pi = new predicate_item_get_contacts(dirInput, neg, once, call, num, cl, this);
+					}
+					else if (iid == "get_ocontacts") {
+						pi = new predicate_item_get_contacts(dirOutput, neg, once, call, num, cl, this);
+					}
+					else {
+						pi = new predicate_item_user(neg, once, call, num, cl, this, iid);
+					}
+
+					if (p < s.length() && s[p] == '(') {
+						p++;
+						while (p < s.length() && s[p] != ')') {
+							int oldp = p;
+							value* dummy = parse(CTX, true, true, ff, s, p);
+							if (dummy) {
+								dummy->free();
+								pi->add_arg(s.substr(oldp, p - oldp));
+							}
+							else {
+								std::cout << id << ":" << iid << " : strange call head!" << endl;
+								exit(2);
+							}
+							if (!bypass_spaces(s, p)) {
+								std::cout << id << ":" << iid << " : strange call head!" << endl;
+								exit(2);
+							}
+							if (s[p] == ',') p++;
+							else if (s[p] != ')') {
+								std::cout << id << ":" << iid << " : unexpected '" << s[p] << "' in call head!" << endl;
+								exit(2);
+							}
+						}
+						p++;
+					}
 				}
 			}
 
@@ -7290,6 +8091,10 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 				else if (!open_bracket && (s[p] == ';' || s[p] == ',' && or_levels.size() > 0 && or_levels.top() == brackets.size())) {
 					p++;
 					if (brackets.size() == 0) {
+						if (cl->is_forking()) {
+							pi = new predicate_item_join(true, new int_number(-1), false, false, false, num++, cl, this);
+							cl->add_item(pi);
+						}
 						clause * _cl = new clause(pr);
 						pr->add_clause(_cl);
 						_cl->set_args(*cl->get_args());
@@ -7324,6 +8129,11 @@ void interpreter::parse_clause(vector<string> & renew, frame_item * ff, string &
 					p++;
 					s.insert(s.begin() + p, ')');
 					p++;
+
+					if (cl->is_forking()) {
+						pi = new predicate_item_join(true, new int_number(-1), false, false, false, num++, cl, this);
+						cl->add_item(pi);
+					}
 
 					if (!brackets.top()) {
 						std::cout << "Brackets not balanced or problems with ';'-branches in " << id << " clause!" << endl;
@@ -7374,7 +8184,7 @@ void interpreter::parse_program(vector<string> & renew, string & s) {
 		bypass_spaces(s, p);
 		if (p < s.length()) {
 			frame_item * dummy = new frame_item();
-			parse_clause(renew, dummy, s, p);
+			parse_clause(CONTEXT, renew, dummy, s, p);
 			delete dummy;
 		}
 		else
@@ -7455,7 +8265,7 @@ void interpreter::run() {
 	generated_vars * variants = new generated_vars();
 	frame_item * ff = new frame_item();
 	variants->push_back(ff);
-	starter->processing(false, 0, variants, &args, ff);
+	starter->processing(CONTEXT, false, 0, variants, &args, ff, CONTEXT);
 	delete args;
 	delete variants;
 	delete ff;
@@ -7469,19 +8279,9 @@ interpreter::interpreter(const string & fname, const string & starter_name) {
 	outs = &std::cout;
 	xpathInductLib = 0;
 
-	CALLS.reserve(50000);
-	FRAMES.reserve(50000);
-	NEGS.reserve(50000);
-	_FLAGS.reserve(50000);
-	PARENT_CALLS.reserve(50000);
-	PARENT_CALL_VARIANT.reserve(50000);
-	CLAUSES.reserve(50000);
-	// FLAGS;
-	LEVELS.reserve(50000);
-	TRACE.reserve(50000);
-	TRACEARGS.reserve(50000);
-	TRACERS.reserve(50000);
-	ptrTRACE.reserve(50000);
+	forking = false;
+
+	CONTEXT = new context(50000, NULL, NULL, NULL, NULL, this);
 
 	if (fname.length() > 0)
 		starter = load_program(fname, starter_name);
@@ -7524,6 +8324,7 @@ interpreter::~interpreter() {
 		delete itg->second;
 		itg++;
 	}
+	delete CONTEXT;
 }
 
 string interpreter::open_file(const string & fname, const string & mode) {
@@ -7659,7 +8460,7 @@ int main(int argc, char ** argv) {
 		main_part++;
 	}
 
-	std::cout << "Prolog MicroBrain by V.V.Pekunov V0.21beta2" << endl;
+	std::cout << "Prolog MicroBrain by V.V.Pekunov V0.23beta1" << endl;
 	if (argc == main_part) {
 		interpreter prolog("", "");
 		std::cout << "  Enter 'halt.' or 'end_of_file' to exit." << endl << endl;
@@ -7690,7 +8491,7 @@ int main(int argc, char ** argv) {
 			body.append("\n");
 			bypass_spaces(body, p);
 			while (p < body.length()) {
-				prolog.parse_clause(renew, f, body, p);
+				prolog.parse_clause(prolog.CONTEXT, renew, f, body, p);
 				bypass_spaces(body, p);
 			}
 			prolog.bind();
@@ -7702,7 +8503,7 @@ int main(int argc, char ** argv) {
 			variants->push_back(f);
 			predicate_item_user * pi = new predicate_item_user(false, false, false, 0, NULL, &prolog, "internal_goal");
 			pi->bind();
-			bool ret = pi->processing(false, 0, variants, &args, f);
+			bool ret = pi->processing(prolog.CONTEXT, false, 0, variants, &args, f, prolog.CONTEXT);
 
 			auto end = std::chrono::high_resolution_clock::now(); // Засечка конечного времени
 			std::chrono::duration<double, std::ratio<1, 1>> elapsed = end - start; // Вычисляем длительность исполнения
@@ -7754,7 +8555,7 @@ int main(int argc, char ** argv) {
 
 		bypass_spaces(body, p);
 		while (p < body.length()) {
-			_prolog->parse_clause(renew, f, body, p);
+			_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p);
 			bypass_spaces(body, p);
 		}
 		_prolog->bind();
@@ -7786,7 +8587,7 @@ int main(int argc, char ** argv) {
 			body.append("\n");
 			bypass_spaces(body, p);
 			while (p < body.length()) {
-				_prolog->parse_clause(renew, f, body, p);
+				_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p);
 				bypass_spaces(body, p);
 			}
 			_prolog->bind();
@@ -7798,7 +8599,7 @@ int main(int argc, char ** argv) {
 			variants->push_back(f);
 			predicate_item_user * pi = new predicate_item_user(false, false, false, 0, NULL, _prolog, "internal_goal");
 			pi->bind();
-			bool ret = pi->processing(false, 0, variants, &args, f);
+			bool ret = pi->processing(_prolog->CONTEXT, false, 0, variants, &args, f, _prolog->CONTEXT);
 
 			auto end = std::chrono::high_resolution_clock::now(); // Засечка конечного времени
 			std::chrono::duration<double, std::ratio<1, 1>> elapsed = end - start; // Вычисляем длительность исполнения
