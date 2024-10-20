@@ -725,10 +725,18 @@ enumerations_point();
      =(OPT, '')->
       true;
       (
+       read_token_from_atom(OPT, START),
        (
         =(OPT, 'auto')->
          Opt is '0.5';
-         =(Opt, OPT)
+         once(
+          =(START, 'auto')->
+            (
+             atom_concat(_, AUTO, OPT),
+             atom_concat(',', Opt, AUTO)
+            );
+            =(Opt, OPT)
+         )
        ),
        write('static double __originalK = 0.0;'), nl,
        write('static double prev__usedK = 0.0;'), nl,
@@ -809,7 +817,7 @@ enumerations_point();
     ),
     !,
     (
-     =(OPT,'auto')->
+     read_token_from_atom(OPT, 'auto')->
       (
        write('__start = omp_get_wtime() - __start;'), nl,
        ( =(MODE,'')->true; ( write('if ('), write(MODE), write(') {'), nl )),
