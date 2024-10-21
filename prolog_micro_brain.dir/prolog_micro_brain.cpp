@@ -2429,27 +2429,28 @@ public:
 		{
 			int_number * n1 = dynamic_cast<int_number *>(positional_vals->at(0));
 			int_number * n2 = dynamic_cast<int_number *>(positional_vals->at(1));
-			n1->inc();
+			int_number* _n2 = new int_number(n1->get_value() + 1);
 
-			if (!n1 || !n2 || !n1->unify(CTX, r, n2)) {
+			if (!n1 || !n2 || !n2->unify(CTX, r, _n2)) {
 				delete r;
 				delete result;
 				result = NULL;
 			}
+			_n2->free();
 		}
 		else if (a1 && !a2) {
 			int_number * n2 = dynamic_cast<int_number *>(positional_vals->at(1));
-			n2->dec();
+			int_number * _n2 = new int_number(n2->get_value() - 1);
 
-			r->set(CTX, a1->get_name().c_str(), n2);
-			n2->free();
+			r->set(CTX, a1->get_name().c_str(), _n2);
+			_n2->free();
 		}
 		else if (!a1 && a2) {
 			int_number * n1 = dynamic_cast<int_number *>(positional_vals->at(0));
-			n1->inc();
+			int_number* _n1 = new int_number(n1->get_value() + 1);
 
-			r->set(CTX, a2->get_name().c_str(), n1);
-			n1->free();
+			r->set(CTX, a2->get_name().c_str(), _n1);
+			_n1->free();
 		}
 		return result;
 	}
@@ -7586,9 +7587,9 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					}
 					else {
 						once = true;
-						brackets.push(NULL);
+						// brackets.push(NULL);
 						p += 5;
-						bracket_level++;
+						// bracket_level++;
 					}
 				}
 				else if (s.substr(p, 5) == "call(") {
@@ -7603,8 +7604,8 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					p += 2;
 					if (once) {
 						s.insert(p, "(");
-						brackets.pop();
-						bracket_level--;
+						// brackets.pop();
+						// bracket_level--;
 					}
 					once = false;
 				}
@@ -7702,8 +7703,8 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 
 							pi = _pi;
 						}
-						if (brackets.size() && !brackets.top())
-							s.insert(p, ")");
+						/*if (brackets.size() && !brackets.top())
+							s.insert(p, ")");*/
 					}
 				}
 				else {
