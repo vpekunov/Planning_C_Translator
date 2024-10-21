@@ -7604,9 +7604,12 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					if (once) {
 						s.insert(p, "(");
 						brackets.pop();
+						bracket_level--;
 					}
 					once = false;
 				}
+				else if (once)
+					s.insert(p, "(");
 
 				bypass_spaces(s, p);
 				if (p + 2 < s.length() && s[p] == '\'' && s[p + 1] == ',' && s[p + 2] == '\'')
@@ -7699,6 +7702,8 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 
 							pi = _pi;
 						}
+						if (brackets.size() && !brackets.top())
+							s.insert(p, ")");
 					}
 				}
 				else {
@@ -7756,7 +7761,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 						int br_level = 0;
 						while (p < s.length() && (
 							(in_quote || s[p] == '_' || isspace(s[p]) || isalnum(s[p]) || expr_chars.find(s[p]) != string::npos) ||
-							s[p] == ',' && br_level ||
+							(s[p] == ',' || s[p] == ';') && br_level ||
 							p + 1 < s.length() && s[p] == '.' && isdigit(s[p + 1])
 							)) {
 							if (in_quote && s[p] == '\\') p++;
