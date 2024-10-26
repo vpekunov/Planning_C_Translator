@@ -800,11 +800,13 @@ Begin
      End 
 End;
 
+Var HayStack: WideString;
+
 Type PoolItem = Record
         RS: TRegExpr;
         NeedleNum: Integer;
-        G, M: Integer;
-        Result: Boolean
+        G, M, PP: Integer;
+        Result: LongInt
 End;
 
 procedure ParseThread(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
@@ -812,16 +814,28 @@ procedure ParseThread(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
 Var Pool: Array Of PoolItem Absolute Data;
     Flag: Boolean;
     K: Integer;
+    F: Integer;
 begin
   K := Pool[Index].G;
   Repeat
     Flag := Pool[Index].RS.ExecPos(K);
     If Not Flag Then Break;
     If (Pool[Index].RS.MatchPos[Pool[Index].NeedleNum] >= Pool[Index].M) Then Break;
+    F := 0;
+    While Flag And (F < Index) Do
+      If InterlockedCompareExchange(Pool[F].Result, 1, 1) <> 0 Then
+         Flag := False
+      Else
+         Inc(F);
+    If Not Flag Then Break;
     Inc(K)
   Until False;
 
-  Pool[Index].Result := Flag
+  If Flag Then
+     If (Pool[Index].RS.MatchPos[Pool[Index].NeedleNum] > Pool[Index].PP) And
+        (Trim(UnescapeString(Copy(HayStack, Pool[Index].M, Pool[Index].RS.MatchPos[Pool[Index].NeedleNum] - Pool[Index].M))) = '')
+        Then
+          InterlockedExchange(Pool[Index].Result, 1)
 end;
 
 procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks, IsVectorized, IsClustered: Boolean);
@@ -1069,7 +1083,7 @@ Var L: TAnalyser;
     ModParams: TObjStrList;
     Patterns: TStringList;
     Pattern: TPattern;
-    HayStack, P: WideString;
+    P: WideString;
     Replacement: WideString;
     Context1Num, NeedleNum, Context2Num: Integer;
     ByPass: Boolean;
@@ -1390,7 +1404,8 @@ begin
                  Begin
                    With TPattern(Patterns.Objects[F]) Do
                      P := '(' + Context1 + ')(' + Needle + ')(' + Context2 + ')';
-                   RPar[F] := (Pos(P, ')+=>{') = 0) And (Pos(P, ')-=>{') = 0) And
+                   RPar[F] := RParallelMode And
+                              (Pos(P, ')+=>{') = 0) And (Pos(P, ')-=>{') = 0) And
                               (Pos(P, ')*=>{') = 0) And (Pos(P, 'xpath(') = 0) And
                               (Pos(P, 'xpathf(') = 0) And (Pos(P, '}})?=>{') = 0);
                    If RPar[F] Then
@@ -1425,7 +1440,8 @@ begin
                              Pool[K].NeedleNum := NeedleNum;
                              Pool[K].G := G;
                              Pool[K].M := M;
-                             Pool[K].Result := False;
+                             Pool[K].PP := PP;
+                             Pool[K].Result := 0;
                              Inc(K)
                            End;
 
@@ -1441,10 +1457,7 @@ begin
                                 NeedleNum := Context1Num + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Context1);
                                 Context2Num := NeedleNum + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Needle);
 
-                                If Pool[K].Result And
-                                   (RS[F].MatchPos[NeedleNum] > PP) And
-                                   (Trim(UnescapeString(Copy(HayStack, M, RS[F].MatchPos[NeedleNum] - M))) = '')
-                                   Then
+                                If Pool[K].Result <> 0 Then
                                    Break;
                                 Inc(K)
                              End;
