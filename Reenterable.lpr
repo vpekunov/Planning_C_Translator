@@ -1422,7 +1422,9 @@ Var _Out: TStringList;
     ExtensionsOnly: Boolean;
     ParamNameNum: Integer;
     Flag: Boolean Absolute CastedFlag;
+    Millisecs: Comp;
 begin
+     Millisecs := TimeStampToMsecs(DateTimeToTimeStamp(Now));
      SetMultiByteConversionCodePage(CP_UTF8);
      SetMultiByteRTLFileSystemCodePage(CP_UTF8);
      If ParamCount=0 Then
@@ -3447,6 +3449,8 @@ begin
              Halt(-1)
           End;
           _Out.Free;
-        End
+        End;
+        Millisecs := TimeStampToMsecs(DateTimeToTimeStamp(Now)) - Millisecs;
+        WriteLn('Elapsed time = ', 0.001*Millisecs:6:3, ' secs');
 end.
 

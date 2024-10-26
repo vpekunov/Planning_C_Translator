@@ -1,3 +1,5 @@
+#pragma parse parallel
+
 #include "atomic_compile.h"
 
 #include <stdlib.h>

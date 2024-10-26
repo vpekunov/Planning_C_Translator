@@ -38,7 +38,14 @@ Var Prologer: TLibHandle = DWORD(-1);
 
 implementation
 
-uses Consts, regexpr, xpath, xmlread, dom, Math;
+uses
+  {$IFDEF UNIX}
+   cthreads, cmem,
+  {$ENDIF}
+  {$IFDEF FPC}
+  MTProcs,
+  {$ENDIF}
+  Consts, regexpr, xpath, xmlread, dom, Math;
 
 (* *)
 Type run_gprolog7 = Function(Dir, ConsultScript, OutFName, MainGoal, gprolog_console_out, DoneGoal, GID: PChar):Integer; cdecl;
@@ -793,6 +800,30 @@ Begin
      End 
 End;
 
+Type PoolItem = Record
+        RS: TRegExpr;
+        NeedleNum: Integer;
+        G, M: Integer;
+        Result: Boolean
+End;
+
+procedure ParseThread(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
+
+Var Pool: Array Of PoolItem Absolute Data;
+    Flag: Boolean;
+    K: Integer;
+begin
+  K := Pool[Index].G;
+  Repeat
+    Flag := Pool[Index].RS.ExecPos(K);
+    If Not Flag Then Break;
+    If (Pool[Index].RS.MatchPos[Pool[Index].NeedleNum] >= Pool[Index].M) Then Break;
+    Inc(K)
+  Until False;
+
+  Pool[Index].Result := Flag
+end;
+
 procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks, IsVectorized, IsClustered: Boolean);
 
 Type SmallINtArray = Array Of SmallInt;
@@ -1051,6 +1082,10 @@ Var L: TAnalyser;
     Facts: WideString;
     Map: SmallIntArray;
     RS: Array Of TRegExpr;
+    Pool: Array Of PoolItem;
+    RParallelMode: Boolean;
+    RParallelTasks: Word;
+    RPar: Array Of Boolean;
     Replacers: TStringList;
     db: TFastDB;
     GID: Integer;
@@ -1063,6 +1098,7 @@ begin
   L:=TAnalyser.Create(IdentSet,[Space,Tabulation], True);
 
   Patterns := TStringList.Create;
+  RParallelMode := False;
 
   if (PreChecks) Then
      VerifyProgram(True, True, IsVectorized, IsClustered);
@@ -1092,7 +1128,25 @@ begin
       If L.IsNext(Pound) Then
          Begin
            L.Check(Pound);
-           If (L.FindIdent(True) = idparse) And Not ByPass Then
+           If (L.FindIdent(True) = idpragma) And Not ByPass Then
+              Begin
+                L.GetIdent(True);
+                If L.FindIdent(True) = idparse Then
+                   Begin
+                     L.GetIdent(True);
+                     If L.FindIdent(True) = idsequential Then
+                        Begin
+                          RParallelMode := False;
+                          TLine(Lines.Objects[LCounter-1]).Restricted := True
+                        End
+                     Else If L.FindIdent(True) = idparallel Then
+                        Begin
+                          RParallelMode := True;
+                          TLine(Lines.Objects[LCounter-1]).Restricted := True
+                        End
+                   End
+              End
+           Else If (L.FindIdent(True) = idparse) And Not ByPass Then
               GetScheme(pmParse, L)
            Else If (L.FindIdent(True) = idscan) And Not ByPass Then
               GetScheme(pmScan, L)
@@ -1330,10 +1384,17 @@ begin
         If PatternsMode = pmParse Then
            Begin
              SetLength(RS, Patterns.Count);
+             SetLength(RPar, Patterns.Count);
+             RParallelTasks := 0;
              For F := 0 To Patterns.Count-1 Do
                  Begin
                    With TPattern(Patterns.Objects[F]) Do
                      P := '(' + Context1 + ')(' + Needle + ')(' + Context2 + ')';
+                   RPar[F] := (Pos(P, ')+=>{') = 0) And (Pos(P, ')-=>{') = 0) And
+                              (Pos(P, ')*=>{') = 0) And (Pos(P, 'xpath(') = 0) And
+                              (Pos(P, 'xpathf(') = 0) And (Pos(P, '}})?=>{') = 0);
+                   If RPar[F] Then
+                      Inc(RParallelTasks);
                    RS[F] := TRegExpr.Create(UTF8Decode(P));
                    RS[F].Compile;
                    RS[F].SetENV(ENV);
@@ -1341,40 +1402,98 @@ begin
                    RS[F].InputString := HayStack
                  End;
 
+             SetLength(Pool, RParallelTasks);
+
              G := 1;
              PP := 0;
              M := 1;
              While G <= Length(HayStack) Do
                Begin
-                 F := 0;
-                 While F < Patterns.Count Do
-                   Begin
-                     Context1Num := 1;
-                     NeedleNum := Context1Num + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Context1);
-                     Context2Num := NeedleNum + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Needle);
+                 F := Patterns.Count;
+                 If RParallelTasks > 0 Then
+                    Begin
+                      ProcThreadPool.MaxThreadCount := 2*RParallelTasks;
+                      K := 0;
+                      For F := 0 To Patterns.Count - 1 Do
+                        If RPar[F] Then
+                           Begin
+                             Context1Num := 1;
+                             NeedleNum := Context1Num + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Context1);
+                             Context2Num := NeedleNum + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Needle);
 
-                     K := G;
-                     Repeat
-                       Flag := RS[F].ExecPos(K);
-                       If Not Flag Then Break;
-                       If (RS[F].MatchPos[NeedleNum] >= M) Then Break;
-                       Inc(K)
-                     Until False;
-                     If Flag And
-                        (RS[F].MatchPos[NeedleNum] > PP) And
-                        (Trim(UnescapeString(Copy(HayStack, M, RS[F].MatchPos[NeedleNum] - M))) = '')
-                        Then
-                        Break;
-                     Inc(F)
-                   End;
-                 If F = Patterns.Count Then
-                    If Trim(UnescapeString(Copy(HayStack, M, 16*65536))) = '' Then
-                       Break
-                    Else
-                       Begin
-                         WriteLn('Pattern parsing: unrecognized near [', UnescapeString(Copy(HayStack, M, 300)), ']');
-                         Halt(-300)
-                       End;
+                             Pool[K].RS := RS[F];
+                             Pool[K].NeedleNum := NeedleNum;
+                             Pool[K].G := G;
+                             Pool[K].M := M;
+                             Pool[K].Result := False;
+                             Inc(K)
+                           End;
+
+                      ProcThreadPool.DoParallel(@ParseThread, 0, RParallelTasks-1, Pointer(Pool));
+
+                      F := 0;
+                      K := 0;
+                      While F < Patterns.Count Do
+                        Begin
+                          If RPar[F] Then
+                             Begin
+                                Context1Num := 1;
+                                NeedleNum := Context1Num + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Context1);
+                                Context2Num := NeedleNum + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Needle);
+
+                                If Pool[K].Result And
+                                   (RS[F].MatchPos[NeedleNum] > PP) And
+                                   (Trim(UnescapeString(Copy(HayStack, M, RS[F].MatchPos[NeedleNum] - M))) = '')
+                                   Then
+                                   Break;
+                                Inc(K)
+                             End;
+                          Inc(F)
+                        End;
+                      If (F = Patterns.Count) And (Patterns.Count = RParallelTasks) Then
+                         If Trim(UnescapeString(Copy(HayStack, M, 16*65536))) = '' Then
+                            Break
+                         Else
+                            Begin
+                              WriteLn('Pattern parsing: unrecognized near [', UnescapeString(Copy(HayStack, M, 300)), ']');
+                              Halt(-300)
+                            End
+                    End;
+                 If (F = Patterns.Count) And (Patterns.Count - RParallelTasks > 0) Then
+                    Begin
+                       F := 0;
+                       While F < Patterns.Count Do
+                         Begin
+                           If Not RPar[F] Then
+                              Begin
+                                 Context1Num := 1;
+                                 NeedleNum := Context1Num + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Context1);
+                                 Context2Num := NeedleNum + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Needle);
+
+                                 K := G;
+                                 Repeat
+                                   Flag := RS[F].ExecPos(K);
+                                   If Not Flag Then Break;
+                                   If (RS[F].MatchPos[NeedleNum] >= M) Then Break;
+                                   Inc(K)
+                                 Until False;
+                                 If Flag And
+                                    (RS[F].MatchPos[NeedleNum] > PP) And
+                                    (Trim(UnescapeString(Copy(HayStack, M, RS[F].MatchPos[NeedleNum] - M))) = '')
+                                    Then
+                                    Break
+                              End;
+                           Inc(F)
+                         End;
+                       If F = Patterns.Count Then
+                          If Trim(UnescapeString(Copy(HayStack, M, 16*65536))) = '' Then
+                             Break
+                          Else
+                             Begin
+                               WriteLn('Pattern parsing: unrecognized near [', UnescapeString(Copy(HayStack, M, 300)), ']');
+                               Halt(-300)
+                             End
+                    End;
 
                  Start := RS[F].MatchPos[NeedleNum];
                  Stop := Start + RS[F].MatchLen[NeedleNum] - 1;

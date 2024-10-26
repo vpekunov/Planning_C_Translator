@@ -39,6 +39,7 @@ Const idReenterable          = 'REENTERABLE';
       idMarkupdef            = 'MARKUPDEF';
       idOmp                  = 'OMP';
       idParallel             = 'PARALLEL';
+      idSequential           = 'SEQUENTIAL';
       idPlan                 = 'PLAN';
       idFirst                = 'FIRST';
       idLast                 = 'LAST';
