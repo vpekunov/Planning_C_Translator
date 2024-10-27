@@ -29,6 +29,8 @@ procedure PreprocStage1(ApplyConds: Boolean;
 procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks, IsVectorized, IsClustered: Boolean);
 procedure PreprocStage2(Var Restrictions: TRestrictions);
 
+Type SmallIntArray = Array Of SmallInt;
+
 Type PatternModes = (pmNone, pmScan, pmParse);
 
 Var PatternsMode: PatternModes = pmNone;
@@ -806,6 +808,13 @@ Type PoolItem = Record
         RS: TRegExpr;
         NeedleNum: Integer;
         G, M, PP: Integer;
+        PAT: TPattern;
+        Start, Stop: Integer;
+        Map: SmallIntArray;
+        ENV: TXPathEnvironment;
+        Replacers: TStringList;
+        GID: ^Integer;
+        CSC: ^TRTLCriticalSection;
         Result: LongInt
 End;
 
@@ -838,9 +847,60 @@ begin
           InterlockedExchange(Pool[Index].Result, 1)
 end;
 
-procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks, IsVectorized, IsClustered: Boolean);
+procedure ScanThread(Index: PtrInt; Data: Pointer; Item: TMultiThreadProcItem);
 
-Type SmallINtArray = Array Of SmallInt;
+Var Pool: Array Of PoolItem Absolute Data;
+    Replacement: String;
+    Start, Stop: Integer;
+    K, G: Integer;
+begin
+  G := Pool[Index].Start;
+  While (G <= Length(HayStack)) And (G <= Pool[Index].Stop) And Pool[Index].RS.ExecPos(G) Do
+    Begin
+      Start := Pool[Index].RS.MatchPos[Pool[Index].NeedleNum];
+      Stop := Start + Pool[Index].RS.MatchLen[Pool[Index].NeedleNum] - 1;
+      K := Start;
+      EnterCriticalSection(Pool[Index].CSC^);
+      While (K <= Stop) And (Pool[Index].Map[K] < 0) Do
+        Inc(K);
+
+      If K > Stop Then
+         Begin
+           Replacement := Pool[Index].PAT.GetReplacement(Pool[Index].ENV, UTF8Encode(Pool[Index].RS.ExportXML));
+           If (Stop < Start) And (Start >= Length(HayStack)) Then
+              Begin
+                SetLength(Pool[Index].Map, Length(Pool[Index].Map)+1);
+                Pool[Index].Map[Length(Pool[Index].Map)-1] := Pool[Index].Replacers.Count
+              End
+           Else
+               For K := Start To Stop Do
+                   Pool[Index].Map[K] := Pool[Index].Replacers.Count;
+           If Pool[Index].PAT.Fact Then
+              Begin
+                Pool[Index].Replacers.AddObject(Replacement, IntegerToTObject(1));
+                Replacement := ''
+              End
+           Else
+              Pool[Index].Replacers.AddObject(Replacement, Nil);
+           Inc(Pool[Index].GID^);
+           Pool[Index].ENV.setGID(Pool[Index].GID^);
+           G := Start
+         End
+      Else If Pool[Index].PAT.Context1 = '' Then
+         If Pool[Index].Map[Start] >= 0 Then
+            Begin
+              G := Start;
+              While (G < Length(HayStack)) And (Pool[Index].Map[G] >= 0) Do
+                Inc(G);
+              Dec(G)
+            End;
+      LeaveCriticalSection(Pool[Index].CSC^);
+      // Inc(G)
+      If G <= Start Then G := Start+1
+    End
+end;
+
+procedure PreprocStage1a(Var Restrictions: TRestrictions; PreChecks, IsVectorized, IsClustered: Boolean);
 
 function CountBrackets(Const S: String): Integer;
 
@@ -1097,10 +1157,11 @@ Var L: TAnalyser;
     Map: SmallIntArray;
     RS: Array Of TRegExpr;
     Pool: Array Of PoolItem;
-    RParallelMode: Boolean;
+    RPParallelMode, RSParallelMode: Boolean;
     RParallelTasks: Word;
     RPar: Array Of Boolean;
     Replacers: TStringList;
+    CSC: TRTLCriticalSection;
     db: TFastDB;
     GID: Integer;
     LN: TLine;
@@ -1112,7 +1173,9 @@ begin
   L:=TAnalyser.Create(IdentSet,[Space,Tabulation], True);
 
   Patterns := TStringList.Create;
-  RParallelMode := False;
+  RPParallelMode := False;
+  RSParallelMode := False;
+  InitCriticalSection(CSC);
 
   if (PreChecks) Then
      VerifyProgram(True, True, IsVectorized, IsClustered);
@@ -1150,12 +1213,26 @@ begin
                      L.GetIdent(True);
                      If L.FindIdent(True) = idsequential Then
                         Begin
-                          RParallelMode := False;
+                          RPParallelMode := False;
                           TLine(Lines.Objects[LCounter-1]).Restricted := True
                         End
                      Else If L.FindIdent(True) = idparallel Then
                         Begin
-                          RParallelMode := True;
+                          RPParallelMode := True;
+                          TLine(Lines.Objects[LCounter-1]).Restricted := True
+                        End
+                   End
+                Else If L.FindIdent(True) = idscan Then
+                   Begin
+                     L.GetIdent(True);
+                     If L.FindIdent(True) = idsequential Then
+                        Begin
+                          RSParallelMode := False;
+                          TLine(Lines.Objects[LCounter-1]).Restricted := True
+                        End
+                     Else If L.FindIdent(True) = idparallel Then
+                        Begin
+                          RSParallelMode := True;
                           TLine(Lines.Objects[LCounter-1]).Restricted := True
                         End
                    End
@@ -1395,26 +1472,32 @@ begin
           Map[F] := -1;
         Replacers := TStringList.Create;
 
+        SetLength(RPar, Patterns.Count);
+        For F := 0 To Patterns.Count-1 Do
+            Begin
+              With TPattern(Patterns.Objects[F]) Do
+                P := '(' + Context1 + ')(' + Needle + ')(' + Context2 + ')';
+              RPar[F] := (((PatternsMode = pmParse) And RPParallelMode) Or ((PatternsMode = pmScan) And RSParallelMode)) And
+                         (Pos(P, ')+=>{') = 0) And (Pos(P, ')-=>{') = 0) And
+                         (Pos(P, ')*=>{') = 0) And (Pos(P, 'xpath(') = 0) And
+                         (Pos(P, 'xpathf(') = 0) And (Pos(P, '}})?=>{') = 0)
+            End;
+
         If PatternsMode = pmParse Then
            Begin
              SetLength(RS, Patterns.Count);
-             SetLength(RPar, Patterns.Count);
              RParallelTasks := 0;
              For F := 0 To Patterns.Count-1 Do
                  Begin
                    With TPattern(Patterns.Objects[F]) Do
                      P := '(' + Context1 + ')(' + Needle + ')(' + Context2 + ')';
-                   RPar[F] := RParallelMode And
-                              (Pos(P, ')+=>{') = 0) And (Pos(P, ')-=>{') = 0) And
-                              (Pos(P, ')*=>{') = 0) And (Pos(P, 'xpath(') = 0) And
-                              (Pos(P, 'xpathf(') = 0) And (Pos(P, '}})?=>{') = 0);
-                   If RPar[F] Then
-                      Inc(RParallelTasks);
                    RS[F] := TRegExpr.Create(UTF8Decode(P));
                    RS[F].Compile;
                    RS[F].SetENV(ENV);
                    RS[F].SetDB(db);
-                   RS[F].InputString := HayStack
+                   RS[F].InputString := HayStack;
+                   If RPar[F] Then
+                      Inc(RParallelTasks)
                  End;
 
              SetLength(Pool, RParallelTasks);
@@ -1557,53 +1640,89 @@ begin
                     Context1Num := 1;
                     NeedleNum := Context1Num + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Context1);
                     Context2Num := NeedleNum + 1 + CountBrackets(TPattern(Patterns.Objects[F]).Needle);
-                    R := TRegExpr.Create(UTF8Decode(P));
-                    R.Compile;
-                    R.SetENV(ENV);
-                    R.SetDB(db);
-                    R.InputString := HayStack;
-                    G := 1;
-                    While (G <= Length(HayStack)) And R.ExecPos(G) Do
-                      Begin
-                        Start := R.MatchPos[NeedleNum];
-                        Stop := Start + R.MatchLen[NeedleNum] - 1;
-                        K := Start;
-                        While (K <= Stop) And (Map[K] < 0) Do
-                          Inc(K);
+                    If RPar[F] Then
+                       Begin
+                         G := Length(HayStack) Div 8192;
+                         RParallelTasks := Max(1, Min(G, 8));
+                         K := (Length(HayStack) Div RParallelTasks) + 1;
+                         SetLength(Pool, RParallelTasks*2 - 1);
+                         SetLength(RS, RParallelTasks*2 - 1);
+                         For G := 0 To RParallelTasks*2 - 2 Do
+                             Begin
+                               RS[G] := TRegExpr.Create(UTF8Decode(P));
+                               RS[G].Compile;
+                               RS[G].SetENV(ENV);
+                               RS[G].SetDB(db);
+                               RS[G].InputString := HayStack;
 
-                        If K > Stop Then
+                               Pool[G].RS := RS[G];
+                               Pool[G].ENV := ENV;
+                               Pool[G].Replacers := Replacers;
+                               Pool[G].GID := @GID;
+                               Pool[G].CSC := @CSC;
+                               Pool[G].Start := 1 + ((G*K) Div 2);
+                               Pool[G].Stop := Min(Pool[G].Start + K + 1, Length(HayStack));
+                               Pool[G].Map := Map;
+                               Pool[G].PAT := TPattern(Patterns.Objects[F]);
+                               Pool[G].NeedleNum := NeedleNum;
+                             End;
+
+                         ProcThreadPool.DoParallel(@ScanThread, 0, RParallelTasks*2-2, Pointer(Pool));
+
+                         For G := 0 To RParallelTasks*2 - 2 Do
+                             RS[G].Free
+                       End
+                    Else
+                       Begin
+                         R := TRegExpr.Create(UTF8Decode(P));
+                         R.Compile;
+                         R.SetENV(ENV);
+                         R.SetDB(db);
+                         R.InputString := HayStack;
+                         G := 1;
+                         While (G <= Length(HayStack)) And R.ExecPos(G) Do
                            Begin
-                             Replacement := TPattern(Patterns.Objects[F]).GetReplacement(ENV, UTF8Encode(R.ExportXML));
-                             If (Stop < Start) And (Start >= Length(HayStack)) Then
+                             Start := R.MatchPos[NeedleNum];
+                             Stop := Start + R.MatchLen[NeedleNum] - 1;
+                             K := Start;
+                             While (K <= Stop) And (Map[K] < 0) Do
+                               Inc(K);
+
+                             If K > Stop Then
                                 Begin
-                                  SetLength(Map, Length(Map)+1);
-                                  Map[Length(Map)-1] := Replacers.Count
+                                  Replacement := TPattern(Patterns.Objects[F]).GetReplacement(ENV, UTF8Encode(R.ExportXML));
+                                  If (Stop < Start) And (Start >= Length(HayStack)) Then
+                                     Begin
+                                       SetLength(Map, Length(Map)+1);
+                                       Map[Length(Map)-1] := Replacers.Count
+                                     End
+                                  Else
+                                      For K := Start To Stop Do
+                                          Map[K] := Replacers.Count;
+                                  If TPattern(Patterns.Objects[F]).Fact Then
+                                     Begin
+                                       Replacers.AddObject(Replacement, IntegerToTObject(1));
+                                       Replacement := ''
+                                     End
+                                  Else
+                                     Replacers.AddObject(Replacement, Nil);
+                                  Inc(GID);
+                                  ENV.setGID(GID);
+                                  G := Start
                                 End
-                             Else
-                                 For K := Start To Stop Do
-                                     Map[K] := Replacers.Count;
-                             If TPattern(Patterns.Objects[F]).Fact Then
-                                Begin
-                                  Replacers.AddObject(Replacement, IntegerToTObject(1));
-                                  Replacement := ''
-                                End
-                             Else
-                                Replacers.AddObject(Replacement, Nil);
-                             Inc(GID);
-                             ENV.setGID(GID);
-                             G := Start
-                           End
-                        Else If TPattern(Patterns.Objects[F]).Context1 = '' Then
-                           If Map[Start] >= 0 Then
-                              Begin
-                                G := Start;
-                                While (G < Length(HayStack)) And (Map[G] >= 0) Do
-                                  Inc(G);
-                                Dec(G)
-                              End;
-                        Inc(G)
-                      End;
-                    R.Free;
+                             Else If TPattern(Patterns.Objects[F]).Context1 = '' Then
+                                If Map[Start] >= 0 Then
+                                   Begin
+                                     G := Start;
+                                     While (G < Length(HayStack)) And (Map[G] >= 0) Do
+                                       Inc(G);
+                                     Dec(G)
+                                   End;
+                             If G <= Start Then G := Start+1
+                             // Inc(G)
+                           End;
+                         R.Free
+                       End
                   End
            End;
 
@@ -1632,6 +1751,8 @@ begin
           Objects[F].Free;
       Free
     End;
+
+  DoneCriticalSection(CSC);
 
   L.Free
 end;

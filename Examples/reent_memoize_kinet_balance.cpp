@@ -1,5 +1,7 @@
 // ВНИМАНИЕ: нестационарный ветер!
 
+#pragma scan parallel
+
 #define _CRT_SECURE_NO_WARNINGS
 
 #include <stdio.h>
