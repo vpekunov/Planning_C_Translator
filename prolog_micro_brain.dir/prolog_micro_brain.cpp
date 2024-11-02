@@ -565,7 +565,10 @@ tframe_item* frame_item::tcopy(context* CTX, interpreter* INTRP, bool import_glo
 			if (it->first.length() && it->first[0] != '&') {
 				string new_name = it->first;
 				new_name.insert(0, 1, '*');
-				result->set(CTX, new_name.c_str(), it->second ? it->second->copy(CTX, this) : NULL);
+				bool use_local_copy = false;
+				find(new_name.c_str(), use_local_copy);
+				if (!use_local_copy)
+					result->set(CTX, new_name.c_str(), it->second ? it->second->copy(CTX, this) : NULL);
 			}
 			it++;
 		}
