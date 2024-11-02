@@ -4777,7 +4777,7 @@ public:
 		bool d1 = positional_vals->at(0)->defined();
 		bool d2 = positional_vals->at(1)->defined();
 		bool d3 = positional_vals->at(2)->defined();
-		if (!d2 || !d1 && !d3) {
+		if (!d2) {
 			std::cout << "nth(Index,L,A) indeterminated!" << endl;
 			exit(-3);
 		}
@@ -4797,7 +4797,7 @@ public:
 
 		frame_item * r = f->copy(CTX);
 
-		if (ANY1 || VAR1) { // Search
+		if (!d1 && !d3 || ANY1 || VAR1) { // Search or Variants
 			int n = 1;
 			auto check = [&](value * item) {
 				if (V3->unify(CTX, r, item)) {
