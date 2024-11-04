@@ -86,7 +86,7 @@ typedef struct {
 
 class context {
 public:
-	context(int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
+	context(predicate_item * forker, int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
 		this->parent = parent;
 
 		CALLS.reserve(RESERVE);
@@ -106,6 +106,7 @@ public:
 
 		THR = NULL;
 		FRAME.store(tframe);
+		this->forker = forker;
 		this->starting = starting;
 		this->ending = ending;
 		this->prolog = prolog;
@@ -128,6 +129,7 @@ public:
 
 	context* parent;
 	interpreter* prolog;
+	predicate_item* forker;
 	predicate_item* starting;
 	predicate_item* ending;
 
@@ -152,7 +154,7 @@ public:
 
 	std::mutex pages_mutex;
 
-	virtual context* add_page(tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
+	virtual context* add_page(predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
 
 	virtual bool join(int K, frame_item* f, interpreter* INTRP);
 };

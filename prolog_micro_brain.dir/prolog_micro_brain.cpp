@@ -738,10 +738,10 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 	return result;
 }
 
-context* context::add_page(tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
+context* context::add_page(predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
 	std::unique_lock<std::mutex> plock(pages_mutex);
 
-	context* result = new context(100, this, f, starting, ending, prolog);
+	context* result = new context(forker, 100, this, f, starting, ending, prolog);
 
 	CONTEXTS.push_back(result);
 
@@ -3365,7 +3365,8 @@ public:
 };
 
 class predicate_item_append : public predicate_item {
-	bool d1, d2, d3;
+	typedef struct { bool d1, d2, d3; } params;
+	std::map<context*, params> d;
 public:
 	predicate_item_append(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
@@ -3373,6 +3374,13 @@ public:
 
 	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
+
+		lock();
+		params p = d[CTX];
+		unlock();
+		bool d1 = p.d1;
+		bool d2 = p.d2;
+		bool d3 = p.d3;
 
 		if (d1 && d2 && d3 && internal_variant == 0) {
 			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
@@ -3490,9 +3498,14 @@ public:
 			exit(-3);
 		}
 		if (positional_vals->size() == 3) {
-			d1 = positional_vals->at(0)->defined();
-			d2 = positional_vals->at(1)->defined();
-			d3 = positional_vals->at(2)->defined();
+			params p;
+			p.d1 = positional_vals->at(0)->defined();
+			p.d2 = positional_vals->at(1)->defined();
+			p.d3 = positional_vals->at(2)->defined();
+
+			lock();
+			d[CTX] = p;
+			unlock();
 
 			int internal_ptr = 0;
 			frame_item * first = get_next_variant(CTX, f, internal_ptr, positional_vals);
@@ -3520,7 +3533,10 @@ public:
 };
 
 class predicate_item_sublist : public predicate_item {
-	bool d1, d2;
+	typedef struct {
+		bool d1, d2;
+	} params;
+	std::map<context*, params> d;
 public:
 	predicate_item_sublist(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
@@ -3528,6 +3544,13 @@ public:
 
 	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
+
+		params p;
+		lock();
+		p = d[CTX];
+		unlock();
+		bool d1 = p.d1;
+		bool d2 = p.d2;
 
 		if (d1 && d2 && internal_variant == 0) {
 			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
@@ -3588,8 +3611,14 @@ public:
 			std::cout << "sublist(A,B) incorrect call!" << endl;
 			exit(-3);
 		}
-		d1 = positional_vals->at(0)->defined();
-		d2 = positional_vals->at(1)->defined();
+
+		params p;
+		p.d1 = positional_vals->at(0)->defined();
+		p.d2 = positional_vals->at(1)->defined();
+
+		lock();
+		d[CTX] = p;
+		unlock();
 
 		int internal_ptr = 0;
 		frame_item * first = get_next_variant(CTX, f, internal_ptr, positional_vals);
@@ -3602,7 +3631,10 @@ public:
 };
 
 class predicate_item_atom_concat : public predicate_item {
-	bool d1, d2, d3;
+	typedef struct {
+		bool d1, d2, d3;
+	} params;
+	std::map<context*, params> d;
 public:
 	predicate_item_atom_concat(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
@@ -3610,6 +3642,14 @@ public:
 
 	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) {
 		frame_item * result = NULL;
+
+		params p;
+		lock();
+		p = d[CTX];
+		unlock();
+		bool d1 = p.d1;
+		bool d2 = p.d2;
+		bool d3 = p.d3;
 
 		if (d1 && d2 && d3 && internal_variant == 0) {
 			::term * L1 = dynamic_cast<::term *>(positional_vals->at(0));
@@ -3727,10 +3767,14 @@ public:
 			std::cout << "atom_concat(A,B,C) incorrect call!" << endl;
 			exit(-3);
 		}
-		d1 = positional_vals->at(0)->defined();
-		d2 = positional_vals->at(1)->defined();
-		d3 = positional_vals->at(2)->defined();
-		if (!d1 && !d2 && !d3) {
+		params p;
+		p.d1 = positional_vals->at(0)->defined();
+		p.d2 = positional_vals->at(1)->defined();
+		p.d3 = positional_vals->at(2)->defined();
+		lock();
+		d[CTX] = p;
+		unlock();
+		if (!p.d1 && !p.d2 && !p.d3) {
 			std::cout << "atom_concat(A,B,C) indeterminated!" << endl;
 			exit(-3);
 		}
@@ -4483,8 +4527,11 @@ public:
 };
 
 class predicate_item_member : public predicate_item {
-	bool d1;
-	::list * L2;
+	typedef struct {
+		bool d1;
+		::list* L2;
+	} params;
+	std::map<context*, params> d;
 public:
 	predicate_item_member(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
@@ -4494,6 +4541,10 @@ public:
 		frame_item * result = NULL;
 
 		::value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
+
+		lock();
+		::list* L2 = d[CTX].L2;
+		unlock();
 
 		for (; !result && internal_variant < L2->size(); internal_variant++) {
 			frame_item * r = f->copy(CTX);
@@ -4512,11 +4563,14 @@ public:
 			std::cout << "member(A,L) incorrect call!" << endl;
 			exit(-3);
 		}
-		d1 = positional_vals->at(0)->defined();
+		params p;
+		p.d1 = positional_vals->at(0)->defined();
+		p.L2 = dynamic_cast<::list *>(positional_vals->at(1));
+		lock();
+		d[CTX] = p;
+		unlock();
 
-		L2 = dynamic_cast<::list *>(positional_vals->at(1));
-
-		if (!L2) {
+		if (!p.L2) {
 			return NULL;
 		}
 
@@ -4531,9 +4585,12 @@ public:
 };
 
 class predicate_item_for : public predicate_item {
-	int first;
-	int last;
-	var * V;
+	typedef struct {
+		int first;
+		int last;
+		var* V;
+	} params;
+	std::map<context*, params> d;
 public:
 	predicate_item_for(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
 
@@ -4544,10 +4601,15 @@ public:
 
 		::value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
 
-		for (; !result && internal_variant < last - first + 1; internal_variant++) {
+		params p;
+		lock();
+		p = d[CTX];
+		unlock();
+
+		for (; !result && internal_variant < p.last - p.first + 1; internal_variant++) {
 			frame_item * r = f->copy(CTX);
-			int_number * N = new int_number(first + internal_variant);
-			if (V->unify(CTX, r, N))
+			int_number * N = new int_number(p.first + internal_variant);
+			if (p.V->unify(CTX, r, N))
 				result = r;
 			else
 				delete r;
@@ -4567,16 +4629,21 @@ public:
 			exit(-3);
 		}
 
-		V = dynamic_cast<::var *>(positional_vals->at(0));
+		params p;
+		p.V = dynamic_cast<::var *>(positional_vals->at(0));
 		int_number * FROM = dynamic_cast<::int_number *>(positional_vals->at(1));
 		int_number * TO = dynamic_cast<::int_number *>(positional_vals->at(2));
 
-		if (!V || !FROM || !TO) {
+		if (!p.V || !FROM || !TO) {
 			return NULL;
 		}
 
-		first = (int)(0.5 + FROM->get_value());
-		last = (int)(0.5 + TO->get_value());
+		p.first = (int)(0.5 + FROM->get_value());
+		p.last = (int)(0.5 + TO->get_value());
+
+		lock();
+		d[CTX] = p;
+		unlock();
 
 		int internal_ptr = 0;
 		frame_item * _first = get_next_variant(CTX, f, internal_ptr, positional_vals);
@@ -6495,6 +6562,10 @@ public:
 		return predicate_item::get_next(variant);
 	}
 
+	virtual predicate_item* get_last(int variant) {
+		return ending_number == 0 ? NULL : parent->get_item(ending_number-1);
+	}
+
 	virtual bool execute(context * CTX, frame_item* f) {
 		int N = 1;
 		int_number* ni = NULL;
@@ -6532,7 +6603,7 @@ public:
 		}
 		// Process
 		for (int i = 0; i < N; i++) {
-			CTX->add_page(f->tcopy(CTX, prolog, true), parent->get_item(self_number+1), parent->get_item(ending_number), prolog);
+			CTX->add_page(this, f->tcopy(CTX, prolog, true), parent->get_item(self_number+1), parent->get_item(ending_number), prolog);
 		}
 
 		return true;
@@ -7011,7 +7082,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 
 	predicate* user_p = user ? user->get_user_predicate() : NULL;
 
-	context* CNT = user_p && user_p->is_forking() ? new context(100, CONTEXT, NULL, NULL, NULL, this) : CONTEXT;
+	context* CNT = user_p && user_p->is_forking() ? new context(NULL, 100, CONTEXT, NULL, NULL, NULL, this) : CONTEXT;
 
 	generated_vars * variants = p ? p->generate_variants(CNT, f, *positional_vals) : new generated_vars(1, f->copy(CNT));
 	/*
@@ -7177,6 +7248,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 							CNT->LEVELS.pop();
 							CNT->ptrTRACE.pop();
 
+							if (CNT && CNT->FRAME && CNT->forker && p && p == dynamic_cast<predicate_item_fork*>(CNT->forker)->get_last(i))
+								CNT->FRAME.load()->sync(CNT, ff);
+
 							if (CNT->PARENT_CALLS.size() == 0)
 								f->sync(CNT, ff);
 
@@ -7319,6 +7393,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						CNT->FLAGS.pop_back();
 						CNT->LEVELS.pop();
 						CNT->ptrTRACE.pop();
+
+						if (CNT && CNT->FRAME && CNT->forker && p && p == dynamic_cast<predicate_item_fork*>(CNT->forker)->get_last(i))
+							CNT->FRAME.load()->sync(CNT, ff);
 
 						if (variants)
 							variants->delete_from(i);
@@ -8290,7 +8367,7 @@ interpreter::interpreter(const string & fname, const string & starter_name) {
 
 	forking = false;
 
-	CONTEXT = new context(50000, NULL, NULL, NULL, NULL, this);
+	CONTEXT = new context(NULL, 50000, NULL, NULL, NULL, NULL, this);
 
 	if (fname.length() > 0)
 		starter = load_program(fname, starter_name);
