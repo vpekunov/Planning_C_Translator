@@ -178,6 +178,7 @@ public:
 	map< string, set<int> *> DBIndicators;
 	std::mutex GLOCK;
 	map<string, value *> GVars;
+	std::recursive_mutex STARLOCK;
 
 	context* CONTEXT;
 
@@ -349,10 +350,12 @@ protected:
 
 	char* deleted;
 public:
-	frame_item() {
+	frame_item(context * CTX = NULL, frame_item* inheriting = NULL) {
 		names.reserve(32);
 		vars.reserve(8);
 		deleted = NULL;
+
+		import_transacted_globs(CTX, inheriting);
 	}
 
 	virtual ~frame_item() {
@@ -364,6 +367,15 @@ public:
 		}
 		if (deleted)
 			free(deleted);
+	}
+
+	virtual void import_transacted_globs(context* CTX, frame_item* inheriting) {
+		if (CTX && inheriting && (CTX->THR || CTX->forked())) {
+			for (mapper& m : inheriting->vars) {
+				if (m._name[0] == '*')
+					set(CTX, m._name, m.ptr);
+			}
+		}
 	}
 
 	virtual void add_local_names(std::set<string>& s) {
@@ -813,11 +825,27 @@ protected:
 	bool call;
 
 	std::mutex mutex;
+	std::recursive_mutex* critical;
 public:
-	predicate_item(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : neg(_neg), once(_once), call(_call), self_number(num), parent(c), prolog(_prolog) { }
+	predicate_item(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : neg(_neg), once(_once), call(_call),
+		self_number(num), parent(c), critical(NULL), prolog(_prolog) { }
 	virtual ~predicate_item() {
 		for (value * v : _args)
 			v->free();
+	}
+
+	void set_critical(std::recursive_mutex* critical) {
+		this->critical = critical;
+	}
+
+	void enter_critical() {
+		if (this->critical)
+			this->critical->lock();
+	}
+
+	void leave_critical() {
+		if (this->critical)
+			this->critical->unlock();
 	}
 
 	void lock() { mutex.lock(); }

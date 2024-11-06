@@ -842,7 +842,7 @@
 
 @put_ftime(Fun,NPrms,T):-
    atomic_function(Fun,GID,NPrms),
-   (
+   *(
     (predicate_property(atomic_ftime(_,_,_),'dynamic'), atomic_ftime(Fun,GID,T0))->(
          D is T-T0,
          (
@@ -863,7 +863,7 @@
    !.
 
 @put_ltime(GID,T):-
-   (
+   *(
     (predicate_property(atomic_splitted(_,_),'dynamic'), atomic_splitted(GID,_))->
       (
        (predicate_property(atomic_ltime(_,_),'dynamic'), atomic_ltime(GID,T0))->(
@@ -1971,8 +1971,8 @@
    asserta(atomic_reanalyze),retractall(atomic_reanalyze),
    asserta(atomic_splitted('','')), retractall(atomic_splitted(_,_)),
    retractall(atomic_splitted_time(_,_)),
-   retractall(atomic_break(_)),
-   retractall(atomic_continue(_)),
+   retractall(atomic_break(_,_)),
+   retractall(atomic_continue(_,_)),
    retractall(params(_)),
    retractall(counter(_)),
    read_db,
@@ -2155,7 +2155,7 @@
    !.
 
 @register_splitted_time(GID,TTP,TTN,TT1):-
-   (
+   *(
     (predicate_property(atomic_splitted(_,_),'dynamic'), atomic_splitted(GID,_))->
       (
        (predicate_property(atomic_splitted_time(_,_),'dynamic'), atomic_splitted_time(GID,Timings))->
@@ -2175,30 +2175,35 @@
 % Альтернативы из switch {}
 @traverse_alters([op(CurGID,Time,Ins2,Outs2,Allow)], [CurGID|GIDs], [TopGID|StackGIDs], [switch(TopGID,Pass)|StackConstrs], StackConstrs, Vars, Time, NAlt):-
    atomic_op('clsAtomicAlternation',CurGID,_,[],_),
-   (
-    (append(ALT,[NextGID|_],GIDs),atomic_op('clsAtomicOper',NextGID,_,[],_),db_content('args',NextGID,[['op','break']]),!)->
-       (
-        !,
-        traverse_fun(t,Splitted1, ALT,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,T1),
-        !
-       );
-       (
-        traverse_fun(t,Splitted1, GIDs,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,T1),
-        !
-       )
-   ),
-   collecting(Splitted1, [], [], Ins1, Outs1, Allow1),
-   retractall(atomic_break(_)),
+   {
+    (
+     (append(ALT,[NextGID|_],GIDs),atomic_op('clsAtomicOper',NextGID,_,[],_),db_content('args',NextGID,[['op','break']]),!)->
+        (
+         !,
+         traverse_fun(t,Splitted1, ALT,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,T1),
+         !
+        );
+        (
+         traverse_fun(t,Splitted1, GIDs,[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,T1),
+         !
+        )
+    ),
+    collecting(Splitted1, [], [], Ins1, Outs1, Allow1),
+   },
+   thread_id(PID),
+   retractall(atomic_break(PID,_)),
    (
     (append(_,[NextGID1|Rest1],GIDs),atomic_op('clsAtomicAlternation',NextGID1,_,[],_))->(
        !,
        traverse_alters(Splitted2, [NextGID1|Rest1],[TopGID|StackGIDs],[switch(TopGID,Pass)|StackConstrs],_,Vars,T2,NAlt1),
+       {&},
        Time is T1+T2,
        NAlt is NAlt1+1,
        !,
        collecting(Splitted2, Ins1, Outs1, Ins2, Outs2, Allow2),
        !
     );(
+       {&},
        =(Time,T1), =(NAlt,1),
        =(Ins2,Ins1), =(Outs2,Outs1), =(Allow2,t),
        !
@@ -2252,11 +2257,13 @@
    !.
 
 @check_split(CurGID,1000000.0):-
+  *(
    predicate_property(atomic_split(_,_,_,_,_),'dynamic'),
    atomic_split(LoopID,_,CurGID,_,_),
    predicate_property(atomic_splitted(_,_),'dynamic'),
    atomic_splitted(LoopID,_),
-   !.
+   !
+  ).
 
 @check_split(_,1.0):-
    !.
@@ -2530,6 +2537,7 @@
    !.
 
 @create_split(CurGID,VarCanals,Privates,Splitted):-
+  *(
    (member(op(_,_,_,_,f),Splitted), predicate_property(atomic_auto(_),'dynamic'), atomic_auto(CurGID))->
      ( retractall(atomic_split(CurGID,_,_,_,_)),! );
      (
@@ -2571,7 +2579,8 @@
           )
        ),
        !
-     ).
+     )
+  ).
 
 @find_split_privates_one([], []):-
    !.
@@ -2610,6 +2619,7 @@
    !.
 
 @analyze_splitted(CurGID,Vars):-
+  *(
    atomic_splitted(CurGID,params(Canals,OldPrivates,Tol,Degree,RestParams)),
    !,
    find_split_privates(Vars,Privates),
@@ -2621,7 +2631,8 @@
        (retractall(atomic_splitted(CurGID,_)), asserta(atomic_splitted(CurGID,params(Canals,Privates,Tol,Degree,RestParams))));
        true
    ),
-   !.
+   !
+  ).
 
 @analyze_splitted(_,_):-
    !.
@@ -2632,17 +2643,18 @@
    !,
    getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,_,_,_,_,_,BaseTime,_),
    !,
+   thread_id(PID),
    (
-    (predicate_property(atomic_continue(_),'dynamic'), atomic_continue(_))->(
+    (predicate_property(atomic_continue(_,_),'dynamic'), atomic_continue(PID,_))->(
       =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
       =(CONT,0)
     )
    ),
-   retractall(atomic_continue(_)),
+   retractall(atomic_continue(PID,_)),
    (
-    (predicate_property(atomic_break(_),'dynamic'), atomic_break(_))->(
-       retractall(atomic_break(_)),
+    (predicate_property(atomic_break(_,_),'dynamic'), atomic_break(PID,_))->(
+       retractall(atomic_break(PID,_)),
        =(T1,0.0),=(OSplitted,[])
       );(
        =(Pass,1)->
@@ -2687,21 +2699,22 @@
    db_content('args',CurGID,[['op','break']]),
    !,
    check_split(CurGID,K),
-   asserta(atomic_break(CurGID)),
+   thread_id(PID),
+   asserta(atomic_break(PID,CurGID)),
    =..(Top,[_,TopGID,_]),
    !, % Цикл выхода из конструкций верхнего уровня
-     asserta(vr(Vars)), asserta(tm(0.0)),
+     asserta(vr(PID,Vars)), asserta(tm(PID,0.0)),
      append(_,[CurTopGID|Rest],StackGIDs),
-     once(vr(VAR0)), once(tm(T0)),
+     once(vr(PID,VAR0)), once(tm(PID,T0)),
      traverse_fun(t, _, [],[CurTopGID|Rest],[Top|StackConstrs],_,VAR0,TT),
      T1 is T0+TT,
-     retractall(vr(_)), retractall(tm(_)),
+     retractall(vr(PID,_)), retractall(tm(PID,_)),
      =(VAR0,[_|VAR1]),
-     asserta(vr(VAR1)), asserta(tm(T1)),
+     asserta(vr(PID,VAR1)), asserta(tm(PID,T1)),
      =(TopGID,CurTopGID), % Проверка -- условие окончания цикла
    !,
    Time is T1*K,
-   retractall(vr(_)), retractall(tm(_)),
+   retractall(vr(PID,_)), retractall(tm(PID,_)),
    !.
 
 % Возобновление continue
@@ -2710,20 +2723,21 @@
    db_content('args',CurGID,[['op','continue']]),
    !,
    check_split(CurGID,K),
-   asserta(atomic_continue(CurGID)),
+   thread_id(PID),
+   asserta(atomic_continue(PID,CurGID)),
    !, % Цикл выхода из конструкций верхнего уровня
-     asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(tm(0.0)),
+     asserta(st(PID,StackConstrs)), asserta(vr(PID,Vars)), asserta(tm(PID,0.0)),
      append(_,[CurTopGID|Rest],StackGIDs),
-     once(st(ST0)), once(vr(VAR0)), once(tm(T0)),
+     once(st(PID,ST0)), once(vr(PID,VAR0)), once(tm(PID,T0)),
      traverse_fun(t, _, [],[CurTopGID|Rest],ST0,ST1,VAR0,TT),
      T1 is T0+TT,
-     retractall(st(_)), retractall(vr(_)), retractall(tm(_)),
+     retractall(st(PID,_)), retractall(vr(PID,_)), retractall(tm(PID,_)),
      =(VAR0,[_|VAR1]),
-     asserta(st(ST1)), asserta(vr(VAR1)), asserta(tm(T1)),
-     \+ atomic_continue(CurGID), % Проверка -- условие окончания цикла
+     asserta(st(PID,ST1)), asserta(vr(PID,VAR1)), asserta(tm(PID,T1)),
+     \+ atomic_continue(PID,CurGID), % Проверка -- условие окончания цикла
    !,
    =(OutCStack,ST1), Time is T1*K,
-   retractall(st(_)), retractall(vr(_)), retractall(tm(_)),
+   retractall(st(PID,_)), retractall(vr(PID,_)), retractall(tm(PID,_)),
    !.
 
 % Возврат return
@@ -2731,19 +2745,20 @@
    atomic_op('clsAtomicReturn',CurGID,_,[],_),
    !,
    check_split(CurGID,K),
+   thread_id(PID),
    !, % Цикл выхода из конструкций верхнего уровня
-     asserta(st(StackConstrs)), asserta(vr(Vars)), asserta(tm(0.0)),
+     asserta(st(PID,StackConstrs)), asserta(vr(PID,Vars)), asserta(tm(PID,0.0)),
      append(_,[CurTopGID|Rest],StackGIDs),
-     once(st(ST0)), once(vr(VAR0)), once(tm(T0)),
+     once(st(PID,ST0)), once(vr(PID,VAR0)), once(tm(PID,T0)),
      traverse_fun(t, _, [],[CurTopGID|Rest],ST0,ST1,VAR0,TT),
      T1 is T0+TT,
-     retractall(st(_)), retractall(vr(_)), retractall(tm(_)),
+     retractall(st(PID,_)), retractall(vr(PID,_)), retractall(tm(PID,_)),
      =(VAR0,[_|VAR1]),
-     asserta(st(ST1)), asserta(vr(VAR1)), asserta(tm(T1)),
+     asserta(st(PID,ST1)), asserta(vr(PID,VAR1)), asserta(tm(PID,T1)),
      =(Rest,[-1]), % Проверка -- условие окончания цикла
    !,
    =(OutCStack,ST1), Time is T1*K,
-   retractall(st(_)), retractall(vr(_)), retractall(tm(_)),
+   retractall(st(PID,_)), retractall(vr(PID,_)), retractall(tm(PID,_)),
    !.
 
 % Окончание do-while
@@ -2752,17 +2767,18 @@
    !,
    getNewInOutRefLazies(TopGID,[LVars|Vars],Ops,_,_,_,_,_,BaseTime,_),
    !,
+   thread_id(PID),
    (
-    (predicate_property(atomic_continue(_),'dynamic'), atomic_continue(_))->(
+    (predicate_property(atomic_continue(_,_),'dynamic'), atomic_continue(PID,_))->(
       =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
       =(CONT,0)
     )
    ),
-   retractall(atomic_continue(_)),
+   retractall(atomic_continue(PID,_)),
    (
-    (predicate_property(atomic_break(_),'dynamic'), atomic_break(_))->(
-       retractall(atomic_break(_)),
+    (predicate_property(atomic_break(_,_),'dynamic'), atomic_break(PID,_))->(
+       retractall(atomic_break(PID,_)),
        =(T2,0.0),=(OSplitted,[])
       );(
        =(Pass,1)->
@@ -2807,17 +2823,18 @@
    !,
    getForNewInOutRefLazies(['cond','chng'],TopGID,[LVars|Vars],Ops,_,_,_,_,_,BaseTime,_),
    !,
+   thread_id(PID),
    (
-    (predicate_property(atomic_continue(_),'dynamic'), atomic_continue(_))->(
+    (predicate_property(atomic_continue(_,_),'dynamic'), atomic_continue(PID,_))->(
       =(CONT,1) % Если это проход после continue, игнорируем время работы в этом витке, иначе оно завысит общее время исполнения
     );(
       =(CONT,0)
     )
    ),
-   retractall(atomic_continue(_)),
+   retractall(atomic_continue(PID,_)),
    (
-    (predicate_property(atomic_break(_),'dynamic'), atomic_break(_))->(
-       retractall(atomic_break(_)),
+    (predicate_property(atomic_break(_,_),'dynamic'), atomic_break(PID,_))->(
+       retractall(atomic_break(PID,_)),
        =(T2,0.0),=(OSplitted,[])
       );(
        =(Pass,1)->
@@ -2890,23 +2907,26 @@
    check_split(CurGID,K),
    getNewInOutRefLazies(CurGID,Vars,Ops,News,Ins,Outs,_,_,BaseTime,Allow1),
    !,
-   traverse_fun(t, Splitted1,[IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T20),
-   collecting(Splitted1, Ins, Outs, Ins1, Outs1, Allow2),
-   (
-    =(EGID, '')->
-      (
-       =(Ins2, Ins1), =(Outs2, Outs1), =(Allow3, Allow1), =(T21, T20)
-      );
-      ( traverse_fun(t, Splitted2,[EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T21),
-        collecting(Splitted2, Ins1, Outs1, Ins2, Outs2, Allow3)
-      )
-   ),
-   !,
-   (
-     OTime is BaseTime+0.5*(T20+T21)
-   ),
+   {
+    traverse_fun(t, Splitted1,[IfGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T20),
+    collecting(Splitted1, Ins, Outs, Ins1, Outs1, Allow2),
+    (
+     =(EGID, '')->
+       (
+        =(Ins2, Ins1), =(Outs2, Outs1), =(Allow3, Allow1), =(T21, T20)
+       );
+       ( traverse_fun(t, Splitted2,[EGID],[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T21),
+         collecting(Splitted2, Ins1, Outs1, Ins2, Outs2, Allow3)
+       )
+    ),
+    !,
+    (
+      OTime is BaseTime+0.5*(T20+T21)
+    )
+   },
    traverse_fun(Mode, Splitted3, GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,T3),
    !,
+   {&},
    (
      (=(Allow1,f);=(Allow2,f);=(Allow3,f))->
        =(Allow,f);
@@ -2927,38 +2947,41 @@
        (=(SMode,f));
        (=(SMode,t))
    ),
-   traverse_fun(SMode, Splitted1,[IGID],[CurGID,TopGID|StackGIDs],[while(CurGID,1)|StackConstrs],_,[News|Vars],T2),
-   !,
-   (
-    <(T2,1000000.0)->
-      CheckedTime is T2;
-      (
-       T01 is round(T2/1000000),
-       T02 is round(T2-T01*1000000.0),
-       CheckedTime is max(T01,T02)
-      )
-   ),
-   !,
-   (
-     OTime is BaseTime+CheckedTime,
-     analyze_splitted(CurGID,Vars),
-     collecting(Splitted1, Ins, Outs, Ins0, Outs1, Allow2),
-     purge_owns(Ins0,CurGID,Ins1)
-   ),
-   !,
-   (
-     (predicate_property(atomic_splitted(_,_),'dynamic'),atomic_splitted(CurGID,params(Canals,Privates,_,_,_)))->
+   {
+    traverse_fun(SMode, Splitted1,[IGID],[CurGID,TopGID|StackGIDs],[while(CurGID,1)|StackConstrs],_,[News|Vars],T2),
+    !,
+    (
+     <(T2,1000000.0)->
+       CheckedTime is T2;
        (
-         (
-           (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
-             true;
-             create_split(CurGID,Canals,Privates,Splitted1)
-         )
-       );
-       (true)
-   ),
+        T01 is round(T2/1000000),
+        T02 is round(T2-T01*1000000.0),
+        CheckedTime is max(T01,T02)
+       )
+    ),
+    !,
+    (
+      OTime is BaseTime+CheckedTime,
+      analyze_splitted(CurGID,Vars),
+      collecting(Splitted1, Ins, Outs, Ins0, Outs1, Allow2),
+      purge_owns(Ins0,CurGID,Ins1)
+    ),
+    !,
+    *(
+      (predicate_property(atomic_splitted(_,_),'dynamic'),atomic_splitted(CurGID,params(Canals,Privates,_,_,_)))->
+        (
+          (
+            (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
+              true;
+              create_split(CurGID,Canals,Privates,Splitted1)
+          )
+        );
+        (true)
+    )
+   },
    traverse_fun(Mode, Splitted2, GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,T3),
    !,
+   {&},
    (
      (=(Allow1,f);=(Allow2,f))->
        =(Allow,f);
@@ -2979,39 +3002,42 @@
        (=(SMode,f));
        (=(SMode,t))
    ),
-   traverse_fun(SMode, Splitted1,[IGID],[CurGID,TopGID|StackGIDs],[for(CurGID,1)|StackConstrs],_,[News|Vars],T2),
-   !,
-   analyze_splitted(CurGID,Vars),
-   !,
-   (
-     (predicate_property(atomic_splitted(_,_),'dynamic'),atomic_splitted(CurGID,params(Canals,Privates,_,_,_)))->
+   {
+    traverse_fun(SMode, Splitted1,[IGID],[CurGID,TopGID|StackGIDs],[for(CurGID,1)|StackConstrs],_,[News|Vars],T2),
+    !,
+    analyze_splitted(CurGID,Vars),
+    !,
+    *(
+      (predicate_property(atomic_splitted(_,_),'dynamic'),atomic_splitted(CurGID,params(Canals,Privates,_,_,_)))->
+        (
+          (
+            (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
+              true;
+              create_split(CurGID,Canals,Privates,Splitted1)
+          )
+        );
+        (true)
+    ),
+    (
+     <(T2,1000000.0)->
+       CheckedTime is T2;
        (
-         (
-           (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
-             true;
-             create_split(CurGID,Canals,Privates,Splitted1)
-         )
-       );
-       (true)
-   ),
-   (
-    <(T2,1000000.0)->
-      CheckedTime is T2;
-      (
-       T01 is round(T2/1000000),
-       T02 is round(T2-T01*1000000.0),
-       CheckedTime is max(T01,T02)
-      )
-   ),
-   !,
-   (
-      OTime is BaseTime+CheckedTime,
-      collecting(Splitted1, Ins, Outs, Ins0, Outs1, Allow2),
-      purge_owns(Ins0,CurGID,Ins1)
-   ),
-   !,
+        T01 is round(T2/1000000),
+        T02 is round(T2-T01*1000000.0),
+        CheckedTime is max(T01,T02)
+       )
+    ),
+    !,
+    (
+       OTime is BaseTime+CheckedTime,
+       collecting(Splitted1, Ins, Outs, Ins0, Outs1, Allow2),
+       purge_owns(Ins0,CurGID,Ins1)
+    ),
+    !
+   },
    traverse_fun(Mode, Splitted2, GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,T3),
    !,
+   {&},
    (
      (=(Allow1,f);=(Allow2,f))->
        =(Allow,f);
@@ -3030,35 +3056,38 @@
        (=(SMode,f));
        (=(SMode,t))
    ),
-   traverse_fun(SMode, Splitted1, [IGID],[CurGID,TopGID|StackGIDs],[do(CurGID,1)|StackConstrs],_,[[]|Vars],T1),
-   !,
-   (
-    <(T1,1000000.0)->
-      CheckedTime is T1;
-      (
-       T01 is round(T1/1000000),
-       T02 is round(T1-T01*1000000.0),
-       CheckedTime is max(T01,T02)
-      )
-   ),
-   !,
-   analyze_splitted(CurGID,Vars),
-   collecting(Splitted1, [], [], Ins0, Outs1, Allow),
-   purge_owns(Ins0,CurGID,Ins1),
-   !,
-   (
-     (predicate_property(atomic_splitted(_,_),'dynamic'),atomic_splitted(CurGID,params(Canals,Privates,_,_,_)))->
+   {
+    traverse_fun(SMode, Splitted1, [IGID],[CurGID,TopGID|StackGIDs],[do(CurGID,1)|StackConstrs],_,[[]|Vars],T1),
+    !,
+    (
+     <(T1,1000000.0)->
+       CheckedTime is T1;
        (
-         (
-           (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
-             true;
-             create_split(CurGID,Canals,Privates,Splitted1)
-         )
-       );
-       (true)
-   ),
+        T01 is round(T1/1000000),
+        T02 is round(T1-T01*1000000.0),
+        CheckedTime is max(T01,T02)
+       )
+    ),
+    !,
+    analyze_splitted(CurGID,Vars),
+    collecting(Splitted1, [], [], Ins0, Outs1, Allow),
+    purge_owns(Ins0,CurGID,Ins1),
+    !,
+    *(
+      (predicate_property(atomic_splitted(_,_),'dynamic'),atomic_splitted(CurGID,params(Canals,Privates,_,_,_)))->
+        (
+          (
+            (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
+              true;
+              create_split(CurGID,Canals,Privates,Splitted1)
+          )
+        );
+        (true)
+    )
+   },
    traverse_fun(Mode, Splitted2, GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,T2),
    !,
+   {&},
    Time is K*(CheckedTime+T2),
    !.
 
@@ -3096,8 +3125,9 @@
 
 @traverse_fun(Mode, OSplitted, [CurGID|GIDs], [TopGID|StackGIDs], StackConstrs, OutCStack, Vars, Time):-
    check_split(CurGID,K),
+   thread_id(PID),
    (
-    (predicate_property(atomic_break(_),'dynamic'), atomic_break(_))->(
+    (predicate_property(atomic_break(_,_),'dynamic'), atomic_break(PID,_))->(
        traverse_fun(Mode, OSplitted, [], [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Time1),
        Time is Time1*K,
        !
@@ -3114,10 +3144,13 @@
        ),
        addLocals(Vars,News,Vars1),
        !,
-       traverse_fun(t, Splitted1, IGIDs,[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T2),
-       !,
+       (
+        traverse_fun(t, Splitted1, IGIDs,[CurGID,TopGID|StackGIDs],StackConstrs,_,[News|Vars],T2),
+        !
+       ),
        traverse_fun(Mode, Splitted2, GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars1,T3),
        !,
+%       {&},
        (=(Mode,t)->
          (
             OTime is TSP+BaseTime+T2,
@@ -3140,8 +3173,8 @@
    ).
 
 @create_splits(Fun,GID,NPrms):-
-   retractall(atomic_break(_)),
-   retractall(atomic_continue(_)),
+   retractall(atomic_break(_,_)),
+   retractall(atomic_continue(_,_)),
    atomic_globals(GLOB),
    glob_prefixate(GLOB,G1),
    get_fparams(all,Fun,NPrms,PARMS),

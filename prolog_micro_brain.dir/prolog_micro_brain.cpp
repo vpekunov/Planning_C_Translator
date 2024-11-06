@@ -1855,7 +1855,7 @@ generated_vars * predicate_item_user::generate_variants(context * CTX, frame_ite
 bool predicate_item_user::processing(context * CONTEXT, bool line_neg, int variant, generated_vars * variants, vector<value *> ** positional_vals, frame_item * up_f, context * up_c) {
 	predicate_item * next = get_next(variant);
 
-	frame_item* f = new frame_item();
+	frame_item* f = new frame_item(CONTEXT, up_f);
 
 	/**/
 	if (variant == 0) {
@@ -3250,6 +3250,42 @@ public:
 		frame_item* r = f->copy(CTX);
 
 		int_number* id = new int_number(CTX->THR ? CTX->THR->get_nthread() : -1);
+		if (id && a->unify(CTX, r, id))
+			result->push_back(r);
+		else {
+			delete r;
+			delete result;
+			result = NULL;
+		}
+
+		return result;
+	}
+};
+
+class predicate_item_thread_id : public predicate_item {
+public:
+	predicate_item_thread_id(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "thread_id"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 1) {
+			std::cout << "thread_id(ID) incorrect call!" << endl;
+			exit(-3);
+		}
+		value* a = dynamic_cast<value*>(positional_vals->at(0));
+		if (!a) {
+			std::cout << "thread_id(ID) indeterminated!" << endl;
+			exit(-3);
+		}
+
+		generated_vars* result = new generated_vars();
+		frame_item* r = f->copy(CTX);
+
+		ostringstream ss;
+		ss << std::this_thread::get_id();
+
+		term* id = new term(ss.str());
 		if (id && a->unify(CTX, r, id))
 			result->push_back(r);
 		else {
@@ -7104,6 +7140,13 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 		CNT->TRACE.push(variants);
 		CNT->TRACEARGS.push(positional_vals);
 		CNT->TRACERS.push(p);
+
+		predicate_right_bracket* rb = dynamic_cast<predicate_right_bracket*>(p);
+		predicate_left_bracket* lb = dynamic_cast<predicate_left_bracket*>(p);
+
+		if (lb) lb->enter_critical();
+		if (rb) rb->get_corresponding()->leave_critical();
+
 		for (i = 0; neg_standard || variants && variants->has_variant(i); i++) {
 			predicate_item * next =
 				p ? (
@@ -7201,6 +7244,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						if (CNT != CONTEXT)
 							delete CNT;
 
+						if (lb) lb->leave_critical();
+						if (rb) rb->get_corresponding()->enter_critical();
+
 						return false;
 					}
 					neg_standard = false;
@@ -7211,8 +7257,6 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 			if (success) {
 				bool yes = next == NULL;
 
-				predicate_right_bracket * rb = dynamic_cast<predicate_right_bracket *>(p);
-				predicate_left_bracket * lb = dynamic_cast<predicate_left_bracket *>(p);
 				bool rbc = rb && rb->get_corresponding()->is_call();
 				bool rbo = rb && rb->get_corresponding()->is_once();
 
@@ -7235,6 +7279,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 							(*positional_vals) = NULL;
 						}
 						yes = process(CNT, neg, this_clause, next, ff, &next_args);
+
 						if (next_args) {
 							for (int j = 0; j < next_args->size(); j++)
 								next_args->at(j)->free();
@@ -7262,6 +7307,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 
 							if (CNT != CONTEXT)
 								delete CNT;
+
+							if (lb) lb->leave_critical();
+							if (rb) rb->get_corresponding()->enter_critical();
 
 							return true;
 						}
@@ -7331,6 +7379,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 							if (CNT != CONTEXT)
 								delete CNT;
 
+							if (lb) lb->leave_critical();
+							if (rb) rb->get_corresponding()->enter_critical();
+
 							return true;
 						}
 
@@ -7347,6 +7398,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 								delete (*positional_vals);
 								(*positional_vals) = NULL;
 							}
+							_up_ff->import_transacted_globs(CNT, ff);
 							yes = process(up_c, next_neg, next_clause, next_clause_call, _up_ff, &next_args);
 							if (!yes) {
 								CNT->PARENT_CALLS.push(dynamic_cast<predicate_item_user *>(parent_call));
@@ -7381,6 +7433,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 								if (CNT != CONTEXT)
 									delete CNT;
 
+								if (lb) lb->leave_critical();
+								if (rb) rb->get_corresponding()->enter_critical();
+
 								return true;
 							}
 						}
@@ -7406,6 +7461,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						if (CNT != CONTEXT)
 							delete CNT;
 
+						if (lb) lb->leave_critical();
+						if (rb) rb->get_corresponding()->enter_critical();
+
 						return true;
 					}
 				}
@@ -7413,6 +7471,8 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 			CNT->ptrTRACE.pop();
 			delete ff;
 		}
+		if (lb) lb->leave_critical();
+		if (rb) rb->get_corresponding()->enter_critical();
 		CNT->FLAGS.pop_back();
 		CNT->LEVELS.pop();
 		CNT->TRACE.pop();
@@ -7555,7 +7615,13 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 			bool neg = false;
 			bool once = false;
 			bool call = false;
+			bool star = false;
 			
+			if (p + 1 < s.length() && s[p] == '*' && s[p + 1] == '(') {
+				star = true;
+				p++;
+			}
+
 			if (p + 1 < s.length() && s[p] == '\\' && s[p + 1] == '+') {
 				neg = true;
 				p += 2;
@@ -7719,6 +7785,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					}
 					p++;
 					pi = new predicate_left_bracket(brackets.size() == 0, neg, once, call, num, cl, this);
+					if (star) pi->set_critical(&STARLOCK);
 					if (or_branch) {
 						brackets.top()->push_branch(pi);
 						or_branch = false;
@@ -7906,6 +7973,9 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					}
 					else if (iid == "page_id") {
 						pi = new predicate_item_page_id(neg, once, call, num, cl, this);
+					}
+					else if (iid == "thread_id") {
+						pi = new predicate_item_thread_id(neg, once, call, num, cl, this);
 					}
 					else if (iid == "atom_concat") {
 						pi = new predicate_item_atom_concat(neg, once, call, num, cl, this);
