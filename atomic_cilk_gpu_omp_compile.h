@@ -5614,19 +5614,19 @@
 @atom_generate_variants(LoopGID,Canals,First,[H|Last1],V):-
    append(First,[H],First1),
    !,
-   {
+   (
     atom_generate_variants(LoopGID,Canals,First1,Last1,V0),
     !
-   }
-   {
-    {atom_analyze_part(First,Ins1,Outs1,T1)}
-    {atom_analyze_part([H|Last1],Ins2,Outs2,T2)},
-    {&},
+   ),
+   (
+    (atom_analyze_part(First,Ins1,Outs1,T1)),
+    (atom_analyze_part([H|Last1],Ins2,Outs2,T2)),
+%    {&},
     atom_intersect(Outs1,Ins2,P1),
     atom_exclude_canals(P1, Canals, FoundCanals, P11),
     atom_intersect(Outs2,Ins1,P2)
-   },
-   {&},
+   ),
+%   {&},
    (
      (
       (append(_,[op(PrevGID,_,_,_,_)],First), =(P11,[]), =(P2,[]), \+ atomic_op('clsPreproc',PrevGID,_,_,_), atom_belongs(H,LoopGID))->
