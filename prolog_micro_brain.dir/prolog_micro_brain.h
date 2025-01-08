@@ -86,8 +86,9 @@ typedef struct {
 
 class context {
 public:
-	context(predicate_item * forker, int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
+	context(bool locals_in_forked, predicate_item * forker, int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
 		this->parent = parent;
+		this->locals_in_forked = locals_in_forked;
 
 		CALLS.reserve(RESERVE);
 		FRAMES.reserve(RESERVE);
@@ -132,6 +133,7 @@ public:
 	predicate_item* forker;
 	predicate_item* starting;
 	predicate_item* ending;
+	bool locals_in_forked;
 
 	vector<context*> CONTEXTS;
 	std::atomic<tframe_item*> FRAME;
@@ -154,7 +156,7 @@ public:
 
 	std::mutex pages_mutex;
 
-	virtual context* add_page(predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
+	virtual context* add_page(bool locals_in_forked, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
 
 	virtual bool join(int K, frame_item* f, interpreter* INTRP);
 };
@@ -178,6 +180,7 @@ public:
 	map< string, set<int> *> DBIndicators;
 	std::mutex GLOCK;
 	map<string, value *> GVars;
+	map<string, std::recursive_mutex *> STARLOCKS;
 	std::recursive_mutex STARLOCK;
 
 	context* CONTEXT;
@@ -378,9 +381,9 @@ public:
 		}
 	}
 
-	virtual void add_local_names(std::set<string>& s) {
+	virtual void add_local_names(bool locals_in_forked, std::set<string>& s) {
 		for (mapper& m : vars)
-			if (m._name[0] != '$')
+			if (m._name[0] != '$' && (!locals_in_forked || m._name[0] == '*'))
 				s.insert(m._name);
 	}
 

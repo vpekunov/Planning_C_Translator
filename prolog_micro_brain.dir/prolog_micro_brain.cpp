@@ -595,6 +595,7 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 	int success = 0;
 	vector<bool> joineds(CONTEXTS.size(), false);
 	std::set<string> names;
+	vector<std::set<string>> lnames(CONTEXTS.size(), std::set<string>());
 	do {
 		vector<bool> stoppeds(CONTEXTS.size());
 		int stopped = std::count(joineds.begin(), joineds.end(), true);
@@ -602,7 +603,8 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 			for (int i = 0; i < CONTEXTS.size(); i++)
 				if (!joineds[i] && !stoppeds[i] && CONTEXTS[i]->THR->is_stopped()) {
 					stoppeds[i] = true;
-					CONTEXTS[i]->FRAME.load()->add_local_names(names);
+					CONTEXTS[i]->FRAME.load()->add_local_names(CONTEXTS[i]->locals_in_forked, lnames[i]);
+					names.insert(lnames[i].begin(), lnames[i].end());
 					stopped++;
 				}
 			std::this_thread::yield();
@@ -613,7 +615,7 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 			// Conflict Matrix
 			for (int i = 0; i < CONTEXTS.size(); i++)
 				for (int j = i + 1; j < CONTEXTS.size(); j++)
-					if (stoppeds[i] && stoppeds[j]) {
+					if (stoppeds[i] && stoppeds[j] && (lnames[i].find(vname) != lnames[i].end() && lnames[j].find(vname) != lnames[j].end())) {
 						clock_t fwi = CONTEXTS[i]->FRAME.load()->first_write(vname);
 						clock_t fwj = CONTEXTS[j]->FRAME.load()->first_write(vname);
 						clock_t lri = CONTEXTS[i]->FRAME.load()->last_read(vname);
@@ -655,7 +657,7 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 			clock_t min_time = 0;
 			for (const string& vname : names) {
 				for (int i = 0; i < CONTEXTS.size(); i++)
-					if (stoppeds[i]) {
+					if (stoppeds[i] && lnames[i].find(vname) != lnames[i].end()) {
 						clock_t tm = CONTEXTS[i]->FRAME.load()->first_write(vname);
 						if (tm && (!min_time || tm < min_time)) {
 							first_winner = i;
@@ -670,11 +672,11 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 		// Set vars by threads with non-zero first_writes
 		for (const string& vname : names) {
 			int winner = -1;
-			if (CONTEXTS[first_winner]->FRAME.load()->first_write(vname))
+			if (lnames[first_winner].find(vname) != lnames[first_winner].end() && CONTEXTS[first_winner]->FRAME.load()->first_write(vname))
 				winner = first_winner;
 			else {
 				for (int i : other_winners)
-					if (CONTEXTS[i]->FRAME.load()->first_write(vname)) {
+					if (lnames[i].find(vname) != lnames[i].end() && CONTEXTS[i]->FRAME.load()->first_write(vname)) {
 						winner = i;
 						break;
 					}
@@ -738,10 +740,10 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 	return result;
 }
 
-context* context::add_page(predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
+context* context::add_page(bool locals_in_forked, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
 	std::unique_lock<std::mutex> plock(pages_mutex);
 
-	context* result = new context(forker, 100, this, f, starting, ending, prolog);
+	context* result = new context(locals_in_forked, forker, 100, this, f, starting, ending, prolog);
 
 	CONTEXTS.push_back(result);
 
@@ -6554,9 +6556,11 @@ class predicate_item_fork : public predicate_item {
 	// predicate_item* start; // Starts from get_start()
 	int ending_number;
 	value * n_threads;
+	bool locals_in_forked;
 public:
-	predicate_item_fork(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) :
+	predicate_item_fork(bool locals, bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) :
 		predicate_item(_neg, _once, _call, num, c, _prolog) {
+		locals_in_forked = locals;
 		n_threads = new int_number(1);
 	}
 	virtual ~predicate_item_fork() {
@@ -6639,7 +6643,7 @@ public:
 		}
 		// Process
 		for (int i = 0; i < N; i++) {
-			CTX->add_page(this, f->tcopy(CTX, prolog, true), parent->get_item(self_number+1), parent->get_item(ending_number), prolog);
+			CTX->add_page(locals_in_forked, this, f->tcopy(CTX, prolog, true), parent->get_item(self_number+1), parent->get_item(ending_number), prolog);
 		}
 
 		return true;
@@ -7118,7 +7122,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 
 	predicate* user_p = user ? user->get_user_predicate() : NULL;
 
-	context* CNT = user_p && user_p->is_forking() ? new context(NULL, 100, CONTEXT, NULL, NULL, NULL, this) : CONTEXT;
+	context* CNT = user_p && user_p->is_forking() ? new context(false, NULL, 100, CONTEXT, NULL, NULL, NULL, this) : CONTEXT;
 
 	generated_vars * variants = p ? p->generate_variants(CNT, f, *positional_vals) : new generated_vars(1, f->copy(CNT));
 	/*
@@ -7616,10 +7620,40 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 			bool once = false;
 			bool call = false;
 			bool star = false;
+			bool locals_in_forked = false;
+			std::recursive_mutex * starlock = &STARLOCK;
 			
-			if (p + 1 < s.length() && s[p] == '*' && s[p + 1] == '(') {
+			if (p + 1 < s.length() && s[p] == '*' && (s[p + 1] == '(' || s[p + 1] == '[' || s[p + 1] == '{')) {
 				star = true;
 				p++;
+				if (s[p] == '[') {
+					p++;
+					bypass_spaces(s, p);
+					string lock_name;
+					while (p < s.length() && (isalnum(s[p]) || s[p] == '_'))
+						lock_name += s[p++];
+					bypass_spaces(s, p);
+					if (s[p] == ']') {
+						p++;
+						bypass_spaces(s, p);
+						if (s[p] != '(') {
+							std::cout << "'(' expected after [critical_id] in [" << s.substr(p - 30, 100) << "]!" << endl;
+							exit(2);
+						}
+						if (lock_name.length()) {
+							map<string, std::recursive_mutex *>::iterator itstar = STARLOCKS.find(lock_name);
+							if (itstar == STARLOCKS.end()) {
+								starlock = new recursive_mutex();
+								STARLOCKS[lock_name] = starlock;
+							} else
+								starlock = itstar->second;
+						}
+					} else {
+						std::cout << "[critical_id] expected in [" << s.substr(p - 30, 100) << "]!" << endl;
+						exit(2);
+					}
+				} else if (s[p] == '{')
+					locals_in_forked = true;
 			}
 
 			if (p + 1 < s.length() && s[p] == '\\' && s[p + 1] == '+') {
@@ -7667,7 +7701,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					}
 					else {
 						// {...
-						pi = new predicate_item_fork(false, false, false, num, cl, this);
+						pi = new predicate_item_fork(locals_in_forked, false, false, false, num, cl, this);
 						fork_stack.push(dynamic_cast<predicate_item_fork *>(pi));
 						fork_bracket_levels.push(bracket_level);
 						cl->set_forking(true);
@@ -7785,7 +7819,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					}
 					p++;
 					pi = new predicate_left_bracket(brackets.size() == 0, neg, once, call, num, cl, this);
-					if (star) pi->set_critical(&STARLOCK);
+					if (star) pi->set_critical(starlock);
 					if (or_branch) {
 						brackets.top()->push_branch(pi);
 						or_branch = false;
@@ -8437,7 +8471,7 @@ interpreter::interpreter(const string & fname, const string & starter_name) {
 
 	forking = false;
 
-	CONTEXT = new context(NULL, 50000, NULL, NULL, NULL, NULL, this);
+	CONTEXT = new context(false, NULL, 50000, NULL, NULL, NULL, NULL, this);
 
 	if (fname.length() > 0)
 		starter = load_program(fname, starter_name);
@@ -8481,6 +8515,11 @@ interpreter::~interpreter() {
 		itg++;
 	}
 	delete CONTEXT;
+	map<string, std::recursive_mutex *>::iterator itstars = STARLOCKS.begin();
+	while (itstars != STARLOCKS.end()) {
+		delete itstars->second;
+		itstars++;
+	}
 }
 
 string interpreter::open_file(const string & fname, const string & mode) {
