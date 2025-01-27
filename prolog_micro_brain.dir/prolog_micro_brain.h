@@ -86,9 +86,10 @@ typedef struct {
 
 class context {
 public:
-	context(bool locals_in_forked, predicate_item * forker, int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
+	context(bool locals_in_forked, bool transactable_facts, predicate_item * forker, int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
 		this->parent = parent;
 		this->locals_in_forked = locals_in_forked;
+		this->transactable_facts = transactable_facts;
 
 		CALLS.reserve(RESERVE);
 		FRAMES.reserve(RESERVE);
@@ -134,6 +135,7 @@ public:
 	predicate_item* starting;
 	predicate_item* ending;
 	bool locals_in_forked;
+	bool transactable_facts;
 
 	vector<context*> CONTEXTS;
 	std::atomic<tframe_item*> FRAME;
@@ -156,7 +158,7 @@ public:
 
 	std::mutex pages_mutex;
 
-	virtual context* add_page(bool locals_in_forked, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
+	virtual context* add_page(bool locals_in_forked, bool transactable_facts, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
 
 	virtual bool join(int K, frame_item* f, interpreter* INTRP);
 };
@@ -602,10 +604,16 @@ class tframe_item : public frame_item {
 
 	vector<clock_t> last_reads;
 	vector<clock_t> first_writes;
+	vector<clock_t> last_writes;
+	vector<clock_t> first_reads;
+
+	clock_t creation;
 
 	std::mutex mutex;
 public:
-	tframe_item() : frame_item() { }
+	tframe_item() : frame_item() {
+		creation = clock();
+	}
 
 	virtual void set(context * CTX, const char* name, value* v) {
 		bool locked = mutex.try_lock();
@@ -625,6 +633,8 @@ public:
 			vars.insert(vars.begin() + it, m);
 			last_reads.insert(last_reads.begin() + it, 0);
 			first_writes.insert(first_writes.begin() + it, 0);
+			last_writes.insert(last_writes.begin() + it, 0);
+			first_reads.insert(first_reads.begin() + it, 0);
 		}
 		else {
 			if (vars[it].ptr)
@@ -633,6 +643,7 @@ public:
 		}
 		if (first_writes[it] == 0)
 			first_writes[it] = clock();
+		last_writes[it] = clock();
 		if (locked) mutex.unlock();
 	}
 
@@ -643,6 +654,8 @@ public:
 		int it = find(name, found);
 		if (found) {
 			result = vars[it].ptr;
+			if (first_reads[it] == 0)
+				first_reads[it] = clock();
 			last_reads[it] = clock();
 		}
 		else if (unwind && name[0] == '$') {
@@ -658,6 +671,8 @@ public:
 		if (it >= 0) {
 			last_reads.erase(last_reads.begin() + it);
 			first_writes.erase(first_writes.begin() + it);
+			last_writes.erase(last_writes.begin() + it);
+			first_reads.erase(first_reads.begin() + it);
 		}
 		if (locked) mutex.unlock();
 		return it;
@@ -668,6 +683,8 @@ public:
 		int it = find(name.c_str(), found);
 		if (found && first_writes[it] == 0)
 			first_writes[it] = clock();
+		if (found)
+			last_writes[it] = clock();
 	}
 
 	virtual clock_t first_write(const std::string& vname) {
@@ -688,6 +705,39 @@ public:
 			return 0;
 	}
 
+	virtual clock_t first_read(const std::string& vname) {
+		bool found = false;
+		int it = find(vname.c_str(), found);
+		if (found)
+			return first_reads[it];
+		else
+			return 0;
+	}
+
+	virtual clock_t last_write(const std::string& vname) {
+		bool found = false;
+		int it = find(vname.c_str(), found);
+		if (found)
+			return last_writes[it];
+		else
+			return 0;
+	}
+
+	virtual void statistics(const std::string & vname, clock_t & cr, clock_t &fw, clock_t &fr, clock_t &lw, clock_t &lr) {
+		bool found = false;
+		int it = find(vname.c_str(), found);
+		if (found) {
+			lw = last_writes[it];
+			lr = last_reads[it];
+			fw = first_writes[it];
+			fr = first_reads[it];
+		}
+		else {
+			fw = fr = lw = lr = 0;
+		}
+		cr = creation;
+	}
+
 	virtual void sync(context* CTX, frame_item* other) {
 		bool locked = mutex.try_lock();
 		tframe_item* _other = dynamic_cast<tframe_item*>(other);
@@ -702,8 +752,12 @@ public:
 			char* itc = _other->vars[it]._name;
 			set(CTX, itc, _other->vars[it].ptr);
 			int _it = find(itc, f);
-			if (f)
+			if (f) {
 				first_writes[_it] = _other->first_writes[it];
+				last_writes[_it] = _other->last_writes[it];
+				first_reads[_it] = _other->first_reads[it];
+				last_reads[_it] = _other->last_reads[it];
+			}
 			else {
 				cout << "Internal ERROR : can't sync tframe_item : var '" << itc << "'" << endl;
 				exit(-60);
@@ -731,6 +785,8 @@ public:
 		}
 		((tframe_item*)result)->first_writes = first_writes;
 		((tframe_item*)result)->last_reads = last_reads;
+		((tframe_item*)result)->first_reads = first_reads;
+		((tframe_item*)result)->last_writes = last_writes;
 		return result;
 	}
 
