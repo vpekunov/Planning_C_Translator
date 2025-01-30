@@ -2391,6 +2391,21 @@
    clk_is_pure_call(func,FUNS),
    clk_is_pure_call(proc,PROCS).
 
+@clk_is_pure_for(_, []):-!.
+
+@clk_is_pure_for(Types, [H|T]):-
+   =..(H, [Functor, _, _, _, FUNS, PROCS, _, _, _]),
+   once((
+    member(Functor, Types)->
+     (
+      clk_is_pure_call(func,FUNS),
+      clk_is_pure_call(proc,PROCS)
+     );
+     true
+   )),
+   !,
+   clk_is_pure_for(Types, T).
+
 % Альтернативы из switch {}
 @clk_traverse_alters([CurGID|GIDs], [TopGID|StackGIDs], [switch(TopGID,Pass)|StackConstrs], StackConstrs, Vars, InLazies, OutLazies, InRefs, OutRefs, ISpawns, OSpawns, Time, NAlt):-
    cilk_op('clsAlternation',CurGID,_,[],_),
@@ -2439,7 +2454,7 @@
       );(
        clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2), clk_intersect(LVars,InRefs,Decision3),
        (
-        ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
+        (=(ISpawns,[]); (once(clk_is_pure(Ops)),=(Decision1,[]),=(Decision2,[]),=(Decision3,[])))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(TP,0.0)
         );(
           (
@@ -2613,7 +2628,7 @@
       );(
        clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2), clk_intersect(LVars,InRefs,Decision3),
        (
-        ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
+        (=(ISpawns,[]); (once(clk_is_pure(Ops)),=(Decision1,[]),=(Decision2,[]),=(Decision3,[])))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           (
@@ -2705,7 +2720,7 @@
       );(
        clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2), clk_intersect(LVars,InRefs,Decision3),
        (
-        ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]),=(Decision3,[]))->(
+        (=(ISpawns,[]); (once(clk_is_pure_for(['cond', 'chng'], Ops)),=(Decision1,[]),=(Decision2,[]),=(Decision3,[])))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           (
@@ -2796,7 +2811,7 @@
       );(
        clk_intersect(InLazies,LVars,Decision2), clk_intersect(InRefs,LVars,Decision3),
        (
-        (=(Decision2,[]),=(Decision3,[]))->(
+        (=(ISpawns,[]); (=(Decision2,[]),=(Decision3,[])))->(
           =(OutLazies,InLazies), =(OutRefs,InRefs), =(OSpawns,ISpawns), =(Time,0.0)
         );(
           clk_put_cilk_sync(SyncGID),
@@ -2844,7 +2859,7 @@
       );(
        clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2),
        (
-        ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
+        (=(ISpawns,[]); (once(clk_is_pure(Ops)),=(Decision1,[]),=(Decision2,[])))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           clk_put_cilk_sync(SyncGID),
@@ -2885,7 +2900,7 @@
       );(
        clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2),
        (
-        ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
+        (=(ISpawns,[]); (once(clk_is_pure(Ops)),=(Decision1,[]),=(Decision2,[])))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           clk_put_cilk_sync(SyncGID),
@@ -2901,9 +2916,8 @@
    !,
    append(Laz1,Laz2,Laz22), clk_unique(Laz22,Laz3), !,
    append(Ref1,Ref2,Ref22), clk_unique(Ref22,Ref3), !,
-   append(OSP1,OSP2,OSP3),
    !,
-   clk_traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz3,OutLazies,Ref3,OutRefs,OSP3,OSpawns,T3),
+   clk_traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz3,OutLazies,Ref3,OutRefs,OSP2,OSpawns,T3),
    Time is T1+BaseTime+T2+T3,
    !.
 
@@ -2921,7 +2935,7 @@
       );(
        clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2),
        (
-        ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
+        (=(ISpawns,[]); (once(clk_is_pure_for(['init', 'cond'], Ops)),=(Decision1,[]),=(Decision2,[])))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           clk_put_cilk_sync(SyncGID),
@@ -2937,9 +2951,8 @@
    !,
    append(Laz1,Laz2,Laz22), clk_unique(Laz22,Laz3), !,
    append(Ref1,Ref2,Ref22), clk_unique(Ref22,Ref3), !,
-   append(OSP1,OSP2,OSP3),
    !,
-   clk_traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz3,OutLazies,Ref3,OutRefs,OSP3,OSpawns,T3),
+   clk_traverse_fun(_,GIDs, [TopGID|StackGIDs],StackConstrs,OutCStack,Vars,Laz3,OutLazies,Ref3,OutRefs,OSP2,OSpawns,T3),
    Time is T1+BaseTime+T2+T3,
    !.
 
@@ -2968,7 +2981,7 @@
       );(
        clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2),
        (
-        ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
+        (=(ISpawns,[]); (once(clk_is_pure(Ops)),=(Decision1,[]),=(Decision2,[])))->(
           =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISP), =(T1,0.0)
         );(
           clk_put_cilk_sync(SyncGID),
@@ -3010,7 +3023,7 @@
          );(
           clk_intersect(InLazies,Ins,Decision1), clk_intersect(InRefs,Outs,Decision2),
           (
-           ((once(clk_is_pure(Ops)); =(ISpawns,[])),=(Decision1,[]),=(Decision2,[]))->(
+           (=(ISpawns,[]); (once(clk_is_pure(Ops)),=(Decision1,[]),=(Decision2,[])))->(
              =(NextLazies,InLazies), =(NextRefs,InRefs), =(OSP1,ISpawns), =(T1,0.0)
            );(
              clk_put_cilk_sync(SyncGID),

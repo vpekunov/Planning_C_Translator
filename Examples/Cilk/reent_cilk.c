@@ -1,4 +1,4 @@
-// Uncomment the following line if you hava a Cilk-capable compiler
+// Uncomment the following line if you have a Cilk-capable compiler
 // #define CILK
 
 #include "cilk_compile.h"
@@ -10,6 +10,8 @@
 #pragma auto pure(sqrt)
 #pragma auto pure(exp,sin)
 #pragma auto pure(printf)
+
+#pragma auto for
 
 #define PI 3.14159265358
 
