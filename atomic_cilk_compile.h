@@ -2339,22 +2339,37 @@
 @clk_inc_spawns([],[],_):-!.
 
 @clk_inc_spawns([trace(S,Fun,NPrms,T0)|T1],[trace(S,Fun,NPrms,TR)|T2],Delta):-
-   TR is T0+Delta,
+   clk_inc_spawn_list(T0,TR,Delta),
    clk_inc_spawns(T1,T2,Delta).
 
-@clk_start_spawn(GID,Fun,NPrms,L,[trace(GID,Fun,NPrms,0.0)|L],T1,T2):-
-   g_read('$SpawnTime', A),  % +Затраты на собственно spawn
+@clk_inc_spawn_list([],[],_):-!.
+
+@clk_inc_spawn_list([H|T],[H1|T1],Delta):-
+   H1 is H+Delta,
+   clk_inc_spawn_list(T,T1,Delta).
+
+@clk_start_spawn(GID,Fun,NPrms,L,L1,T1,T2):-
+% +Затраты на собственно spawn
+   once(append(Left,[trace(GID,Fun,NPrms,LIST)|Right],L)),
+   once(append(Left,[trace(GID,Fun,NPrms,[0.0|LIST])|Right],L1)),
+   g_read('$SpawnTime', A),
+   T2 is T1+A,
+   !.
+
+@clk_start_spawn(GID,Fun,NPrms,L,[trace(GID,Fun,NPrms,[0.0])|L],T1,T2):-
+% +Затраты на собственно spawn
+   g_read('$SpawnTime', A),
    T2 is T1+A.
 
-@clk_stop_spawns([],[],T,T):-!.
+@clk_iterate_spawn(_,_,_,_,[],0.0):-
+   !.
 
-@clk_stop_spawns([trace(GID,Fun,NPrm,T1)|T],[],T0,TMax):-
-   clk_get_ftime(Fun,NPrm,TF),
-   g_read('$SyncTime', SyncTime),
+@clk_iterate_spawn(GID,T0,TF,SyncTime,[T1|TL],TMax):-
    (
     <(T1,TF)->
       TT is T0+TF-T1+SyncTime;
-      TT is T0+SyncTime % Затраты на собственно sync
+% Затраты на собственно sync
+      TT is T0+SyncTime
    ),
    (
     (predicate_property(cilk_spawn_time(_,_),'dynamic'), cilk_spawn_time(GID,Timings))->
@@ -2365,7 +2380,20 @@
          asserta(cilk_spawn_time(GID,[T1]))
       )
    ),
-   clk_stop_spawns(T,[],T0,TC),
+   clk_iterate_spawn(GID,T0,TF,SyncTime,TL,TC),
+   (
+    >(TT,TC)->
+      =(TMax,TT);
+      =(TMax,TC)
+   ).
+
+@clk_stop_spawns([],[],T,T):-!.
+
+@clk_stop_spawns([trace(GID,Fun,NPrm,TL)|T],[],T0,TMax):-
+   clk_get_ftime(Fun,NPrm,TF),
+   g_read('$SyncTime', SyncTime),
+   clk_iterate_spawn(GID,T0,TF,SyncTime,TL,TT),
+   once(clk_stop_spawns(T,[],T0,TC)),
    (
     >(TT,TC)->
       =(TMax,TT);
