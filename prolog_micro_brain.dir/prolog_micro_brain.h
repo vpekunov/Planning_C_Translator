@@ -84,12 +84,41 @@ typedef struct {
 	value* ptr;
 } mapper;
 
+class journal_item;
+class journal;
+
+typedef enum { jInsert = 0, jDelete } jTypes;
+
 class context {
 public:
 	context(bool locals_in_forked, bool transactable_facts, predicate_item * forker, int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
 		this->parent = parent;
 		this->locals_in_forked = locals_in_forked;
 		this->transactable_facts = transactable_facts;
+
+		if (!transactable_facts && parent != NULL) {
+			DBLOCK = parent->DBLOCK;
+			DB = parent->DB;
+			DBJournal = parent->DBJournal;
+		}
+		else {
+			DBLOCK = new std::mutex();
+			DB = new map< string, vector<term*>*>();
+			if (parent) {
+				std::unique_lock<std::mutex> lock(*parent->DBLOCK);
+				map< string, vector<term*>*>::iterator itd = parent->DB->begin();
+				while (itd != parent->DB->end()) {
+					if (itd->second) {
+						(*DB)[itd->first] = new vector<term*>(*itd->second);
+					}
+					itd++;
+				}
+				lock.unlock();
+			}
+			DBJournal = new map<string, journal*>();
+		}
+
+		rollback = false;
 
 		CALLS.reserve(RESERVE);
 		FRAMES.reserve(RESERVE);
@@ -117,6 +146,22 @@ public:
 	virtual ~context() {
 		for (context* C : CONTEXTS)
 			delete C;
+		if (transactable_facts || parent == NULL) {
+			map< string, vector<term*>*>::iterator itd = DB->begin();
+			while (itd != DB->end()) {
+				delete itd->second;
+				itd++;
+			}
+			delete DBLOCK;
+			delete DB;
+
+			map<string, journal*>::iterator itj = DBJournal->begin();
+			while (itj != DBJournal->end()) {
+				delete itj->second;
+				itj++;
+			}
+			delete DBJournal;
+		}
 		delete THR;
 		delete FRAME.load();
 	}
@@ -129,6 +174,10 @@ public:
 		return result;
 	}
 
+	virtual void set_rollback(bool val) {
+		rollback = val;
+	}
+
 	context* parent;
 	interpreter* prolog;
 	predicate_item* forker;
@@ -136,6 +185,11 @@ public:
 	predicate_item* ending;
 	bool locals_in_forked;
 	bool transactable_facts;
+	bool rollback;
+
+	std::mutex * DBLOCK;
+	map< string, vector<term*>*> * DB;
+	map<string, journal*> * DBJournal;
 
 	vector<context*> CONTEXTS;
 	std::atomic<tframe_item*> FRAME;
@@ -160,6 +214,10 @@ public:
 
 	virtual context* add_page(bool locals_in_forked, bool transactable_facts, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
 
+	virtual void register_db_read(const std::string& iid);
+
+	virtual void register_db_write(const std::string& iid, jTypes t, value* data, int position);
+	
 	virtual bool join(int K, frame_item* f, interpreter* INTRP);
 };
 
@@ -173,17 +231,108 @@ private:
 
 	bool forking;
 public:
+	typedef enum {
+		id_append = 0,
+		id_sublist,
+		id_delete,
+		id_member,
+		id_last,
+		id_reverse,
+		id_for,
+		id_length,
+		id_max_list,
+		id_atom_length,
+		id_nth,
+		id_page_id,
+		id_thread_id,
+		id_atom_concat,
+		id_atom_chars,
+		id_atom_codes,
+		id_atom_hex,
+		id_atom_hexs,
+		id_number_atom,
+		id_number,
+		id_consistency,
+		id_listing,
+		id_current_predicate,
+		id_findall,
+		id_functor,
+		id_predicate_property,
+		id_spredicate_property_pi,
+		id_eq,
+		id_neq,
+		id_less,
+		id_greater,
+		id_term_split,
+		id_g_assign,
+		id_g_assign_nth,
+		id_g_read,
+		id_fail,
+		id_true,
+		id_change_directory,
+		id_open,
+		id_close,
+		id_get_char,
+		id_peek_char,
+		id_read_token,
+		id_read_token_from_atom,
+		id_mars,
+		id_mars_decode,
+		id_unset,
+		id_write,
+		id_write_to_atom,
+		id_write_term,
+		id_write_term_to_atom,
+		id_nl,
+		id_file_exists,
+		id_unlink,
+		id_rename_file,
+		id_seeing,
+		id_telling,
+		id_seen,
+		id_told,
+		id_see,
+		id_tell,
+		id_random,
+		id_randomize,
+		id_char_code,
+		id_get_code,
+		id_at_end_of_stream,
+		id_open_url,
+		id_track_post,
+		id_consult,
+		id_assert,
+		id_asserta,
+		id_assertz,
+		id_retract,
+		id_retractall,
+		id_inc,
+		id_halt,
+		id_load_classes,
+		id_init_xpathing,
+		id_induct_xpathing,
+		id_import_model_after_induct,
+		id_unload_classes,
+		id_var,
+		id_nonvar,
+		id_get_icontacts,
+		id_get_ocontacts,
+		id_rollback
+	} ids;
+
+	map<string, ids> MAP;
+
 	string CLASSES_ROOT;
 	string INDUCT_MODE;
 
 	map<string, predicate *> PREDICATES;
-	std::mutex DBLOCK;
-	map< string, vector<term *> *> DB;
-	map< string, set<int> *> DBIndicators;
 	std::mutex GLOCK;
 	map<string, value *> GVars;
 	map<string, std::recursive_mutex *> STARLOCKS;
 	std::recursive_mutex STARLOCK;
+
+	map< string, set<int>*> DBIndicators;
+	std::mutex DBILock;
 
 	context* CONTEXT;
 
@@ -389,14 +538,15 @@ public:
 				s.insert(m._name);
 	}
 
-	virtual void sync(context * CTX, frame_item * other) {
+	virtual void sync(bool not_sync_globs, context * CTX, frame_item * other) {
 		int it = 0;
 		while (it < other->vars.size()) {
 			char * itc = other->vars[it]._name;
-			set(CTX, itc, other->vars[it].ptr);
+			if (not_sync_globs || *itc == '*')
+				set(CTX, itc, other->vars[it].ptr);
 			it++;
 		}
-		if (other->deleted) {
+		if (not_sync_globs && other->deleted) {
 			char* cur = other->deleted;
 			while (*cur) {
 				unset(CTX, cur);
@@ -535,10 +685,11 @@ public:
 			names.erase(names.begin() + (vars[it]._name - oldp), names.begin() + (vars[it]._name - oldp) + n + 1);
 			char* newp = &names[0];
 			for (int i = 0; i < vars.size(); i++)
-				if (vars[i]._name < vars[it]._name)
-					vars[i]._name += newp - oldp;
-				else
-					vars[i]._name += newp - oldp - n - 1;
+				if (i != it)
+					if (vars[i]._name < vars[it]._name)
+						vars[i]._name += newp - oldp;
+					else
+						vars[i]._name += newp - oldp - n - 1;
 			vars.erase(vars.begin() + it);
 			return it;
 		} else
@@ -556,6 +707,9 @@ public:
 		else
 			return NULL;
 	}
+
+	virtual void register_facts(context* CTX, std::set<string>& names) { }
+	virtual void unregister_facts(context* CTX) { }
 };
 
 class tthread : public std::thread {
@@ -601,6 +755,7 @@ public:
 
 class tframe_item : public frame_item {
 	friend class frame_item;
+	friend class journal;
 
 	vector<clock_t> last_reads;
 	vector<clock_t> first_writes;
@@ -738,11 +893,34 @@ public:
 		cr = creation;
 	}
 
-	virtual void sync(context* CTX, frame_item* other) {
+	virtual void register_fact_group(context* CTX, string & fact, journal* J);
+
+	virtual void unregister_fact_group(context* CTX, string & fact);
+
+	virtual void register_facts(context* CTX, std::set<string>& names) {
+		map<string, journal*>::iterator it = CTX->DBJournal->begin();
+		while (it != CTX->DBJournal->end()) {
+			string fact = it->first;
+			register_fact_group(CTX, fact, it->second);
+			names.insert(fact);
+			it++;
+		}
+	}
+
+	virtual void unregister_facts(context* CTX) {
+		map<string, journal*>::iterator it = CTX->DBJournal->begin();
+		while (it != CTX->DBJournal->end()) {
+			string fact = it->first;
+			unregister_fact_group(CTX, fact);
+			it++;
+		}
+	}
+
+	virtual void sync(bool not_sync_globs, context* CTX, frame_item* other) {
 		bool locked = mutex.try_lock();
 		tframe_item* _other = dynamic_cast<tframe_item*>(other);
 		if (!_other) {
-			frame_item::sync(CTX, other);
+			frame_item::sync(not_sync_globs, CTX, other);
 			if (locked) mutex.unlock();
 			return;
 		}
@@ -750,21 +928,23 @@ public:
 		while (it < _other->vars.size()) {
 			bool f;
 			char* itc = _other->vars[it]._name;
-			set(CTX, itc, _other->vars[it].ptr);
-			int _it = find(itc, f);
-			if (f) {
-				first_writes[_it] = _other->first_writes[it];
-				last_writes[_it] = _other->last_writes[it];
-				first_reads[_it] = _other->first_reads[it];
-				last_reads[_it] = _other->last_reads[it];
-			}
-			else {
-				cout << "Internal ERROR : can't sync tframe_item : var '" << itc << "'" << endl;
-				exit(-60);
+			if (not_sync_globs || *itc == '*') {
+				set(CTX, itc, _other->vars[it].ptr);
+				int _it = find(itc, f);
+				if (f) {
+					first_writes[_it] = _other->first_writes[it];
+					last_writes[_it] = _other->last_writes[it];
+					first_reads[_it] = _other->first_reads[it];
+					last_reads[_it] = _other->last_reads[it];
+				}
+				else {
+					cout << "Internal ERROR : can't sync tframe_item : var '" << itc << "'" << endl;
+					exit(-60);
+				}
 			}
 			it++;
 		}
-		if (other->deleted) {
+		if (not_sync_globs && other->deleted) {
 			char* cur = other->deleted;
 			while (*cur) {
 				unset(CTX, cur);
@@ -1019,6 +1199,57 @@ public:
 	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals);
 
 	virtual bool processing(context * CONTEXT, bool line_neg, int variant, generated_vars * variants, vector<value *> ** positional_vals, frame_item * up_f, context * up_c);
+};
+
+class journal_item {
+public:
+	jTypes type;
+	value* data;
+	int position;
+
+	journal_item(jTypes t, value* data, int position) {
+		this->type = t;
+		this->data = data;
+		this->position = position;
+	}
+
+	virtual ~journal_item() {
+		if (this->type == jInsert)
+			this->data->free();
+	}
+};
+
+class journal {
+public:
+	clock_t creation;
+	clock_t first_write, last_write, first_read, last_read;
+
+	vector<journal_item*> log;
+
+	journal() {
+		creation = clock();
+
+		first_write = last_write = first_read = last_read = 0;
+	}
+
+	virtual ~journal() {
+		for (journal_item* it : log)
+			delete it;
+	}
+
+	virtual void register_read() {
+		if (!first_read)
+			first_read = clock();
+		last_read = clock();
+	}
+
+	virtual void register_write(jTypes t, value* data, int position) {
+		if (!first_write)
+			first_write = clock();
+		last_write = clock();
+
+		log.push_back(new journal_item(t, data, position));
+	}
 };
 
 #endif

@@ -604,26 +604,36 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 	vector<std::set<string>> lnames(CONTEXTS.size(), std::set<string>());
 
 	f->add_local_names(false, lnames[CONTEXTS.size() - 1]);
+
 	names = lnames[CONTEXTS.size() - 1];
 
 	do {
-		vector<bool> stoppeds(CONTEXTS.size());
+		vector<bool> stoppeds(CONTEXTS.size(), false);
+		vector<bool> rollback(CONTEXTS.size(), false);
 		int stopped = std::count(joineds.begin(), joineds.end(), true);
 		bool mainlined = !joineds[CONTEXTS.size() - 1];
 		if (mainlined) {
 			stoppeds[CONTEXTS.size() - 1] = true;
 			stopped++;
 		}
+		f->register_facts(this, lnames[CONTEXTS.size() - 1]);
+		names.insert(lnames[CONTEXTS.size() - 1].begin(), lnames[CONTEXTS.size() - 1].end());
 		while (stopped < CONTEXTS.size()) {
 			for (int i = 0; i < CONTEXTS.size(); i++)
 				if (!joineds[i] && !stoppeds[i] && CONTEXTS[i]->THR->is_stopped()) {
-					stoppeds[i] = true;
-					CONTEXTS[i]->FRAME.load()->add_local_names(CONTEXTS[i]->locals_in_forked, lnames[i]);
-					names.insert(lnames[i].begin(), lnames[i].end());
+					rollback[i] = CONTEXTS[i]->rollback;
+					stoppeds[i] = !rollback[i];
+					if (stoppeds[i]) {
+						CONTEXTS[i]->FRAME.load()->add_local_names(CONTEXTS[i]->locals_in_forked, lnames[i]);
+						if (CONTEXTS[i]->transactable_facts)
+							CONTEXTS[i]->FRAME.load()->register_facts(CONTEXTS[i], lnames[i]);
+						names.insert(lnames[i].begin(), lnames[i].end());
+					}
 					stopped++;
 				}
 			std::this_thread::yield();
 		}
+		stopped -= std::count(rollback.begin(), rollback.end(), true);
 		// In not joineds search for winners
 		vector<vector<int>> M(CONTEXTS.size(), vector<int>(CONTEXTS.size(), 0));
 		std::set<string> conflictors;
@@ -644,8 +654,10 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 								CONTEXTS[j]->FRAME.load()->statistics(vname, crj, fwj, frj, lwj, lrj);
 							if (fwi || fwj) {
 								if (fwi && fwj) {
-									M[i][j]++;
-									conflictors.insert(vname);
+									if (fri && fri <= fwi || frj && frj <= fwj) {
+										M[i][j]++;
+										conflictors.insert(vname);
+									}
 								}
 								else if (fwi) {
 									if ((lwi >= crj) && lrj) {
@@ -678,7 +690,6 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 		// Decide
 		int first_winner = mainlined ? CONTEXTS.size() - 1 : -1;
 		std::set<int> other_winners;
-		// run8, без пересогласования должно быть!
 		int first = first_winner < 0 ? 0 : first_winner;
 		int last = first_winner < 0 ? CONTEXTS.size() - 1 : first_winner;
 		for (int i = first; i <= last; i++)
@@ -696,11 +707,12 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 					if (i != j && stoppeds[j] && conflicted.find(j) == conflicted.end())
 						parallels.insert(j);
 				}
+				int candidate = i;
 				if (parallels.size() > 1) {
-					int candidate = *parallels.begin();
 					clock_t min_time = 0;
+					if (!mainlined) parallels.insert(i);
 					for (const string& vname : names) {
-						for (int j : parallels)
+						for (int j : parallels) {
 							if (stoppeds[j] && lnames[j].find(vname) != lnames[j].end()) {
 								clock_t cr, fw, fr, lw, lr;
 								CONTEXTS[j]->FRAME.load()->statistics(vname, cr, fw, fr, lw, lr);
@@ -709,18 +721,30 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 									min_time = fw;
 								}
 							}
+						}
 					}
+					if (!mainlined) parallels.erase(i);
 					for (int j = 0; j < CONTEXTS.size(); j++)
 						for (int k = j + 1; k < CONTEXTS.size(); k++)
 							if (M[j][k]) {
 								parallels.erase(j);
 								parallels.erase(k);
 							}
+				}
+				if (mainlined) {
 					parallels.insert(candidate);
+					parallels.erase(i);
+					parallels.insert(-i);
+					candidate = i;
+				}
+				else {
+					parallels.insert(i);
+					parallels.erase(candidate);
+					parallels.insert(-candidate);
 				}
 				if (parallels.size() > other_winners.size()) {
 					other_winners = parallels;
-					first_winner = i;
+					first_winner = candidate;
 				}
 			}
 		if (first_winner < 0) {
@@ -739,47 +763,109 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 			for (int i = 0; first_winner < 0 && i < CONTEXTS.size(); i++)
 				if (stoppeds[i])
 					first_winner = i;
-		}
-		// Set vars by threads with non-zero first_writes
-		for (const string& vname : names) {
-			int winner = -1;
-			if (lnames[first_winner].find(vname) != lnames[first_winner].end() &&
-				(mainlined && (dynamic_cast<tframe_item *>(f) == NULL || dynamic_cast<tframe_item*>(f)->first_write(vname)) ||
-				 CONTEXTS[first_winner]->FRAME.load()->first_write(vname)))
-				winner = first_winner;
-			else {
-				for (int i : other_winners)
-					if (lnames[i].find(vname) != lnames[i].end() && CONTEXTS[i]->FRAME.load()->first_write(vname)) {
-						winner = i;
-						break;
-					}
-			}
-			if (winner >= 0 && winner < CONTEXTS.size()-1 && CONTEXTS[winner]->THR->get_result()) {
-				value* old = f->get(this, vname.c_str());
-				value* cur = CONTEXTS[winner]->FRAME.load()->get(CONTEXTS[winner], vname.c_str());
-				if (cur)
-					if (old && (vname.length() == 0 || vname[0] != '*')) {
-						if (!old->unify(this, f, cur))
-							CONTEXTS[winner]->THR->set_result(false);
-					}
-					else
-						f->set(this, vname.c_str(), cur);
+			if (first_winner >= 0) {
+				other_winners.erase(first_winner);
+				other_winners.insert(-first_winner);
 			}
 		}
-		// Join first_winner && other_winners
-		if (!mainlined)
-			other_winners.insert(first_winner);
-		else {
+		f->unregister_facts(this);
+		if (mainlined)
+		{
+			other_winners.erase(first_winner);
+			other_winners.erase(-first_winner);
 			joineds[CONTEXTS.size() - 1] = true;
 			stoppeds[CONTEXTS.size() - 1] = false;
 			success++;
 			joined++;
 		}
+		// Set vars by threads with non-zero first_writes
+		for (int _winner : other_winners) {
+			int winner = abs(_winner);
+			for (const string& vname : names)
+				if (lnames[winner].find(vname) != lnames[winner].end() && CONTEXTS[winner]->FRAME.load()->first_write(vname))
+				{
+					if (vname[0] == '!') {
+						std::unique_lock<std::mutex> dblock(*DBLOCK);
+						string fact = vname.substr(1);
+						map<string, journal*>::iterator its = CONTEXTS[winner]->DBJournal->find(fact);
+						if (its != CONTEXTS[winner]->DBJournal->end()) {
+							journal* SRC = its->second;
+							map<string, vector<term*>*>::iterator it = DB->find(fact);
+							if (it == DB->end()) {
+								(*DB)[fact] = new vector<term*>();
+								it = DB->find(fact);
+							}
+							// Apply journal
+							for (journal_item* jlog : SRC->log) {
+								if (jlog->type == jInsert) {
+									register_db_write(fact, jInsert, jlog->data, jlog->position);
+									it->second->insert(it->second->begin() + jlog->position, (term*)jlog->data);
+									jlog->data->use(); // to prevent free in ~journal_item()
+								}
+								else if (jlog->type == jDelete) {
+									register_db_write(fact, jDelete, jlog->data, jlog->position);
+									it->second->erase(it->second->begin() + jlog->position);
+								}
+								else {
+									cout << "Internal error : unknown DB journal record type!" << endl;
+									exit(1700);
+								}
+							}
+							// Clear journal
+							delete SRC;
+							CONTEXTS[winner]->DBJournal->erase(fact);
+						}
+						dblock.unlock();
+					}
+					else if (vname[0] == '*' || CONTEXTS[winner]->THR->get_result())
+					{
+						value* old = f->get(this, vname.c_str());
+						value* cur = CONTEXTS[winner]->FRAME.load()->get(CONTEXTS[winner], vname.c_str());
+						if (cur)
+							if (old && (vname.length() == 0 || vname[0] != '*')) {
+								if (!old->unify(this, f, cur))
+									CONTEXTS[winner]->THR->set_result(false);
+							}
+							else
+								f->set(this, vname.c_str(), cur);
+					}
+				}
+		}
+		// Join first_winner && other_winners
 		for (int i = 0; i < CONTEXTS.size(); i++)
-			if (stoppeds[i]) {
-				if (other_winners.find(i) == other_winners.end()) {
+			if (stoppeds[i] || rollback[i]) {
+				if (other_winners.find(i) == other_winners.end() && other_winners.find(-i) == other_winners.end()) {
 					tframe_item* OLD = CONTEXTS[i]->FRAME.load();
+					if (CONTEXTS[i]->transactable_facts) { // Undo facts
+						std::unique_lock<std::mutex> lock(*DBLOCK);
+						// Delete journal, including inserted nodes
+						map<string, journal*>::iterator itj = CONTEXTS[i]->DBJournal->begin();
+						while (itj != CONTEXTS[i]->DBJournal->end()) {
+							delete itj->second;
+							itj++;
+						}
+						CONTEXTS[i]->DBJournal->clear();
+						// Clear local DB
+						map< string, vector<term*>*>::iterator itd = CONTEXTS[i]->DB->begin();
+						while (itd != CONTEXTS[i]->DB->end()) {
+							if (itd->second) {
+								delete itd->second;
+							}
+							itd++;
+						}
+						CONTEXTS[i]->DB->clear();
+						// Reload DB
+						itd = DB->begin();
+						while (itd != DB->end()) {
+							if (itd->second) {
+								(*CONTEXTS[i]->DB)[itd->first] = new vector<term*>(*itd->second);
+							}
+							itd++;
+						}
+						lock.unlock();
+					}
 					CONTEXTS[i]->FRAME.store(f->tcopy(this, INTRP, false));
+					CONTEXTS[i]->set_rollback(false);
 					CONTEXTS[i]->THR->set_stopped(false);
 				}
 				else {
@@ -801,19 +887,21 @@ bool context::join(int K, frame_item* f, interpreter* INTRP) {
 	bool result = K < 0 && success == CONTEXTS.size() || K >= 0 && success >= K;
 
 	prolog->GLOCK.lock();
-	for (const string& vname : names) {
-		value* v = f->get(this, vname.c_str());
-		for (int i = 0; i < CONTEXTS.size(); i++)
-			CONTEXTS[i]->FRAME.load()->set(CONTEXTS[i], vname.c_str(), NULL);
-		if (!forked && v && vname.length() && vname[0] == '*') {
-			string src_name = vname.substr(1);
-			std::map<std::string, value*>::iterator it = prolog->GVars.find(src_name);
-			if (it != prolog->GVars.end()) {
-				it->second->free();
+	for (const string& vname : names)
+		if (vname[0] != '!')
+		{
+			value* v = f->get(this, vname.c_str());
+			for (int i = 0; i < CONTEXTS.size(); i++)
+				CONTEXTS[i]->FRAME.load()->set(CONTEXTS[i], vname.c_str(), NULL);
+			if (!forked && v && vname.length() && vname[0] == '*') {
+				string src_name = vname.substr(1);
+				std::map<std::string, value*>::iterator it = prolog->GVars.find(src_name);
+				if (it != prolog->GVars.end()) {
+					it->second->free();
+				}
+				prolog->GVars[src_name] = v->copy(this, f);
 			}
-			prolog->GVars[src_name] = v->copy(this, f);
 		}
-	}
 	prolog->GLOCK.unlock();
 
 	for (context* C : CONTEXTS)
@@ -861,6 +949,55 @@ void tthread::body() {
 		while (is_stopped())
 			std::this_thread::yield();
 	} while (!terminated.test_and_set());
+}
+
+void context::register_db_read(const std::string& iid) {
+	map<string, journal*>::iterator it = DBJournal->find(iid);
+	if (it == DBJournal->end()) {
+		(*DBJournal)[iid] = new journal();
+		it = DBJournal->find(iid);
+	}
+	it->second->register_read();
+}
+
+void context::register_db_write(const std::string& iid, jTypes t, value* data, int position) {
+	map<string, journal*>::iterator it = DBJournal->find(iid);
+	if (it == DBJournal->end()) {
+		(*DBJournal)[iid] = new journal();
+		it = DBJournal->find(iid);
+	}
+	it->second->register_write(t, data, position);
+}
+
+void tframe_item::register_fact_group(context* CTX, string& fact, journal* J) {
+	bool locked = mutex.try_lock();
+	bool found = false;
+	fact.insert(0, 1, '!');
+	int it = find(fact.c_str(), found);
+	if (!found) {
+		set(CTX, fact.c_str(), NULL);
+		it = find(fact.c_str(), found);
+	}
+	if (!first_writes[it] || first_writes[it] > J->first_write)
+		first_writes[it] = J->first_write;
+	if (!last_writes[it] || last_writes[it] < J->last_write)
+		last_writes[it] = J->last_write;
+	if (!first_reads[it] || first_reads[it] > J->first_read)
+		first_reads[it] = J->first_read;
+	if (!last_reads[it] || last_reads[it] < J->last_read)
+		last_reads[it] = J->last_read;
+	if (locked) mutex.unlock();
+}
+
+void tframe_item::unregister_fact_group(context* CTX, string& fact) {
+	bool locked = mutex.try_lock();
+	bool found = false;
+	fact.insert(0, 1, '!');
+	int it = find(fact.c_str(), found);
+	if (found)
+		unset(CTX, fact.c_str());
+
+	if (locked) mutex.unlock();
 }
 
 class string_atomizer {
@@ -1903,9 +2040,11 @@ generated_vars * predicate_item_user::generate_variants(context * CTX, frame_ite
 				dummy->add_arg(CTX, f, positional_vals->at(j));
 			}
 		}
-		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-		if (dummy && prolog->DB.find(iid) != prolog->DB.end()) {
-			vector<term *> * terms = prolog->DB[iid];
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map<string, vector<term*>*>::iterator it = CTX->DB->find(iid);
+		if (dummy && it != CTX->DB->end()) {
+			CTX->register_db_read(iid);
+			vector<term *> * terms = it->second;
 			for (int i = 0; i < terms->size(); i++) {
 				frame_item * ff = f->copy(CTX);
 				term * _dummy = (term *)dummy->copy(CTX, ff);
@@ -1987,8 +2126,8 @@ bool predicate_item_user::processing(context * CONTEXT, bool line_neg, int varia
 			CONTEXT->_FLAGS.pop();
 		}
 
-		if (yes && (CONTEXT == prolog->CONTEXT && CONTEXT->PARENT_CALLS.size() == 0))
-			up_f->sync(CONTEXT, f);
+		if (up_f && f)
+			up_f->sync(yes && CONTEXT == prolog->CONTEXT && CONTEXT->PARENT_CALLS.size() == 0, CONTEXT, f);
 
 		delete f;
 
@@ -2005,6 +2144,9 @@ bool predicate_item_user::processing(context * CONTEXT, bool line_neg, int varia
 			CONTEXT->NEGS.pop();
 			CONTEXT->_FLAGS.pop();
 		}
+
+		if (up_f && f)
+			up_f->sync(false, CONTEXT, f);
 
 		delete f;
 
@@ -2831,10 +2973,12 @@ public:
 		std::unique_lock<std::mutex> glock(prolog->GLOCK);
 		map<string, value *>::iterator itf = prolog->GVars.find("$ObjFactID");
 		if (itf != prolog->GVars.end()) {
-			std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-			map< string, vector<term *> *>::iterator itd = prolog->DB.find(itf->second->to_str());
-			if (itd != prolog->DB.end())
+			std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+			map< string, vector<term *> *>::iterator itd = CTX->DB->find(itf->second->to_str());
+			if (itd != CTX->DB->end()) {
+				CTX->register_db_read(itd->first);
 				n_objs = itd->second->size();
+			}
 			lock.unlock();
 		}
 		glock.unlock();
@@ -2909,23 +3053,28 @@ public:
 
 		auto assertz = [&](term * t) {
 			string atid = t->get_name();
-			std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-			if (prolog->DB.find(atid) == prolog->DB.end())
-				prolog->DB[atid] = new vector<term *>();
+			std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+			CTX->register_db_read(atid);
+			if (CTX->DB->find(atid) == CTX->DB->end())
+				(*CTX->DB)[atid] = new vector<term*>();
 
-			vector<term *> * terms = prolog->DB[atid];
-			terms->push_back((term *)t->copy(CTX, f));
+			vector<term *> * terms = (*CTX->DB)[atid];
+			term* tt = (term*)t->copy(CTX, f);
+			CTX->register_db_write(atid, jInsert, tt, terms->size());
+			terms->push_back(tt);
+			lock.unlock();
 
-			if (prolog->DBIndicators.find(t->get_name()) == prolog->DBIndicators.end()) {
+			std::unique_lock<std::mutex> dbilock(prolog->DBILock);
+			if (prolog->DBIndicators.find(atid) == prolog->DBIndicators.end()) {
 				set<int> * inds = new set<int>;
 				inds->insert(t->get_args().size());
-				prolog->DBIndicators[t->get_name()] = inds;
+				prolog->DBIndicators[atid] = inds;
 			}
 			else {
-				set<int> * inds = prolog->DBIndicators[t->get_name()];
+				set<int> * inds = prolog->DBIndicators[atid];
 				inds->insert(t->get_args().size());
 			}
-			lock.unlock();
+			dbilock.unlock();
 		};
 
 		auto Import = [&](const string & FName, value * _ObjFactID,
@@ -2937,11 +3086,13 @@ public:
 				string LinkFactID = dynamic_cast<term *>(_LinkFactID)->get_name();
 				wstring Lang;
 				S->LoadFromXML(Lang, utf8_to_wstring(FName));
-				std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-				if (prolog->DB.find(ObjFactID) != prolog->DB.end()) {
-					for (term * t : *prolog->DB[ObjFactID])
-						t->free();
-					prolog->DB[ObjFactID]->clear();
+				std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+				map<string, vector<term *>*>::iterator it = CTX->DB->find(ObjFactID);
+				if (it != CTX->DB->end()) {
+					CTX->register_db_read(ObjFactID);
+					for (term * t : *it->second)
+						CTX->register_db_write(ObjFactID, jDelete, t, 0);
+					it->second->clear();
 				}
 				lock.unlock();
 				S->EnumerateObjs(
@@ -2965,10 +3116,12 @@ public:
 					}
 				);
 				lock.lock();
-				if (prolog->DB.find(LinkFactID) != prolog->DB.end()) {
-					for (term * t : *prolog->DB[LinkFactID])
-						t->free();
-					prolog->DB[LinkFactID]->clear();
+				it = CTX->DB->find(LinkFactID);
+				if (it != CTX->DB->end()) {
+					CTX->register_db_read(LinkFactID);
+					for (term * t : *it->second)
+						CTX->register_db_write(LinkFactID, jDelete, t, 0);
+					it->second->clear();
 				}
 				lock.unlock();
 				S->EnumerateLinks(
@@ -4688,8 +4841,17 @@ public:
 		params p;
 		p.d1 = positional_vals->at(0)->defined();
 		p.L2 = dynamic_cast<::list *>(positional_vals->at(1));
+		if (p.L2)
+			p.L2->use();
 		lock();
+
+		if (d.find(CTX) != d.end()) {
+			::list* L2 = d[CTX].L2;
+			if (L2)
+				L2->free();
+		}
 		d[CTX] = p;
+
 		unlock();
 
 		if (!p.L2) {
@@ -4763,7 +4925,14 @@ public:
 		p.first = (int)(0.5 + FROM->get_value());
 		p.last = (int)(0.5 + TO->get_value());
 
+		p.V->use();
+
 		lock();
+		if (d.find(CTX) != d.end()) {
+			var * V = d[CTX].V;
+			if (V)
+				V->free();
+		}
 		d[CTX] = p;
 		unlock();
 
@@ -5057,10 +5226,11 @@ public:
 		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
-		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-		map< string, vector<term *> *>::iterator it = prolog->DB.begin();
-		while (it != prolog->DB.end()) {
-			if (!t || it->first == t->get_name())
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map< string, vector<term *> *>::iterator it = CTX->DB->begin();
+		while (it != CTX->DB->end()) {
+			if (!t || it->first == t->get_name()) {
+				CTX->register_db_read(it->first);
 				for (int i = 0; i < it->second->size(); i++)
 					if (!t || it->second->at(i)->get_args().size() == t->get_arity()) {
 						if (prolog->out_buf.size() == 0) {
@@ -5072,6 +5242,7 @@ public:
 							prolog->out_buf += ".\n";
 						}
 					}
+			}
 			it++;
 		}
 		lock.unlock();
@@ -5102,18 +5273,20 @@ public:
 				std::cout << "current_predicate(A/n) has incorrect parameter!" << endl;
 				exit(-3);
 			}
-			std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-			map< string, vector<term *> *>::iterator it = prolog->DB.begin();
-			while (it != prolog->DB.end()) {
-				if (it->first == t->get_name())
+			std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+			map< string, vector<term *> *>::iterator it = CTX->DB->begin();
+			while (it != CTX->DB->end()) {
+				if (it->first == t->get_name()) {
+					CTX->register_db_read(it->first);
 					for (int i = 0; i < it->second->size(); i++)
 						if (it->second->at(i)->get_args().size() == t->get_arity()) {
-							frame_item * r = f->copy(CTX);
+							frame_item* r = f->copy(CTX);
 							result->push_back(r);
 
 							lock.unlock();
 							return result;
 						}
+				}
 				it++;
 			}
 			lock.unlock();
@@ -5122,11 +5295,12 @@ public:
 			return NULL;
 		}
 
-		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-		map< string, vector<term *> *>::iterator it = prolog->DB.begin();
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map< string, vector<term *> *>::iterator it = CTX->DB->begin();
 		value * t = dynamic_cast<value *>(positional_vals->at(0));
-		while (it != prolog->DB.end()) {
+		while (it != CTX->DB->end()) {
 			set<int> seen;
+			CTX->register_db_read(it->first);
 			for (int i = 0; i < it->second->size(); i++) {
 				int n = it->second->at(i)->get_args().size();
 				if (seen.find(n) == seen.end()) {
@@ -5190,9 +5364,10 @@ public:
 				exit(-3);
 			}
 		}
-		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-		if (t && prolog->DB.find(t->get_name()) != prolog->DB.end()) {
-			vector<term *> * terms = prolog->DB[t->get_name()];
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		if (t && CTX->DB->find(t->get_name()) != CTX->DB->end()) {
+			CTX->register_db_read(t->get_name());
+			vector<term *> * terms = (*CTX->DB)[t->get_name()];
 			stack_container<value *> L;
 			for (int i = 0; i < terms->size(); i++) {
 				frame_item * ff = f->copy(CTX);
@@ -5235,7 +5410,7 @@ public:
 	virtual generated_vars * _generate_variants(context * CTX, frame_item * f, term * signature, value * & prop) {
 		generated_vars * result = new generated_vars();
 
-		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
+		std::unique_lock<std::mutex> lock(prolog->DBILock);
 		map< string, set<int> *>::iterator it = prolog->DBIndicators.find(signature->get_name());
 		term * prop_val = new term("dynamic");
 		int n = signature->get_args().size();
@@ -6531,26 +6706,37 @@ public:
 		}
 
 		string atid = t->get_name();
-		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-		if (prolog->DB.find(atid) == prolog->DB.end())
-			prolog->DB[atid] = new vector<term *>();
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map<string, vector<term*>*>::iterator it = CTX->DB->find(atid);
+		if (it == CTX->DB->end()) {
+			(*CTX->DB)[atid] = new vector<term*>();
+			it = CTX->DB->find(atid);
+		}
 		
-		vector<term *> * terms = prolog->DB[atid];
-		if (z)
-			terms->push_back((term *)t->copy(CTX, f));
-		else
-			terms->insert(terms->begin(), (term *)t->copy(CTX, f));
-
-		if (prolog->DBIndicators.find(t->get_name()) == prolog->DBIndicators.end()) {
-			set<int> * inds = new set<int>;
-			inds->insert(t->get_args().size());
-			prolog->DBIndicators[t->get_name()] = inds;
+		vector<term *> * terms = it->second;
+		term* tt = (term*)t->copy(CTX, f);
+		if (z) {
+			CTX->register_db_write(atid, jInsert, tt, terms->size());
+			terms->push_back(tt);
 		}
 		else {
-			set<int> * inds = prolog->DBIndicators[t->get_name()];
+			CTX->register_db_write(atid, jInsert, tt, 0);
+			terms->insert(terms->begin(), tt);
+		}
+
+		lock.unlock();
+
+		std::unique_lock<std::mutex> dbilock(prolog->DBILock);
+		if (prolog->DBIndicators.find(atid) == prolog->DBIndicators.end()) {
+			set<int> * inds = new set<int>;
+			inds->insert(t->get_args().size());
+			prolog->DBIndicators[atid] = inds;
+		}
+		else {
+			set<int> * inds = prolog->DBIndicators[atid];
 			inds->insert(t->get_args().size());
 		}
-		lock.unlock();
+		dbilock.unlock();
 
 		result->push_back(f->copy(CTX));
 
@@ -6579,16 +6765,23 @@ public:
 			exit(-3);
 		}
 
-		std::unique_lock<std::mutex> lock(prolog->DBLOCK);
-		if (prolog->DB.find(t->get_name()) == prolog->DB.end())
-			prolog->DB[t->get_name()] = new vector<term*>();
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map<string, vector<term*>*>::iterator itdb = CTX->DB->find(t->get_name());
+		if (itdb == CTX->DB->end()) {
+			(*CTX->DB)[t->get_name()] = new vector<term*>();
+			itdb = CTX->DB->find(t->get_name());
+		}
+		CTX->register_db_read(itdb->first);
 
-		vector<term*>* terms = prolog->DB[t->get_name()];
+		vector<term*>* terms = itdb->second;
 		vector<term*>::iterator it = terms->begin();
 		while (it != terms->end()) {
 			term* tt = (term*)t->copy(CTX, f);
 			if (tt->unify(CTX, f, *it)) {
-				if (all) it = terms->erase(it);
+				if (all) {
+					CTX->register_db_write(itdb->first, jDelete, *it, it - terms->begin());
+					it = terms->erase(it);
+				}
 				else {
 					frame_item* ff = f->copy(CTX);
 					value* v1 = new int_number((long long)(*it));
@@ -6597,6 +6790,9 @@ public:
 					value* v2 = new int_number((long long)terms);
 					ff->set(CTX, "$VECTOR$", v2);
 					v2->free();
+					value* v3 = new term(itdb->first);
+					ff->set(CTX, "$FUNCTOR$", v3);
+					v3->free();
 					result->push_back(ff);
 					it++;
 				}
@@ -6622,14 +6818,24 @@ public:
 	virtual bool execute(context * CTX, frame_item* f) {
 		if (all) return true;
 
+		string iid = ((term*)f->get(CTX, "$FUNCTOR$"))->get_name();
+		f->get(CTX, "$FUNCTOR$")->free();
+		f->unset(CTX, "$FUNCTOR$");
+
+		CTX->register_db_read(iid);
+
 		term* v = (term*)((long long)(0.5 + ((int_number*)f->get(CTX, "$RETRACTOR$"))->get_value()));
 		f->get(CTX, "$RETRACTOR$")->free();
+		f->unset(CTX, "$RETRACTOR$");
 		vector<term*>* db = (vector<term*> *)((long long)(0.5 + ((int_number*)f->get(CTX, "$VECTOR$"))->get_value()));
 		f->get(CTX, "$VECTOR$")->free();
+		f->unset(CTX, "$VECTOR$");
 		if (v && db) {
 			vector<term*>::iterator it = find(db->begin(), db->end(), v);
-			if (it != db->end())
+			if (it != db->end()) {
+				CTX->register_db_write(iid, jDelete, *it, it - db->begin());
 				db->erase(it);
+			}
 			return true;
 		}
 		else
@@ -6675,6 +6881,8 @@ public:
 		if (n_threads)
 			n_threads->free();
 		n_threads = v;
+		if (n_threads)
+			n_threads->use();
 	}
 
 	virtual void set_end(int end) {
@@ -6800,6 +7008,35 @@ public:
 			K = (int)(-0.5 + ni->get_value());
 		// Process
 		return CTX->join(K, f, prolog);
+	}
+};
+
+class predicate_item_rollback : public predicate_item {
+public:
+	predicate_item_rollback(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) :
+		predicate_item(_neg, _once, _call, num, c, _prolog) { }
+
+	virtual const string get_id() { return "rollback"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 0) {
+			std::cout << "rollback incorrect call!" << endl;
+			exit(-3);
+		}
+
+		generated_vars* result = new generated_vars();
+
+		frame_item* ff = f->copy(CTX);
+		result->push_back(ff);
+
+		return result;
+	}
+
+	virtual bool execute(context* CTX, frame_item* f) {
+		if (CTX)
+			CTX->set_rollback(true);
+		// Process
+		return true;
 	}
 };
 
@@ -7281,6 +7518,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						CNT->TRACEARGS.pop();
 						CNT->TRACERS.pop();
 
+						if (f && ff)
+							f->sync(false, CNT, ff);
+
 						if (variants)
 							variants->delete_from(i);
 						else
@@ -7302,6 +7542,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						CNT->FLAGS.pop_back();
 						CNT->LEVELS.pop();
 						CNT->ptrTRACE.pop();
+
+						if (f && ff)
+							f->sync(false, CNT, ff);
 
 						if (variants)
 							variants->delete_from(i);
@@ -7328,6 +7571,9 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						CNT->FLAGS.pop_back();
 						CNT->LEVELS.pop();
 						CNT->ptrTRACE.pop();
+
+						if (f && ff)
+							f->sync(false, CNT, ff);
 
 						if (variants)
 							variants->delete_from(i);
@@ -7388,10 +7634,10 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 							CNT->ptrTRACE.pop();
 
 							if (CNT && CNT->FRAME && CNT->forker && p && p == dynamic_cast<predicate_item_fork*>(CNT->forker)->get_last(i))
-								CNT->FRAME.load()->sync(CNT, ff);
+								CNT->FRAME.load()->sync(true, CNT, ff);
 
-							if (CNT->PARENT_CALLS.size() == 0)
-								f->sync(CNT, ff);
+							if (f && ff)
+								f->sync(CNT->PARENT_CALLS.size() == 0, CNT, ff);
 
 							if (variants)
 								variants->delete_from(i);
@@ -7544,7 +7790,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						CNT->ptrTRACE.pop();
 
 						if (CNT && CNT->FRAME && CNT->forker && p && p == dynamic_cast<predicate_item_fork*>(CNT->forker)->get_last(i))
-							CNT->FRAME.load()->sync(CNT, ff);
+							CNT->FRAME.load()->sync(true, CNT, ff);
 
 						if (variants)
 							variants->delete_from(i);
@@ -7563,6 +7809,8 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 				}
 			}
 			CNT->ptrTRACE.pop();
+			if (f && ff)
+				f->sync(false, CNT, ff);
 			delete ff;
 		}
 		if (lb) lb->leave_critical();
@@ -8068,257 +8316,270 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 							pi->add_arg(expr);
 						}
 					}
-					else if (iid == "append") {
-						pi = new predicate_item_append(neg, once, call, num, cl, this);
-					}
-					else if (iid == "sublist") {
-						pi = new predicate_item_sublist(neg, once, call, num, cl, this);
-					}
-					else if (iid == "delete") {
-						pi = new predicate_item_delete(neg, once, call, num, cl, this);
-					}
-					else if (iid == "member") {
-						pi = new predicate_item_member(neg, once, call, num, cl, this);
-					}
-					else if (iid == "last") {
-						pi = new predicate_item_last(neg, once, call, num, cl, this);
-					}
-					else if (iid == "reverse") {
-						pi = new predicate_item_reverse(neg, once, call, num, cl, this);
-					}
-					else if (iid == "for") {
-						pi = new predicate_item_for(neg, once, call, num, cl, this);
-					}
-					else if (iid == "length") {
-						pi = new predicate_item_length(neg, once, call, num, cl, this);
-					}
-					else if (iid == "max_list") {
-						pi = new predicate_item_max_list(neg, once, call, num, cl, this);
-					}
-					else if (iid == "atom_length") {
-						pi = new predicate_item_atom_length(neg, once, call, num, cl, this);
-					}
-					else if (iid == "nth") {
-						pi = new predicate_item_nth(neg, once, call, num, cl, this);
-					}
-					else if (iid == "page_id") {
-						pi = new predicate_item_page_id(neg, once, call, num, cl, this);
-					}
-					else if (iid == "thread_id") {
-						pi = new predicate_item_thread_id(neg, once, call, num, cl, this);
-					}
-					else if (iid == "atom_concat") {
-						pi = new predicate_item_atom_concat(neg, once, call, num, cl, this);
-					}
-					else if (iid == "atom_chars") {
-						pi = new predicate_item_atom_chars(neg, once, call, num, cl, this);
-					}
-					else if (iid == "atom_codes") {
-						pi = new predicate_item_atom_codes(neg, once, call, num, cl, this);
-					}
-					else if (iid == "atom_hex") {
-						pi = new predicate_item_atom_hex(0, neg, once, call, num, cl, this);
-					}
-					else if (iid == "atom_hexs") {
-						pi = new predicate_item_atom_hex(' ', neg, once, call, num, cl, this);
-					}
-					else if (iid == "number_atom") {
-						pi = new predicate_item_number_atom(neg, once, call, num, cl, this);
-					}
-					else if (iid == "number") {
-						pi = new predicate_item_number(neg, once, call, num, cl, this);
-					}
-					else if (iid == "consistency") {
-						pi = new predicate_item_consistency(neg, once, call, num, cl, this);
-					}
-					else if (iid == "listing") {
-						pi = new predicate_item_listing(neg, once, call, num, cl, this);
-					}
-					else if (iid == "current_predicate") {
-						pi = new predicate_item_current_predicate(neg, once, call, num, cl, this);
-					}
-					else if (iid == "findall") {
-						pi = new predicate_item_findall(neg, once, call, num, cl, this);
-					}
-					else if (iid == "functor") {
-						pi = new predicate_item_functor(neg, once, call, num, cl, this);
-					}
-					else if (iid == "predicate_property") {
-						pi = new predicate_item_predicate_property(neg, once, call, num, cl, this);
-					}
-					else if (iid == "$predicate_property_pi") {
-						pi = new predicate_item_predicate_property_pi(neg, once, call, num, cl, this);
-					}
-					else if (iid == "eq" || iid == "=") {
-						pi = new predicate_item_eq(neg, once, call, num, cl, this);
-					}
-					else if (iid == "neq" || iid == "\\=") {
-						pi = new predicate_item_neq(neg, once, call, num, cl, this);
-					}
-					else if (iid == "less" || iid == "<") {
-						pi = new predicate_item_less(neg, once, call, num, cl, this);
-					}
-					else if (iid == "greater" || iid == ">") {
-						pi = new predicate_item_greater(neg, once, call, num, cl, this);
-					}
-					else if (iid == "term_split" || iid == "..") {
-						pi = new predicate_item_term_split(neg, once, call, num, cl, this);
-					}
-					else if (iid == "g_assign") {
-						pi = new predicate_item_g_assign(neg, once, call, num, cl, this);
-					}
-					else if (iid == "g_assign_nth") {
-						pi = new predicate_item_g_assign_nth(neg, once, call, num, cl, this);
-					}
-					else if (iid == "g_read") {
-						pi = new predicate_item_g_read(neg, once, call, num, cl, this);
-					}
-					else if (iid == "fail") {
-						pi = new predicate_item_fail(neg, once, call, num, cl, this);
-					}
-					else if (iid == "true") {
-						pi = new predicate_item_true(neg, once, call, num, cl, this);
-					}
-					else if (iid == "change_directory") {
-						pi = new predicate_item_change_directory(neg, once, call, num, cl, this);
-					}
-					else if (iid == "open") {
-						pi = new predicate_item_open(neg, once, call, num, cl, this);
-					}
-					else if (iid == "close") {
-						pi = new predicate_item_close(neg, once, call, num, cl, this);
-					}
-					else if (iid == "get_char") {
-						pi = new predicate_item_get_or_peek_char(false, neg, once, call, num, cl, this);
-					}
-					else if (iid == "peek_char") {
-						pi = new predicate_item_get_or_peek_char(true, neg, once, call, num, cl, this);
-					}
-					else if (iid == "read_token") {
-						pi = new predicate_item_read_token(neg, once, call, num, cl, this);
-					}
-					else if (iid == "read_token_from_atom") {
-						pi = new predicate_item_read_token_from_atom(neg, once, call, num, cl, this);
-					}
-					else if (iid == "mars") {
-						pi = new predicate_item_mars(neg, once, call, num, cl, this);
-					}
-					else if (iid == "mars_decode") {
-						pi = new predicate_item_mars_decode(neg, once, call, num, cl, this);
-					}
-					else if (iid == "unset") {
-						pi = new predicate_item_unset(neg, once, call, num, cl, this);
-					}
-					else if (iid == "write") {
-						pi = new predicate_item_write(neg, once, call, num, cl, this);
-						}
-					else if (iid == "write_to_atom") {
-						pi = new predicate_item_write_to_atom(neg, once, call, num, cl, this);
-					}
-					else if (iid == "write_term") {
-						pi = new predicate_item_write_term(neg, once, call, num, cl, this);
-					}
-					else if (iid == "write_term_to_atom") {
-						pi = new predicate_item_write_term_to_atom(neg, once, call, num, cl, this);
-					}
-					else if (iid == "nl") {
-						pi = new predicate_item_nl(neg, once, call, num, cl, this);
-					}
-					else if (iid == "file_exists") {
-						pi = new predicate_item_file_exists(neg, once, call, num, cl, this);
-					}
-					else if (iid == "unlink") {
-						pi = new predicate_item_unlink(neg, once, call, num, cl, this);
-					}
-					else if (iid == "rename_file") {
-						pi = new predicate_item_rename_file(neg, once, call, num, cl, this);
-					}
-					else if (iid == "seeing") {
-						pi = new predicate_item_seeing(neg, once, call, num, cl, this);
-					}
-					else if (iid == "telling") {
-						pi = new predicate_item_telling(neg, once, call, num, cl, this);
-					}
-					else if (iid == "seen") {
-						pi = new predicate_item_seen(neg, once, call, num, cl, this);
-					}
-					else if (iid == "told") {
-						pi = new predicate_item_told(neg, once, call, num, cl, this);
-					}
-					else if (iid == "see") {
-						pi = new predicate_item_see(neg, once, call, num, cl, this);
-					}
-					else if (iid == "tell") {
-						pi = new predicate_item_tell(neg, once, call, num, cl, this);
-					}
-					else if (iid == "random") {
-						pi = new predicate_item_random(neg, once, call, num, cl, this);
-					}
-					else if (iid == "randomize") {
-						pi = new predicate_item_randomize(neg, once, call, num, cl, this);
-					}
-					else if (iid == "char_code") {
-						pi = new predicate_item_char_code(neg, once, call, num, cl, this);
-					}
-					else if (iid == "get_code") {
-						pi = new predicate_item_get_code(neg, once, call, num, cl, this);
-					}
-					else if (iid == "at_end_of_stream") {
-						pi = new predicate_item_at_end_of_stream(neg, once, call, num, cl, this);
-					}
-					else if (iid == "open_url") {
-						pi = new predicate_item_open_url(neg, once, call, num, cl, this);
-					}
-					else if (iid == "track_post") {
-						pi = new predicate_item_track_post(neg, once, call, num, cl, this);
-					}
-					else if (iid == "consult") {
-						pi = new predicate_item_consult(neg, once, call, num, cl, this);
-					}
-					else if (iid == "assert" || iid == "asserta" || iid == "assertz") {
-						pi = new predicate_item_assert(iid != "asserta", neg, once, call, num, cl, this);
-					}
-					else if (iid == "retract") {
-						pi = new predicate_item_retract(false, neg, once, call, num, cl, this);
-					}
-					else if (iid == "retractall") {
-						pi = new predicate_item_retract(true, neg, once, call, num, cl, this);
-					}
-					else if (iid == "inc") {
-						pi = new predicate_item_inc(neg, once, call, num, cl, this);
-					}
-					else if (iid == "halt") {
-						exit(0);
-					}
-					else if (iid == "load_classes") {
-						pi = new predicate_item_load_classes(neg, once, call, num, cl, this);
-					}
-					else if (iid == "init_xpathing") {
-						pi = new predicate_item_init_xpathing(neg, once, call, num, cl, this);
-					}
-					else if (iid == "induct_xpathing") {
-						pi = new predicate_item_induct_xpathing(neg, once, call, num, cl, this);
-					}
-					else if (iid == "import_model_after_induct") {
-						pi = new predicate_item_import_model_after_induct(neg, once, call, num, cl, this);
-					}
-					else if (iid == "unload_classes") {
-						pi = new predicate_item_unload_classes(neg, once, call, num, cl, this);
-					}
-					else if (iid == "var") {
-						pi = new predicate_item_var(neg, once, call, num, cl, this);
-					}
-					else if (iid == "nonvar") {
-						pi = new predicate_item_nonvar(neg, once, call, num, cl, this);
-					}
-					else if (iid == "get_icontacts") {
-						pi = new predicate_item_get_contacts(dirInput, neg, once, call, num, cl, this);
-					}
-					else if (iid == "get_ocontacts") {
-						pi = new predicate_item_get_contacts(dirOutput, neg, once, call, num, cl, this);
-					}
 					else {
-						pi = new predicate_item_user(neg, once, call, num, cl, this, iid);
+						map<string, ids>::iterator id = MAP.find(iid);
+						if (id == MAP.end()) {
+							pi = new predicate_item_user(neg, once, call, num, cl, this, iid);
+						}
+						else {
+							ids _iid = id->second;
+							if (_iid == id_append) {
+								pi = new predicate_item_append(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_sublist) {
+								pi = new predicate_item_sublist(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_delete) {
+								pi = new predicate_item_delete(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_member) {
+								pi = new predicate_item_member(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_last) {
+								pi = new predicate_item_last(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_reverse) {
+								pi = new predicate_item_reverse(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_for) {
+								pi = new predicate_item_for(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_length) {
+								pi = new predicate_item_length(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_max_list) {
+								pi = new predicate_item_max_list(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_atom_length) {
+								pi = new predicate_item_atom_length(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_nth) {
+								pi = new predicate_item_nth(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_page_id) {
+								pi = new predicate_item_page_id(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_thread_id) {
+								pi = new predicate_item_thread_id(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_atom_concat) {
+								pi = new predicate_item_atom_concat(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_atom_chars) {
+								pi = new predicate_item_atom_chars(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_atom_codes) {
+								pi = new predicate_item_atom_codes(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_atom_hex) {
+								pi = new predicate_item_atom_hex(0, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_atom_hexs) {
+								pi = new predicate_item_atom_hex(' ', neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_number_atom) {
+								pi = new predicate_item_number_atom(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_number) {
+								pi = new predicate_item_number(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_consistency) {
+								pi = new predicate_item_consistency(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_listing) {
+								pi = new predicate_item_listing(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_current_predicate) {
+								pi = new predicate_item_current_predicate(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_findall) {
+								pi = new predicate_item_findall(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_functor) {
+								pi = new predicate_item_functor(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_predicate_property) {
+								pi = new predicate_item_predicate_property(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_spredicate_property_pi) {
+								pi = new predicate_item_predicate_property_pi(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_eq) {
+								pi = new predicate_item_eq(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_neq) {
+								pi = new predicate_item_neq(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_less) {
+								pi = new predicate_item_less(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_greater) {
+								pi = new predicate_item_greater(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_term_split) {
+								pi = new predicate_item_term_split(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_g_assign) {
+								pi = new predicate_item_g_assign(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_g_assign_nth) {
+								pi = new predicate_item_g_assign_nth(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_g_read) {
+								pi = new predicate_item_g_read(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_fail) {
+								pi = new predicate_item_fail(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_true) {
+								pi = new predicate_item_true(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_change_directory) {
+								pi = new predicate_item_change_directory(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_open) {
+								pi = new predicate_item_open(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_close) {
+								pi = new predicate_item_close(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_get_char) {
+								pi = new predicate_item_get_or_peek_char(false, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_peek_char) {
+								pi = new predicate_item_get_or_peek_char(true, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_read_token) {
+								pi = new predicate_item_read_token(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_read_token_from_atom) {
+								pi = new predicate_item_read_token_from_atom(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_mars) {
+								pi = new predicate_item_mars(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_mars_decode) {
+								pi = new predicate_item_mars_decode(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_unset) {
+								pi = new predicate_item_unset(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_write) {
+								pi = new predicate_item_write(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_write_to_atom) {
+								pi = new predicate_item_write_to_atom(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_write_term) {
+								pi = new predicate_item_write_term(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_write_term_to_atom) {
+								pi = new predicate_item_write_term_to_atom(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_nl) {
+								pi = new predicate_item_nl(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_file_exists) {
+								pi = new predicate_item_file_exists(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_unlink) {
+								pi = new predicate_item_unlink(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_rename_file) {
+								pi = new predicate_item_rename_file(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_seeing) {
+								pi = new predicate_item_seeing(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_telling) {
+								pi = new predicate_item_telling(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_seen) {
+								pi = new predicate_item_seen(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_told) {
+								pi = new predicate_item_told(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_see) {
+								pi = new predicate_item_see(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_tell) {
+								pi = new predicate_item_tell(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_random) {
+								pi = new predicate_item_random(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_randomize) {
+								pi = new predicate_item_randomize(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_char_code) {
+								pi = new predicate_item_char_code(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_get_code) {
+								pi = new predicate_item_get_code(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_at_end_of_stream) {
+								pi = new predicate_item_at_end_of_stream(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_open_url) {
+								pi = new predicate_item_open_url(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_track_post) {
+								pi = new predicate_item_track_post(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_consult) {
+								pi = new predicate_item_consult(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_assert || _iid == id_asserta || _iid == id_assertz) {
+								pi = new predicate_item_assert(_iid != id_asserta, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_retract) {
+								pi = new predicate_item_retract(false, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_retractall) {
+								pi = new predicate_item_retract(true, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_inc) {
+								pi = new predicate_item_inc(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_halt) {
+								exit(0);
+							}
+							else if (_iid == id_load_classes) {
+								pi = new predicate_item_load_classes(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_init_xpathing) {
+								pi = new predicate_item_init_xpathing(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_induct_xpathing) {
+								pi = new predicate_item_induct_xpathing(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_import_model_after_induct) {
+								pi = new predicate_item_import_model_after_induct(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_unload_classes) {
+								pi = new predicate_item_unload_classes(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_var) {
+								pi = new predicate_item_var(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_nonvar) {
+								pi = new predicate_item_nonvar(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_get_icontacts) {
+								pi = new predicate_item_get_contacts(dirInput, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_get_ocontacts) {
+								pi = new predicate_item_get_contacts(dirOutput, neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_rollback) {
+								pi = new predicate_item_rollback(neg, once, call, num, cl, this);
+							}
+							else {
+								cout << "Unmapped construction : " << iid << "!" << endl;
+								exit(1730);
+							}
+						}
 					}
 
 					if (p < s.length() && s[p] == '(') {
@@ -8565,7 +8826,103 @@ interpreter::interpreter(const string & fname, const string & starter_name) {
 	outs = &std::cout;
 	xpathInductLib = 0;
 
+	env[0] = 0;
+	xpath_compiled = false;
+	xpath_loaded = false;
+
 	forking = false;
+
+	MAP["append"] = id_append;
+	MAP["sublist"] = id_sublist;
+	MAP["delete"] = id_delete;
+	MAP["member"] = id_member;
+	MAP["last"] = id_last;
+	MAP["reverse"] = id_reverse;
+	MAP["for"] = id_for;
+	MAP["length"] = id_length;
+	MAP["max_list"] = id_max_list;
+	MAP["atom_length"] = id_atom_length;
+	MAP["nth"] = id_nth;
+	MAP["page_id"] = id_page_id;
+	MAP["thread_id"] = id_thread_id;
+	MAP["atom_concat"] = id_atom_concat;
+	MAP["atom_chars"] = id_atom_chars;
+	MAP["atom_codes"] = id_atom_codes;
+	MAP["atom_hex"] = id_atom_hex;
+	MAP["atom_hexs"] = id_atom_hexs;
+	MAP["number_atom"] = id_number_atom;
+	MAP["number"] = id_number;
+	MAP["consistency"] = id_consistency;
+	MAP["listing"] = id_listing;
+	MAP["current_predicate"] = id_current_predicate;
+	MAP["findall"] = id_findall;
+	MAP["functor"] = id_functor;
+	MAP["predicate_property"] = id_predicate_property;
+	MAP["$predicate_property_pi"] = id_spredicate_property_pi;
+	MAP["eq"] = id_eq;
+	MAP["="] = id_eq;
+	MAP["neq"] = id_neq;
+	MAP["\\="] = id_neq;
+	MAP["less"] = id_less;
+	MAP["<"] = id_less;
+	MAP["greater"] = id_greater;
+	MAP[">"] = id_greater;
+	MAP["term_split"] = id_term_split;
+	MAP[".."] = id_term_split;
+	MAP["g_assign"] = id_g_assign;
+	MAP["g_assign_nth"] = id_g_assign_nth;
+	MAP["g_read"] = id_g_read;
+	MAP["fail"] = id_fail;
+	MAP["true"] = id_true;
+	MAP["change_directory"] = id_change_directory;
+	MAP["open"] = id_open;
+	MAP["close"] = id_close;
+	MAP["get_char"] = id_get_char;
+	MAP["peek_char"] = id_peek_char;
+	MAP["read_token"] = id_read_token;
+	MAP["read_token_from_atom"] = id_read_token_from_atom;
+	MAP["mars"] = id_mars;
+	MAP["mars_decode"] = id_mars_decode;
+	MAP["unset"] = id_unset;
+	MAP["write"] = id_write;
+	MAP["write_to_atom"] = id_write_to_atom;
+	MAP["write_term"] = id_write_term;
+	MAP["write_term_to_atom"] = id_write_term_to_atom;
+	MAP["nl"] = id_nl;
+	MAP["file_exists"] = id_file_exists;
+	MAP["unlink"] = id_unlink;
+	MAP["rename_file"] = id_rename_file;
+	MAP["seeing"] = id_seeing;
+	MAP["telling"] = id_telling;
+	MAP["seen"] = id_seen;
+	MAP["told"] = id_told;
+	MAP["see"] = id_see;
+	MAP["tell"] = id_tell;
+	MAP["random"] = id_random;
+	MAP["randomize"] = id_randomize;
+	MAP["char_code"] = id_char_code;
+	MAP["get_code"] = id_get_code;
+	MAP["at_end_of_stream"] = id_at_end_of_stream;
+	MAP["open_url"] = id_open_url;
+	MAP["track_post"] = id_track_post;
+	MAP["consult"] = id_consult;
+	MAP["assert"] = id_assert;
+	MAP["asserta"] = id_asserta;
+	MAP["assertz"] = id_assertz;
+	MAP["retract"] = id_retract;
+	MAP["retractall"] = id_retractall;
+	MAP["inc"] = id_inc;
+	MAP["halt"] = id_halt;
+	MAP["load_classes"] = id_load_classes;
+	MAP["init_xpathing"] = id_init_xpathing;
+	MAP["induct_xpathing"] = id_induct_xpathing;
+	MAP["import_model_after_induct"] = id_import_model_after_induct;
+	MAP["unload_classes"] = id_unload_classes;
+	MAP["var"] = id_var;
+	MAP["nonvar"] = id_nonvar;
+	MAP["get_icontacts"] = id_get_icontacts;
+	MAP["get_ocontacts"] = id_get_ocontacts;
+	MAP["rollback"] = id_rollback;
 
 	CONTEXT = new context(false, false, NULL, 50000, NULL, NULL, NULL, NULL, this);
 
@@ -8591,20 +8948,6 @@ interpreter::~interpreter() {
 		delete it->second;
 		it++;
 	}
-	map< string, vector<term *> *>::iterator itd = DB.begin();
-	while (itd != DB.end()) {
-		if (itd->second) {
-			for (int i = 0; i < itd->second->size(); i++)
-				delete itd->second->at(i);
-		}
-		delete itd->second;
-		itd++;
-	}
-	map< string, set<int> *>::iterator iti = DBIndicators.begin();
-	while (iti != DBIndicators.end()) {
-		delete iti->second;
-		iti++;
-	}
 	map<string, value *>::iterator itg = GVars.begin();
 	while (itg != GVars.end()) {
 		delete itg->second;
@@ -8615,6 +8958,11 @@ interpreter::~interpreter() {
 	while (itstars != STARLOCKS.end()) {
 		delete itstars->second;
 		itstars++;
+	}
+	map< string, set<int>*>::iterator iti = DBIndicators.begin();
+	while (iti != DBIndicators.end()) {
+		delete iti->second;
+		iti++;
 	}
 }
 
@@ -8751,7 +9099,7 @@ int main(int argc, char ** argv) {
 		main_part++;
 	}
 
-	std::cout << "Prolog MicroBrain by V.V.Pekunov V0.23beta1" << endl;
+	std::cout << "Prolog MicroBrain by V.V.Pekunov V0.23beta3" << endl;
 	if (argc == main_part) {
 		interpreter prolog("", "");
 		std::cout << "  Enter 'halt.' or 'end_of_file' to exit." << endl << endl;
