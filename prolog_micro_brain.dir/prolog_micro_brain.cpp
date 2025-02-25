@@ -583,349 +583,6 @@ tframe_item* frame_item::tcopy(context* CTX, interpreter* INTRP, bool import_glo
 	return result;
 }
 
-bool context::join(int K, frame_item* f, interpreter* INTRP) {
-	std::unique_lock<std::mutex> lock(pages_mutex);
-	if (CONTEXTS.size() == 0) {
-		lock.unlock();
-		return true;
-	}
-
-	context* C = this;
-	while (C && !C->THR)
-		C = C->parent;
-	bool forked = C && C->THR;
-
-	CONTEXTS.push_back(this);
-
-	int joined = 0;
-	int success = 0;
-	vector<bool> joineds(CONTEXTS.size(), false);
-	std::set<string> names;
-	vector<std::set<string>> lnames(CONTEXTS.size(), std::set<string>());
-
-	f->add_local_names(false, lnames[CONTEXTS.size() - 1]);
-
-	names = lnames[CONTEXTS.size() - 1];
-
-	do {
-		vector<bool> stoppeds(CONTEXTS.size(), false);
-		vector<bool> rollback(CONTEXTS.size(), false);
-		int stopped = std::count(joineds.begin(), joineds.end(), true);
-		bool mainlined = !joineds[CONTEXTS.size() - 1];
-		if (mainlined) {
-			stoppeds[CONTEXTS.size() - 1] = true;
-			stopped++;
-		}
-		f->register_facts(this, lnames[CONTEXTS.size() - 1]);
-		names.insert(lnames[CONTEXTS.size() - 1].begin(), lnames[CONTEXTS.size() - 1].end());
-		while (stopped < CONTEXTS.size()) {
-			for (int i = 0; i < CONTEXTS.size(); i++)
-				if (!joineds[i] && !stoppeds[i] && CONTEXTS[i]->THR->is_stopped()) {
-					rollback[i] = CONTEXTS[i]->rollback;
-					stoppeds[i] = !rollback[i];
-					if (stoppeds[i]) {
-						CONTEXTS[i]->FRAME.load()->add_local_names(CONTEXTS[i]->locals_in_forked, lnames[i]);
-						if (CONTEXTS[i]->transactable_facts)
-							CONTEXTS[i]->FRAME.load()->register_facts(CONTEXTS[i], lnames[i]);
-						names.insert(lnames[i].begin(), lnames[i].end());
-					}
-					stopped++;
-				}
-			std::this_thread::yield();
-		}
-		stopped -= std::count(rollback.begin(), rollback.end(), true);
-		// In not joineds search for winners
-		vector<vector<int>> M(CONTEXTS.size(), vector<int>(CONTEXTS.size(), 0));
-		std::set<string> conflictors;
-		for (const string& vname : names) {
-			// Conflict Matrix
-			for (int i = 0; i < CONTEXTS.size(); i++)
-				for (int j = i + 1; j < CONTEXTS.size(); j++)
-					if (stoppeds[i] && stoppeds[j] && (lnames[i].find(vname) != lnames[i].end() && lnames[j].find(vname) != lnames[j].end())) {
-						clock_t cri, fwi, fri, lwi, lri;
-						CONTEXTS[i]->FRAME.load()->statistics(vname, cri, fwi, fri, lwi, lri);
-						clock_t crj  = 0, fwj = 0, frj = 0, lwj = 0, lrj = 0;
-						if (j == CONTEXTS.size()-1 && dynamic_cast<tframe_item*>(f) == NULL)
-							/* M[i][j]++ */;
-						else {
-							if (j == CONTEXTS.size() - 1)
-								dynamic_cast<tframe_item*>(f)->statistics(vname, crj, fwj, frj, lwj, lrj);
-							else
-								CONTEXTS[j]->FRAME.load()->statistics(vname, crj, fwj, frj, lwj, lrj);
-							if (fwi || fwj) {
-								if (fwi && fwj) {
-									if (fri && fri <= fwi || frj && frj <= fwj) {
-										M[i][j]++;
-										conflictors.insert(vname);
-									}
-								}
-								else if (fwi) {
-									if ((lwi >= crj) && lrj) {
-										M[i][j]++;
-										conflictors.insert(vname);
-									}
-								}
-								else {
-									if ((lwj >= cri) && lri) {
-										M[i][j]++;
-										conflictors.insert(vname);
-									}
-								}
-							}
-						}
-					}
-		}
-		bool changed;
-		do {
-			changed = false;
-			for (int i = 0; i < CONTEXTS.size(); i++)
-				for (int j = i + 1; j < CONTEXTS.size(); j++)
-					if (M[i][j])
-						for (int k = j + 1; k < CONTEXTS.size(); k++)
-							if (M[j][k] && M[i][k] == 0) {
-								M[i][k] = 1;
-								changed = true;
-							}
-		} while (changed);
-		// Decide
-		int first_winner = mainlined ? CONTEXTS.size() - 1 : -1;
-		std::set<int> other_winners;
-		int first = first_winner < 0 ? 0 : first_winner;
-		int last = first_winner < 0 ? CONTEXTS.size() - 1 : first_winner;
-		for (int i = first; i <= last; i++)
-			if (stoppeds[i]) {
-				std::set<int> conflicted;
-				conflicted.insert(i);
-				for (int k = 0; k < i; k++)
-					if (M[k][i])
-						conflicted.insert(k);
-				for (int k = i + 1; k < CONTEXTS.size(); k++)
-					if (M[i][k])
-						conflicted.insert(k);
-				std::set<int> parallels;
-				for (int j = 0; j < CONTEXTS.size(); j++) {
-					if (i != j && stoppeds[j] && conflicted.find(j) == conflicted.end())
-						parallels.insert(j);
-				}
-				int candidate = i;
-				if (parallels.size() > 1) {
-					clock_t min_time = 0;
-					if (!mainlined) parallels.insert(i);
-					for (const string& vname : names) {
-						for (int j : parallels) {
-							if (stoppeds[j] && lnames[j].find(vname) != lnames[j].end()) {
-								clock_t cr, fw, fr, lw, lr;
-								CONTEXTS[j]->FRAME.load()->statistics(vname, cr, fw, fr, lw, lr);
-								if (fw && (!min_time || fw < min_time && fw >= cr)) {
-									candidate = j;
-									min_time = fw;
-								}
-							}
-						}
-					}
-					if (!mainlined) parallels.erase(i);
-					for (int j = 0; j < CONTEXTS.size(); j++)
-						for (int k = j + 1; k < CONTEXTS.size(); k++)
-							if (M[j][k]) {
-								parallels.erase(j);
-								parallels.erase(k);
-							}
-				}
-				if (mainlined) {
-					parallels.insert(candidate);
-					parallels.erase(i);
-					parallels.insert(-i);
-					candidate = i;
-				}
-				else {
-					parallels.insert(i);
-					parallels.erase(candidate);
-					parallels.insert(-candidate);
-				}
-				if (parallels.size() > other_winners.size()) {
-					other_winners = parallels;
-					first_winner = candidate;
-				}
-			}
-		if (first_winner < 0) {
-			clock_t min_time = 0;
-			for (const string& vname : conflictors) {
-				for (int i = 0; i < CONTEXTS.size(); i++)
-					if (stoppeds[i] && lnames[i].find(vname) != lnames[i].end()) {
-						clock_t cr, fw, fr, lw, lr;
-						CONTEXTS[i]->FRAME.load()->statistics(vname, cr, fw, fr, lw, lr);
-						if (fw && (!min_time || fw < min_time && fw >= cr)) {
-							first_winner = i;
-							min_time = fw;
-						}
-					}
-			}
-			for (int i = 0; first_winner < 0 && i < CONTEXTS.size(); i++)
-				if (stoppeds[i])
-					first_winner = i;
-			if (first_winner >= 0) {
-				other_winners.erase(first_winner);
-				other_winners.insert(-first_winner);
-			}
-		}
-		f->unregister_facts(this);
-		if (mainlined)
-		{
-			other_winners.erase(first_winner);
-			other_winners.erase(-first_winner);
-			joineds[CONTEXTS.size() - 1] = true;
-			stoppeds[CONTEXTS.size() - 1] = false;
-			success++;
-			joined++;
-		}
-		// Set vars by threads with non-zero first_writes
-		for (int _winner : other_winners) {
-			int winner = abs(_winner);
-			for (const string& vname : names)
-				if (lnames[winner].find(vname) != lnames[winner].end() && CONTEXTS[winner]->FRAME.load()->first_write(vname))
-				{
-					if (vname[0] == '!') {
-						std::unique_lock<std::mutex> dblock(*DBLOCK);
-						string fact = vname.substr(1);
-						map<string, journal*>::iterator its = CONTEXTS[winner]->DBJournal->find(fact);
-						if (its != CONTEXTS[winner]->DBJournal->end()) {
-							journal* SRC = its->second;
-							map<string, vector<term*>*>::iterator it = DB->find(fact);
-							if (it == DB->end()) {
-								(*DB)[fact] = new vector<term*>();
-								it = DB->find(fact);
-							}
-							// Apply journal
-							for (journal_item* jlog : SRC->log) {
-								if (jlog->type == jInsert) {
-									register_db_write(fact, jInsert, jlog->data, jlog->position);
-									it->second->insert(it->second->begin() + jlog->position, (term*)jlog->data);
-									jlog->data->use(); // to prevent free in ~journal_item()
-								}
-								else if (jlog->type == jDelete) {
-									register_db_write(fact, jDelete, jlog->data, jlog->position);
-									it->second->erase(it->second->begin() + jlog->position);
-								}
-								else {
-									cout << "Internal error : unknown DB journal record type!" << endl;
-									exit(1700);
-								}
-							}
-							// Clear journal
-							delete SRC;
-							CONTEXTS[winner]->DBJournal->erase(fact);
-						}
-						dblock.unlock();
-					}
-					else if (vname[0] == '*' || CONTEXTS[winner]->THR->get_result())
-					{
-						value* old = f->get(this, vname.c_str());
-						value* cur = CONTEXTS[winner]->FRAME.load()->get(CONTEXTS[winner], vname.c_str());
-						if (cur)
-							if (old && (vname.length() == 0 || vname[0] != '*')) {
-								if (!old->unify(this, f, cur))
-									CONTEXTS[winner]->THR->set_result(false);
-							}
-							else
-								f->set(this, vname.c_str(), cur);
-					}
-				}
-		}
-		// Join first_winner && other_winners
-		for (int i = 0; i < CONTEXTS.size(); i++)
-			if (stoppeds[i] || rollback[i]) {
-				if (other_winners.find(i) == other_winners.end() && other_winners.find(-i) == other_winners.end()) {
-					tframe_item* OLD = CONTEXTS[i]->FRAME.load();
-					if (CONTEXTS[i]->transactable_facts) { // Undo facts
-						std::unique_lock<std::mutex> lock(*DBLOCK);
-						// Delete journal, including inserted nodes
-						map<string, journal*>::iterator itj = CONTEXTS[i]->DBJournal->begin();
-						while (itj != CONTEXTS[i]->DBJournal->end()) {
-							delete itj->second;
-							itj++;
-						}
-						CONTEXTS[i]->DBJournal->clear();
-						// Clear local DB
-						map< string, vector<term*>*>::iterator itd = CONTEXTS[i]->DB->begin();
-						while (itd != CONTEXTS[i]->DB->end()) {
-							if (itd->second) {
-								delete itd->second;
-							}
-							itd++;
-						}
-						CONTEXTS[i]->DB->clear();
-						// Reload DB
-						itd = DB->begin();
-						while (itd != DB->end()) {
-							if (itd->second) {
-								(*CONTEXTS[i]->DB)[itd->first] = new vector<term*>(*itd->second);
-							}
-							itd++;
-						}
-						lock.unlock();
-					}
-					CONTEXTS[i]->FRAME.store(f->tcopy(this, INTRP, false));
-					CONTEXTS[i]->set_rollback(false);
-					CONTEXTS[i]->THR->set_stopped(false);
-				}
-				else {
-					CONTEXTS[i]->THR->set_terminated(true);
-					CONTEXTS[i]->THR->set_stopped(false);
-					CONTEXTS[i]->THR->join();
-					joineds[i] = true;
-					if (CONTEXTS[i]->THR->get_result())
-						success++;
-					joined++;
-				}
-			}
-	} while (joined < CONTEXTS.size());
-
-	joined--;
-	success--;
-	CONTEXTS.pop_back();
-
-	bool result = K < 0 && success == CONTEXTS.size() || K >= 0 && success >= K;
-
-	prolog->GLOCK.lock();
-	for (const string& vname : names)
-		if (vname[0] != '!')
-		{
-			value* v = f->get(this, vname.c_str());
-			for (int i = 0; i < CONTEXTS.size(); i++)
-				CONTEXTS[i]->FRAME.load()->set(CONTEXTS[i], vname.c_str(), NULL);
-			if (!forked && v && vname.length() && vname[0] == '*') {
-				string src_name = vname.substr(1);
-				std::map<std::string, value*>::iterator it = prolog->GVars.find(src_name);
-				if (it != prolog->GVars.end()) {
-					it->second->free();
-				}
-				prolog->GVars[src_name] = v->copy(this, f);
-			}
-		}
-	prolog->GLOCK.unlock();
-
-	for (context* C : CONTEXTS)
-		delete C;
-	CONTEXTS.clear();
-
-	lock.unlock();
-	return result;
-}
-
-context* context::add_page(bool locals_in_forked, bool transactable_facts, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
-	std::unique_lock<std::mutex> plock(pages_mutex);
-
-	context* result = new context(locals_in_forked, transactable_facts, forker, 100, this, f, starting, ending, prolog);
-
-	CONTEXTS.push_back(result);
-
-	result->THR = new tthread(CONTEXTS.size() - 1, result);
-
-	plock.unlock();
-
-	return result;
-}
-
 void tthread::body() {
 	tframe_item* OLD_FRAME = NULL;
 	set_stopped(false);
@@ -949,24 +606,6 @@ void tthread::body() {
 		while (is_stopped())
 			std::this_thread::yield();
 	} while (!terminated.test_and_set());
-}
-
-void context::register_db_read(const std::string& iid) {
-	map<string, journal*>::iterator it = DBJournal->find(iid);
-	if (it == DBJournal->end()) {
-		(*DBJournal)[iid] = new journal();
-		it = DBJournal->find(iid);
-	}
-	it->second->register_read();
-}
-
-void context::register_db_write(const std::string& iid, jTypes t, value* data, int position) {
-	map<string, journal*>::iterator it = DBJournal->find(iid);
-	if (it == DBJournal->end()) {
-		(*DBJournal)[iid] = new journal();
-		it = DBJournal->find(iid);
-	}
-	it->second->register_write(t, data, position);
 }
 
 void tframe_item::register_fact_group(context* CTX, string& fact, journal* J) {
@@ -1219,6 +858,8 @@ public:
 		this->args = vector<value *>();
 	}
 
+	virtual ~term() { }
+
 	virtual void change_name(const string & _name) {
 		name = atomizer.get_atom(_name);
 	}
@@ -1226,11 +867,13 @@ public:
 	virtual void free() {
 		for (int i = 0; i < args.size(); i++)
 			args[i]->free();
-		value::free();
+		refs--;
+		if (refs == 0)
+			delete this;
 	}
 
 	virtual void use() {
-		value::use();
+		refs++;
 		for (int i = 0; i < args.size(); i++)
 			args[i]->use();
 	}
@@ -1485,15 +1128,19 @@ public:
 		chars = v;
 	}
 
+	virtual ~list() { }
+
 	virtual void free() {
 		for (value * v : val)
 			v->free();
 		if (tag) tag->free();
-		value::free();
+		refs--;
+		if (refs == 0)
+			delete this;
 	}
 
 	virtual void use() {
-		value::use();
+		refs++;
 		for (value * v : val)
 			v->use();
 		if (tag) tag->use();
@@ -2017,6 +1664,517 @@ public:
 	}
 };
 
+context::context(bool locals_in_forked, bool transactable_facts, predicate_item* forker, int RESERVE, context* parent, tframe_item* tframe, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
+	this->parent = parent;
+	this->locals_in_forked = locals_in_forked;
+	this->transactable_facts = transactable_facts;
+
+	if (!transactable_facts && parent != NULL) {
+		DBLOCK = parent->DBLOCK;
+		DB = parent->DB;
+		DBJournal = parent->DBJournal;
+	}
+	else {
+		DBLOCK = new std::mutex();
+		DB = new map< string, vector<term*>*>();
+		if (parent) {
+			std::unique_lock<std::mutex> lock(*parent->DBLOCK);
+			map< string, vector<term*>*>::iterator itd = parent->DB->begin();
+			while (itd != parent->DB->end()) {
+				if (itd->second) {
+					(*DB)[itd->first] = new vector<term*>(*itd->second);
+					for (term* v : *itd->second)
+						v->use();
+				}
+				itd++;
+			}
+			lock.unlock();
+		}
+		DBJournal = new map<string, journal*>();
+	}
+
+	rollback = false;
+
+	CALLS.reserve(RESERVE);
+	FRAMES.reserve(RESERVE);
+	CTXS.reserve(RESERVE);
+	NEGS.reserve(RESERVE);
+	_FLAGS.reserve(RESERVE);
+	PARENT_CALLS.reserve(RESERVE);
+	PARENT_CALL_VARIANT.reserve(RESERVE);
+	CLAUSES.reserve(RESERVE);
+	// FLAGS;
+	LEVELS.reserve(RESERVE);
+	TRACE.reserve(RESERVE);
+	TRACEARGS.reserve(RESERVE);
+	TRACERS.reserve(RESERVE);
+	ptrTRACE.reserve(RESERVE);
+
+	THR = NULL;
+	FRAME.store(tframe);
+	this->forker = forker;
+	this->starting = starting;
+	this->ending = ending;
+	this->prolog = prolog;
+}
+
+void context::REFRESH(bool sequential_mode, frame_item* f, context* CTX, interpreter* INTRP) {
+	if (sequential_mode) {
+		FRAME.load()->forced_import_transacted_globs(CTX, f);
+		f = FRAME.load();
+	}
+	FRAME.store(f->tcopy(CTX, INTRP, false));
+}
+
+context* context::add_page(bool locals_in_forked, bool transactable_facts, predicate_item* forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
+	std::unique_lock<std::mutex> plock(pages_mutex);
+
+	context* result = new context(locals_in_forked, transactable_facts, forker, 100, this, f, starting, ending, prolog);
+
+	CONTEXTS.push_back(result);
+
+	result->THR = new tthread(CONTEXTS.size() - 1, result);
+
+	plock.unlock();
+
+	return result;
+}
+
+void context::register_db_read(const std::string& iid) {
+	map<string, journal*>::iterator it = DBJournal->find(iid);
+	if (it == DBJournal->end()) {
+		(*DBJournal)[iid] = new journal();
+		it = DBJournal->find(iid);
+	}
+	it->second->register_read();
+}
+
+void context::register_db_write(const std::string& iid, jTypes t, value* data, int position) {
+	map<string, journal*>::iterator it = DBJournal->find(iid);
+	if (it == DBJournal->end()) {
+		(*DBJournal)[iid] = new journal();
+		it = DBJournal->find(iid);
+	}
+	it->second->register_write(t, data, position);
+}
+
+bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP) {
+	std::unique_lock<std::mutex> lock(pages_mutex);
+	if (CONTEXTS.size() == 0) {
+		lock.unlock();
+		return true;
+	}
+
+	context* C = this;
+	while (C && !C->THR)
+		C = C->parent;
+	bool forked = C && C->THR;
+
+	CONTEXTS.push_back(this);
+
+	int joined = 0;
+	int success = 0;
+	int sequential = sequential_mode ? 0 : -1;
+	bool converged = false;
+	vector<bool> joineds(CONTEXTS.size(), false);
+	std::set<string> names;
+	vector<std::set<string>> lnames(CONTEXTS.size(), std::set<string>());
+
+	f->add_local_names(false, lnames[CONTEXTS.size() - 1]);
+
+	names = lnames[CONTEXTS.size() - 1];
+
+	do {
+		vector<bool> stoppeds(CONTEXTS.size(), false);
+		vector<bool> rollback(CONTEXTS.size(), false);
+		int stopped = std::count(joineds.begin(), joineds.end(), true);
+		bool mainlined = !joineds[CONTEXTS.size() - 1];
+		if (mainlined) {
+			stoppeds[CONTEXTS.size() - 1] = true;
+			stopped++;
+		}
+		f->register_facts(this, lnames[CONTEXTS.size() - 1]);
+		names.insert(lnames[CONTEXTS.size() - 1].begin(), lnames[CONTEXTS.size() - 1].end());
+		while (stopped < CONTEXTS.size()) {
+			for (int i = 0; i < CONTEXTS.size(); i++)
+				if (!joineds[i] && !stoppeds[i] && CONTEXTS[i]->THR->is_stopped()) {
+					rollback[i] = CONTEXTS[i]->rollback;
+					stoppeds[i] = !rollback[i];
+					if (stoppeds[i]) {
+						CONTEXTS[i]->FRAME.load()->add_local_names(CONTEXTS[i]->locals_in_forked, lnames[i]);
+						if (CONTEXTS[i]->transactable_facts)
+							CONTEXTS[i]->FRAME.load()->register_facts(CONTEXTS[i], lnames[i]);
+						names.insert(lnames[i].begin(), lnames[i].end());
+					}
+					stopped++;
+				}
+			std::this_thread::yield();
+		}
+		stopped -= std::count(rollback.begin(), rollback.end(), true);
+		// In not joineds search for winners
+		vector<vector<int>> M(CONTEXTS.size(), vector<int>(CONTEXTS.size(), 0));
+		std::set<string> conflictors;
+		for (const string& vname : names) {
+			// Conflict Matrix
+			for (int i = 0; i < CONTEXTS.size()-2; i++)
+				for (int j = i + 1; j < CONTEXTS.size()-1; j++)
+					if (stoppeds[i] && stoppeds[j] && (lnames[i].find(vname) != lnames[i].end() && lnames[j].find(vname) != lnames[j].end())) {
+						clock_t cri, fwi, fri, lwi, lri;
+						CONTEXTS[i]->FRAME.load()->statistics(vname, cri, fwi, fri, lwi, lri);
+						clock_t crj = 0, fwj = 0, frj = 0, lwj = 0, lrj = 0;
+						if (j == CONTEXTS.size() - 1 && dynamic_cast<tframe_item*>(f) == NULL)
+							/* M[i][j]++ */;
+						else {
+							if (j == CONTEXTS.size() - 1)
+								dynamic_cast<tframe_item*>(f)->statistics(vname, crj, fwj, frj, lwj, lrj);
+							else
+								CONTEXTS[j]->FRAME.load()->statistics(vname, crj, fwj, frj, lwj, lrj);
+							if (fwi || fwj) {
+								if (fwi && fwj) {
+									if (fri && fri <= fwi || frj && frj <= fwj) {
+										M[i][j]++;
+										conflictors.insert(vname);
+									}
+								}
+								else if (fwi) {
+									if ((lwi >= crj) && lrj) {
+										M[i][j]++;
+										conflictors.insert(vname);
+									}
+								}
+								else {
+									if ((lwj >= cri) && lri) {
+										M[i][j]++;
+										conflictors.insert(vname);
+									}
+								}
+							}
+						}
+					}
+		}
+		bool changed;
+		do {
+			changed = false;
+			for (int i = 0; i < CONTEXTS.size(); i++)
+				for (int j = i + 1; j < CONTEXTS.size(); j++)
+					if (M[i][j])
+						for (int k = j + 1; k < CONTEXTS.size(); k++)
+							if (M[j][k] && M[i][k] == 0) {
+								M[i][k] = 1;
+								changed = true;
+							}
+		} while (changed);
+		// Decide
+		int first_winner = mainlined ? CONTEXTS.size() - 1 : -1;
+		std::set<int> other_winners;
+		int first = first_winner < 0 ? 0 : first_winner;
+		int last = first_winner < 0 ? CONTEXTS.size() - 1 : first_winner;
+		for (int i = first; i <= last; i++)
+			if (stoppeds[i]) {
+				std::set<int> conflicted;
+				conflicted.insert(i);
+				for (int k = 0; k < i; k++)
+					if (M[k][i])
+						conflicted.insert(k);
+				for (int k = i + 1; k < CONTEXTS.size(); k++)
+					if (M[i][k])
+						conflicted.insert(k);
+				std::set<int> parallels;
+				for (int j = 0; j < CONTEXTS.size(); j++) {
+					if (i != j && stoppeds[j] && conflicted.find(j) == conflicted.end())
+						parallels.insert(j);
+				}
+				int candidate = i;
+				if (parallels.size() > 1) {
+					clock_t min_time = 0;
+					if (!mainlined) parallels.insert(i);
+					for (const string& vname : names) {
+						for (int j : parallels) {
+							if (stoppeds[j] && lnames[j].find(vname) != lnames[j].end()) {
+								clock_t cr, fw, fr, lw, lr;
+								CONTEXTS[j]->FRAME.load()->statistics(vname, cr, fw, fr, lw, lr);
+								if (fw && (!min_time || fw < min_time && fw >= cr)) {
+									candidate = j;
+									min_time = fw;
+								}
+							}
+						}
+					}
+					if (!mainlined) parallels.erase(i);
+					for (int j = 0; j < CONTEXTS.size(); j++)
+						for (int k = j + 1; k < CONTEXTS.size(); k++)
+							if (M[j][k]) {
+								parallels.erase(j);
+								parallels.erase(k);
+							}
+				}
+				if (mainlined) {
+					parallels.insert(candidate);
+					parallels.erase(i);
+					parallels.insert(-i);
+					candidate = i;
+				}
+				else {
+					parallels.insert(i);
+					parallels.erase(candidate);
+					parallels.insert(-candidate);
+				}
+				if ((sequential < 0 || candidate == sequential || parallels.find(sequential) != parallels.end() || parallels.find(-sequential) != parallels.end()) &&
+					parallels.size() > other_winners.size()) {
+					other_winners = parallels;
+					first_winner = candidate;
+				}
+			}
+		if (first_winner < 0) {
+			if (sequential >= 0)
+				first_winner = sequential;
+			else {
+				clock_t min_time = 0;
+				for (const string& vname : conflictors) {
+					for (int i = 0; i < CONTEXTS.size(); i++)
+						if (stoppeds[i] && lnames[i].find(vname) != lnames[i].end()) {
+							clock_t cr, fw, fr, lw, lr;
+							CONTEXTS[i]->FRAME.load()->statistics(vname, cr, fw, fr, lw, lr);
+							if (fw && (!min_time || fw < min_time && fw >= cr)) {
+								first_winner = i;
+								min_time = fw;
+							}
+						}
+				}
+				for (int i = 0; first_winner < 0 && i < CONTEXTS.size(); i++)
+					if (stoppeds[i])
+						first_winner = i;
+			}
+			if (first_winner >= 0) {
+				other_winners.erase(first_winner);
+				other_winners.insert(-first_winner);
+			}
+		}
+		f->unregister_facts(this);
+		if (mainlined)
+		{
+			other_winners.erase(first_winner);
+			other_winners.erase(-first_winner);
+			joineds[CONTEXTS.size() - 1] = true;
+			stoppeds[CONTEXTS.size() - 1] = false;
+			success++;
+			joined++;
+		}
+		if (sequential >= 0 && (other_winners.size() == 0 || abs(*other_winners.begin()) != sequential)) {
+			other_winners.clear();
+			other_winners.insert(sequential);
+		}
+		// Set vars by threads with non-zero first_writes
+		for (int _winner : other_winners) {
+			int winner = abs(_winner);
+			if (sequential >= 0 && winner != sequential) {
+				set<int>::iterator ito = other_winners.find(winner);
+				while (ito != other_winners.end()) {
+					int _ito = abs(*ito);
+					stoppeds[_ito] = false;
+					rollback[_ito] = true;
+					ito = other_winners.erase(ito);
+					stopped--;
+				}
+				break;
+			}
+			for (const string& vname : names)
+				if (lnames[winner].find(vname) != lnames[winner].end() && CONTEXTS[winner]->FRAME.load()->first_write(vname))
+				{
+					if (vname[0] == '!') {
+						std::unique_lock<std::mutex> dblock(*DBLOCK);
+						string fact = vname.substr(1);
+						map<string, journal*>::iterator its = CONTEXTS[winner]->DBJournal->find(fact);
+						if (its != CONTEXTS[winner]->DBJournal->end()) {
+							journal* SRC = its->second;
+							map<string, vector<term*>*>::iterator it = DB->find(fact);
+							if (it == DB->end()) {
+								(*DB)[fact] = new vector<term*>();
+								it = DB->find(fact);
+							}
+							// Apply journal
+							for (journal_item* jlog : SRC->log) {
+								if (jlog->type == jInsert) {
+									register_db_write(fact, jInsert, jlog->data, jlog->position);
+									it->second->insert(it->second->begin() + jlog->position, (term*)jlog->data);
+									jlog->data->use(); // to prevent free in ~journal_item()
+								}
+								else if (jlog->type == jDelete) {
+									register_db_write(fact, jDelete, jlog->data, jlog->position);
+									it->second->erase(it->second->begin() + jlog->position);
+								}
+								else {
+									cout << "Internal error : unknown DB journal record type!" << endl;
+									exit(1700);
+								}
+							}
+							// Clear journal
+							delete SRC;
+							CONTEXTS[winner]->DBJournal->erase(fact);
+						}
+						dblock.unlock();
+					}
+					else if (vname[0] == '*' || CONTEXTS[winner]->THR->get_result())
+					{
+						value* old = f->get(this, vname.c_str());
+						value* cur = CONTEXTS[winner]->FRAME.load()->get(CONTEXTS[winner], vname.c_str());
+						if (cur)
+							if (old && (vname.length() == 0 || vname[0] != '*')) {
+								if (!old->unify(this, f, cur))
+									CONTEXTS[winner]->THR->set_result(false);
+							}
+							else
+								f->set(this, vname.c_str(), cur);
+					}
+				}
+			if (sequential >= 0) {
+				sequential++;
+				if (CONTEXTS[winner]->THR->get_result()) {
+					set<int>::iterator ito = other_winners.find(sequential);
+					while (ito != other_winners.end()) {
+						int _ito = abs(*ito);
+						stoppeds[_ito] = false;
+						rollback[_ito] = true;
+						ito = other_winners.erase(ito);
+						stopped--;
+					}
+				}
+			}
+		}
+		converged = sequential >= 0 && (sequential == CONTEXTS.size() - 1 || CONTEXTS[sequential - 1]->THR->get_result());
+		// Join first_winner && other_winners
+		for (int i = 0; i < CONTEXTS.size(); i++)
+			if (stoppeds[i] || rollback[i]) {
+				if (other_winners.find(i) == other_winners.end() && other_winners.find(-i) == other_winners.end()) {
+					tframe_item* OLD = CONTEXTS[i]->FRAME.load();
+					if (CONTEXTS[i]->transactable_facts) { // Undo facts
+						std::unique_lock<std::mutex> lock(*DBLOCK);
+						// Delete journal, including deleted nodes
+						map<string, journal*>::iterator itj = CONTEXTS[i]->DBJournal->begin();
+						while (itj != CONTEXTS[i]->DBJournal->end()) {
+							delete itj->second;
+							itj++;
+						}
+						CONTEXTS[i]->DBJournal->clear();
+						// Clear local DB
+						map< string, vector<term*>*>::iterator itd = CONTEXTS[i]->DB->begin();
+						while (itd != CONTEXTS[i]->DB->end()) {
+							if (itd->second) {
+								for (term* v : *itd->second)
+									v->free();
+								delete itd->second;
+							}
+							itd++;
+						}
+						CONTEXTS[i]->DB->clear();
+						// Reload DB
+						itd = DB->begin();
+						while (itd != DB->end()) {
+							if (itd->second) {
+								(*CONTEXTS[i]->DB)[itd->first] = new vector<term*>(*itd->second);
+								for (term* v : *itd->second)
+									v->use();
+							}
+							itd++;
+						}
+						lock.unlock();
+					}
+					CONTEXTS[i]->REFRESH(sequential_mode, f, this, INTRP);
+					if (converged) {
+						CONTEXTS[i]->THR->set_terminated(true);
+						CONTEXTS[i]->THR->set_stopped(false);
+						CONTEXTS[i]->THR->join();
+						joineds[i] = true;
+						if (CONTEXTS[i]->THR->get_result())
+							success++;
+						joined++;
+					}
+					else {
+						CONTEXTS[i]->set_rollback(false);
+						CONTEXTS[i]->THR->set_stopped(false);
+					}
+				}
+				else {
+					CONTEXTS[i]->THR->set_terminated(true);
+					CONTEXTS[i]->THR->set_stopped(false);
+					CONTEXTS[i]->THR->join();
+					joineds[i] = true;
+					if (CONTEXTS[i]->THR->get_result())
+						success++;
+					joined++;
+				}
+			}
+	} while (joined < CONTEXTS.size());
+
+	joined--;
+	success--;
+	CONTEXTS.pop_back();
+
+	bool result =
+		(converged && sequential > 0 && CONTEXTS[sequential - 1]->THR->get_result()) ||
+		(sequential < 0 && (K < 0 && success == CONTEXTS.size() || K >= 0 && success >= K));
+
+	prolog->GLOCK.lock();
+	for (const string& vname : names)
+		if (vname[0] != '!')
+		{
+			value* v = f->get(this, vname.c_str());
+			for (int i = 0; i < CONTEXTS.size(); i++)
+				CONTEXTS[i]->FRAME.load()->set(CONTEXTS[i], vname.c_str(), NULL);
+			if (!forked && v && vname.length() && vname[0] == '*') {
+				string src_name = vname.substr(1);
+				std::map<std::string, value*>::iterator it = prolog->GVars.find(src_name);
+				if (it != prolog->GVars.end()) {
+					it->second->free();
+				}
+				prolog->GVars[src_name] = v->copy(this, f);
+			}
+		}
+	prolog->GLOCK.unlock();
+
+	for (context* C : CONTEXTS)
+		delete C;
+	CONTEXTS.clear();
+
+	lock.unlock();
+	return result;
+}
+
+void context::clearDBJournals() {
+	map<string, journal*>::iterator itj = DBJournal->begin();
+	while (itj != DBJournal->end()) {
+		delete itj->second;
+		itj++;
+	}
+	DBJournal->clear();
+}
+
+context::~context() {
+	for (context* C : CONTEXTS)
+		delete C;
+	if (transactable_facts || parent == NULL) {
+		map< string, vector<term*>*>::iterator itd = DB->begin();
+		while (itd != DB->end()) {
+			for (term* v : *itd->second)
+				v->free();
+			delete itd->second;
+			itd++;
+		}
+		delete DBLOCK;
+		delete DB;
+
+		map<string, journal*>::iterator itj = DBJournal->begin();
+		while (itj != DBJournal->end()) {
+			delete itj->second;
+			itj++;
+		}
+		delete DBJournal;
+	}
+	delete THR;
+	if (FRAME)
+		delete FRAME.load();
+}
+
 generated_vars * predicate_item_user::generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) {
 	generated_vars * result = new generated_vars();
 	if (user_p)
@@ -2097,8 +2255,10 @@ bool predicate_item_user::processing(context * CONTEXT, bool line_neg, int varia
 	CONTEXT->PARENT_CALL_VARIANT.pop();
 	CONTEXT->PARENT_CALL_VARIANT.push(variant);
 
+	bool yes = false;
+
 	if (prolog->retrieve(CONTEXT, f, user_p->get_clause(variant), *positional_vals, true)) {
-		bool yes = user_p->get_clause(variant)->num_items() == 0;
+		yes = user_p->get_clause(variant)->num_items() == 0;
 
 		if (yes) {
 			vector<value *> * v = NULL;
@@ -2114,44 +2274,28 @@ bool predicate_item_user::processing(context * CONTEXT, bool line_neg, int varia
 				delete first_args;
 			}
 		}
-
-		if ((yes || (!variants || !variants->has_variant(variant + 1))) && (CONTEXT->PARENT_CALLS.size() > 0 && CONTEXT->PARENT_CALLS.top() == this)) {
-			CONTEXT->CALLS.pop();
-			CONTEXT->PARENT_CALLS.pop();
-			CONTEXT->PARENT_CALL_VARIANT.pop();
-			CONTEXT->CLAUSES.pop();
-			CONTEXT->FRAMES.pop();
-			CONTEXT->CTXS.pop();
-			CONTEXT->NEGS.pop();
-			CONTEXT->_FLAGS.pop();
-		}
-
-		if (up_f && f)
-			up_f->sync(yes && CONTEXT == prolog->CONTEXT && CONTEXT->PARENT_CALLS.size() == 0, CONTEXT, f);
-
-		delete f;
-
-		return yes;
 	}
 	else {
-		if ((!variants || !variants->has_variant(variant + 1)) && (CONTEXT->PARENT_CALLS.size() > 0 && CONTEXT->PARENT_CALLS.top() == this)) {
-			CONTEXT->CALLS.pop();
-			CONTEXT->PARENT_CALLS.pop();
-			CONTEXT->PARENT_CALL_VARIANT.pop();
-			CONTEXT->CLAUSES.pop();
-			CONTEXT->FRAMES.pop();
-			CONTEXT->CTXS.pop();
-			CONTEXT->NEGS.pop();
-			CONTEXT->_FLAGS.pop();
-		}
-
-		if (up_f && f)
-			up_f->sync(false, CONTEXT, f);
-
-		delete f;
-
-		return false;
+		yes = false;
 	}
+
+	if ((yes || (!variants || !variants->has_variant(variant + 1))) && (CONTEXT->PARENT_CALLS.size() > 0 && CONTEXT->PARENT_CALLS.top() == this)) {
+		CONTEXT->CALLS.pop();
+		CONTEXT->PARENT_CALLS.pop();
+		CONTEXT->PARENT_CALL_VARIANT.pop();
+		CONTEXT->CLAUSES.pop();
+		CONTEXT->FRAMES.pop();
+		CONTEXT->CTXS.pop();
+		CONTEXT->NEGS.pop();
+		CONTEXT->_FLAGS.pop();
+	}
+
+	if (up_f && f)
+		up_f->sync(yes && CONTEXT == prolog->CONTEXT && CONTEXT->PARENT_CALLS.size() == 0, CONTEXT, f);
+
+	delete f;
+
+	return yes;
 }
 
 double interpreter::evaluate(context * CTX, frame_item * ff, const string & expression, int & p) {
@@ -6815,7 +6959,7 @@ public:
 		return result;
 	}
 
-	virtual bool execute(context * CTX, frame_item* f) {
+	virtual bool execute(context * CTX, frame_item* &f, int i, generated_vars* variants) {
 		if (all) return true;
 
 		string iid = ((term*)f->get(CTX, "$FUNCTOR$"))->get_name();
@@ -6901,7 +7045,7 @@ public:
 		return ending_number == 0 ? NULL : parent->get_item(ending_number-1);
 	}
 
-	virtual bool execute(context * CTX, frame_item* f) {
+	virtual bool execute(context * CTX, frame_item* &f, int i, generated_vars* variants) {
 		int N = 1;
 		int_number* ni = NULL;
 
@@ -6937,7 +7081,9 @@ public:
 			exit(-3);
 		}
 		// Process
-		for (int i = 0; i < N; i++) {
+		if (CTX->SEQ_MODE.size() == 0 || CTX->SEQ_MODE.top() != seqNone)
+			CTX->SEQ_MODE.push(seqNone);
+		for (int m = 0; m < N; m++) {
 			CTX->add_page(locals_in_forked, transactable_facts, this, f->tcopy(CTX, prolog, true), parent->get_item(self_number+1), parent->get_item(ending_number), prolog);
 		}
 
@@ -6975,39 +7121,70 @@ public:
 		return result;
 	}
 
-	virtual bool execute(context * CTX, frame_item* f) {
-		int K = -1;
-		int_number* ni = NULL;
+	virtual bool execute(context * CTX, frame_item* &f, int i, generated_vars* variants) {
+		if (CTX->SEQ_MODE.size() == 0 || CTX->SEQ_MODE.top() == seqNone) {
+			int K = -1;
+			int_number* ni = NULL;
 
-		var* nv = dynamic_cast<var*>(k);
-		if (nv) {
-			value* v = f->get(CTX, nv->get_name().c_str());
+			var* nv = dynamic_cast<var*>(k);
+			if (nv) {
+				value* v = f->get(CTX, nv->get_name().c_str());
 
-			if (!v || !v->defined()) {
-				std::cout << "Number of &-joined threads [" << nv->get_name() << "] is not defined!" << endl;
-				exit(-3);
+				if (!v || !v->defined()) {
+					std::cout << "Number of &-joined threads [" << nv->get_name() << "] is not defined!" << endl;
+					exit(-3);
+				}
+
+				ni = dynamic_cast<int_number*>(v);
+
+				if (ni == NULL) {
+					std::cout << "Value of number of &-joined threads [" << nv->get_name() << "] is not int!" << endl;
+					exit(-3);
+				}
 			}
-
-			ni = dynamic_cast<int_number*>(v);
-
-			if (ni == NULL) {
-				std::cout << "Value of number of &-joined threads [" << nv->get_name() << "] is not int!" << endl;
-				exit(-3);
+			else {
+				ni = dynamic_cast<int_number*>(k);
+				if (ni == NULL) {
+					std::cout << "Number of &-joined threads must be a variable or int!" << endl;
+					exit(-3);
+				}
 			}
+			if (ni->get_value() >= 0)
+				K = (int)(0.5 + ni->get_value());
+			else
+				K = (int)(-0.5 + ni->get_value());
+
+			if (CTX->SEQ_MODE.size())
+				CTX->SEQ_MODE.pop();
+			// Process
+			return CTX->join(false, K, f, prolog);
 		}
 		else {
-			ni = dynamic_cast<int_number*>(k);
-			if (ni == NULL) {
-				std::cout << "Number of &-joined threads must be a variable or int!" << endl;
-				exit(-3);
+			if (CTX->SEQ_MODE.top() == seqStopped) {
+				CTX->SEQ_MODE.pop();
+				CTX->SEQ_START.pop();
+				CTX->SEQ_END.pop();
+				return CTX->CONTEXTS.size() > 0 && CTX->join(true, -1, f, prolog);
 			}
+			else if (CTX->SEQ_MODE.top() == seqTrue) {
+				CTX->SEQ_MODE.pop();
+				CTX->SEQ_START.pop();
+				CTX->SEQ_END.pop();
+				return true;
+			}
+
+			if (CTX->CONTEXTS.size() == prolog->NUM_PROCS) {
+				if (CTX->join(true, -1, f, prolog)) {
+					CTX->SEQ_MODE.at(CTX->SEQ_MODE.size()-1) = seqTrue;
+				}
+				return false;
+			}
+			predicate_item* starting = CTX->SEQ_START.top();
+			predicate_item* ending = CTX->SEQ_END.top();
+			CTX->add_page(false, true, this, f->tcopy(CTX, prolog, true), starting, ending, prolog);
+
+			return false;
 		}
-		if (ni->get_value() >= 0)
-			K = (int)(0.5 + ni->get_value());
-		else
-			K = (int)(-0.5 + ni->get_value());
-		// Process
-		return CTX->join(K, f, prolog);
 	}
 };
 
@@ -7032,7 +7209,7 @@ public:
 		return result;
 	}
 
-	virtual bool execute(context* CTX, frame_item* f) {
+	virtual bool execute(context* CTX, frame_item* &f, int i, generated_vars* variants) {
 		if (CTX)
 			CTX->set_rollback(true);
 		// Process
@@ -7040,7 +7217,7 @@ public:
 	}
 };
 
-void interpreter::block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier) {
+void interpreter::block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier, bool frontier_enough) {
 	std::list<int>::iterator itf = CNT->FLAGS.end();
 	bool passed_frontier = false;
 	int nn = CNT->TRACE.size() - 1;
@@ -7052,7 +7229,7 @@ void interpreter::block_process(context * CNT, bool clear_flag, bool cut_flag, p
 		int flags = *(--itf);
 		int level = CNT->LEVELS[nn];
 
-		if (cut_flag && frontier && CNT->PARENT_CALLS.size() && CNT->PARENT_CALLS.top()->get_parent() &&
+		if (cut_flag && frontier && CNT->PARENT_CALLS.size() && CNT->PARENT_CALLS.top() && CNT->PARENT_CALLS.top()->get_parent() &&
 			WHO && WHO->get_parent() == CNT->PARENT_CALLS.top()->get_parent() &&
 			n == CNT->PARENT_CALL_VARIANT.top() &&
 			level == CNT->PARENT_CALLS.size() - 1)
@@ -7073,7 +7250,7 @@ void interpreter::block_process(context * CNT, bool clear_flag, bool cut_flag, p
 			break;
 		}
 
-		if (cut_flag && CNT->PARENT_CALLS.size() && CNT->PARENT_CALLS.top()->get_parent() &&
+		if (cut_flag && CNT->PARENT_CALLS.size() && CNT->PARENT_CALLS.top() && CNT->PARENT_CALLS.top()->get_parent() &&
 			WHO && WHO->get_parent() == CNT->PARENT_CALLS.top()->get_parent() &&
 			n == CNT->PARENT_CALL_VARIANT.top() &&
 			level == CNT->PARENT_CALLS.size()-1)
@@ -7089,6 +7266,9 @@ void interpreter::block_process(context * CNT, bool clear_flag, bool cut_flag, p
 			WHO == frontier &&
 			level == CNT->PARENT_CALLS.size())
 			passed_frontier = true;
+
+		if (passed_frontier && frontier_enough)
+			break;
 
 		nn--;
 	}
@@ -7452,6 +7632,13 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 	context* CNT = user_p && user_p->is_forking() ? new context(context_locals, trans_facts, NULL, 100, CONTEXT, NULL, NULL, NULL, this) : CONTEXT;
 
 	generated_vars * variants = p ? p->generate_variants(CNT, f, *positional_vals) : new generated_vars(1, f->copy(CNT));
+
+	if (p && p->get_starred_end() >= 0) {
+		CONTEXT->SEQ_MODE.push(variants ? seqGenerated : seqStopped);
+		CONTEXT->SEQ_START.push(p->get_strict_next());
+		CONTEXT->SEQ_END.push(p->get_parent()->get_item(p->get_starred_end()));
+	}
+
 	/*
 	if (p) {
 		cout << p->get_id() << "(";
@@ -7465,7 +7652,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 	*/
 	bool neg_standard = !(user && !user->is_dynamic()) && p && p->is_negated();
 	int i = 0;
-	if (variants || neg_standard) {
+	if (variants || neg_standard || p && p->get_starred_end() >= 0) {
 		CNT->FLAGS.push_back((p && p->is_once() ? ::once_flag : 0) + (p && p->is_call() ? call_flag : 0));
 		CNT->LEVELS.push(CNT->PARENT_CALLS.size());
 		CNT->TRACE.push(variants);
@@ -7478,7 +7665,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 		if (lb) lb->enter_critical();
 		if (rb) rb->get_corresponding()->leave_critical();
 
-		for (i = 0; neg_standard || variants && variants->has_variant(i); i++) {
+		for (i = 0; neg_standard || p && p->get_starred_end() >= 0 || variants && variants->has_variant(i); i++) {
 			predicate_item * next =
 				p ? (
 					CNT->ending == NULL || CNT->ending != p->get_next(i) ?
@@ -7488,111 +7675,122 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 			frame_item * ff = variants ? variants->get_next_variant(CNT, i) : f->copy(CNT);
 			bool success = false;
 			CNT->ptrTRACE.push(i);
-			if (user && !user->is_dynamic()) {
-				if (!user->is_negated()) {
-					if (user->processing(CNT, neg, i, variants, positional_vals, ff, CONTEXT)) {
-						CNT->TRACE.pop();
-						CNT->TRACEARGS.pop();
-						CNT->TRACERS.pop();
-						CNT->FLAGS.pop_back();
-						CNT->LEVELS.pop();
-						CNT->ptrTRACE.pop();
+			if (!p || p->get_starred_end() < 0 || variants)
+				if (user && !user->is_dynamic()) {
+					if (!user->is_negated()) {
+						if (user->processing(CNT, neg, i, variants, positional_vals, ff, CONTEXT)) {
+							CNT->TRACE.pop();
+							CNT->TRACEARGS.pop();
+							CNT->TRACERS.pop();
+							CNT->FLAGS.pop_back();
+							CNT->LEVELS.pop();
+							CNT->ptrTRACE.pop();
 
-						if (variants)
-							variants->delete_from(i);
-						else
-							delete ff;
+							if (variants)
+								variants->delete_from(i);
+							else
+								delete ff;
 
-						delete variants;
+							delete variants;
 
-						if (CNT != CONTEXT)
-							delete CNT;
+							if (CNT != CONTEXT)
+								delete CNT;
 
-						return true;
+							return true;
+						}
+						else if (!variants || !variants->has_variant(i+1)) {
+							bool result = false;
+
+							if (p && p->get_starred_end() >= 0) {
+								CONTEXT->SEQ_MODE.at(CONTEXT->SEQ_MODE.size() - 1) = seqStopped;
+
+								vector<value*>* next_args = new vector<value*>();
+								result = process(CNT, neg, this_clause, next, ff, &next_args);
+								delete next_args;
+							}
+
+							CNT->ptrTRACE.pop();
+							CNT->FLAGS.pop_back();
+							CNT->LEVELS.pop();
+							CNT->TRACE.pop();
+							CNT->TRACEARGS.pop();
+							CNT->TRACERS.pop();
+
+							if (!result && f && ff)
+								f->sync(false, CNT, ff);
+
+							if (variants)
+								variants->delete_from(i);
+							else
+								delete ff;
+
+							delete variants;
+
+							if (CNT != CONTEXT)
+								delete CNT;
+
+							return result;
+						}
 					}
-					else if (!variants->has_variant(i+1)) {
-						CNT->ptrTRACE.pop();
-						CNT->FLAGS.pop_back();
-						CNT->LEVELS.pop();
-						CNT->TRACE.pop();
-						CNT->TRACEARGS.pop();
-						CNT->TRACERS.pop();
+					else {
+						if (user->processing(CNT, neg, i, variants, positional_vals, ff, CONTEXT)) {
+							CNT->TRACE.pop();
+							CNT->TRACEARGS.pop();
+							CNT->TRACERS.pop();
+							CNT->FLAGS.pop_back();
+							CNT->LEVELS.pop();
+							CNT->ptrTRACE.pop();
 
-						if (f && ff)
-							f->sync(false, CNT, ff);
+							if (f && ff)
+								f->sync(false, CNT, ff);
 
-						if (variants)
-							variants->delete_from(i);
-						else
-							delete ff;
+							if (variants)
+								variants->delete_from(i);
+							else
+								delete ff;
+							delete variants;
 
-						delete variants;
+							if (CNT != CONTEXT)
+								delete CNT;
 
-						if (CNT != CONTEXT)
-							delete CNT;
-
-						return false;
+							return false;
+						}
+						else if (!variants->has_variant(i + 1)) {
+							success = true;
+						}
 					}
 				}
 				else {
-					if (user->processing(CNT, neg, i, variants, positional_vals, ff, CONTEXT)) {
-						CNT->TRACE.pop();
-						CNT->TRACEARGS.pop();
-						CNT->TRACERS.pop();
-						CNT->FLAGS.pop_back();
-						CNT->LEVELS.pop();
-						CNT->ptrTRACE.pop();
+					if (neg_standard) {
+						if (variants && variants->had_variants() && (!p || p->execute(CNT, ff, i, variants))) {
+							CNT->TRACE.pop();
+							CNT->TRACEARGS.pop();
+							CNT->TRACERS.pop();
+							CNT->FLAGS.pop_back();
+							CNT->LEVELS.pop();
+							CNT->ptrTRACE.pop();
 
-						if (f && ff)
-							f->sync(false, CNT, ff);
+							if (f && ff)
+								f->sync(false, CNT, ff);
 
-						if (variants)
-							variants->delete_from(i);
-						else
-							delete ff;
-						delete variants;
+							if (variants)
+								variants->delete_from(i);
+							else
+								delete ff;
+							delete variants;
 
-						if (CNT != CONTEXT)
-							delete CNT;
+							if (CNT != CONTEXT)
+								delete CNT;
 
-						return false;
+							if (lb) lb->leave_critical();
+							if (rb) rb->get_corresponding()->enter_critical();
+
+							return false;
+						}
+						neg_standard = false;
 					}
-					else if (!variants->has_variant(i + 1)) {
-						success = true;
-					}
+					success = !p || p->execute(CNT, ff, i, variants);
 				}
-			}
-			else {
-				if (neg_standard) {
-					if (variants && variants->had_variants() && (!p || p->execute(CNT, ff))) {
-						CNT->TRACE.pop();
-						CNT->TRACEARGS.pop();
-						CNT->TRACERS.pop();
-						CNT->FLAGS.pop_back();
-						CNT->LEVELS.pop();
-						CNT->ptrTRACE.pop();
-
-						if (f && ff)
-							f->sync(false, CNT, ff);
-
-						if (variants)
-							variants->delete_from(i);
-						else
-							delete ff;
-						delete variants;
-
-						if (CNT != CONTEXT)
-							delete CNT;
-
-						if (lb) lb->leave_critical();
-						if (rb) rb->get_corresponding()->enter_critical();
-
-						return false;
-					}
-					neg_standard = false;
-				}
-				success = !p || p->execute(CNT, ff);
-			}
 
 			if (success) {
 				bool yes = next == NULL;
@@ -7633,7 +7831,15 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 							CNT->LEVELS.pop();
 							CNT->ptrTRACE.pop();
 
-							if (CNT && CNT->FRAME && CNT->forker && p && p == dynamic_cast<predicate_item_fork*>(CNT->forker)->get_last(i))
+							predicate_item_fork* FORKER = CNT && CNT->FRAME && CNT->forker ?
+								dynamic_cast<predicate_item_fork*>(CNT->forker) :
+								NULL;
+
+							if (CNT && CNT->FRAME && CNT->forker && p &&
+								(
+									FORKER && p == FORKER->get_last(i) ||
+									!FORKER && CNT->forker->get_starred_end() >= 0 && p == CNT->forker->get_last(i)
+								))
 								CNT->FRAME.load()->sync(true, CNT, ff);
 
 							if (f && ff)
@@ -7789,7 +7995,15 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 						CNT->LEVELS.pop();
 						CNT->ptrTRACE.pop();
 
-						if (CNT && CNT->FRAME && CNT->forker && p && p == dynamic_cast<predicate_item_fork*>(CNT->forker)->get_last(i))
+						predicate_item_fork* FORKER = CNT && CNT->FRAME && CNT->forker ?
+							dynamic_cast<predicate_item_fork*>(CNT->forker) :
+							NULL;
+
+						if (CNT && CNT->FRAME && CNT->forker && p &&
+							(
+								FORKER && p == FORKER->get_last(i) ||
+								!FORKER && CNT->forker->get_starred_end() >= 0 && p == CNT->forker->get_last(i)
+							))
 							CNT->FRAME.load()->sync(true, CNT, ff);
 
 						if (variants)
@@ -7808,6 +8022,49 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 					}
 				}
 			}
+
+			if (p && p->get_starred_end() >= 0 && (CONTEXT->SEQ_MODE.top() == seqTrue || !variants || !variants->has_variant(i+1))) {
+				if (CONTEXT->SEQ_MODE.top() != seqTrue)
+					CONTEXT->SEQ_MODE.at(CONTEXT->SEQ_MODE.size() - 1) = seqStopped;
+
+				vector<value*>* next_args = new vector<value*>();
+				bool result = process(CNT, neg, this_clause, next, ff, &next_args);
+
+				delete next_args;
+
+				CNT->TRACE.pop();
+				CNT->TRACEARGS.pop();
+				CNT->TRACERS.pop();
+				CNT->FLAGS.pop_back();
+				CNT->LEVELS.pop();
+				CNT->ptrTRACE.pop();
+
+				predicate_item_fork* FORKER = CNT && CNT->FRAME && CNT->forker ?
+					dynamic_cast<predicate_item_fork*>(CNT->forker) :
+					NULL;
+
+				if (CNT && CNT->FRAME && CNT->forker && p &&
+					(
+						FORKER && p == FORKER->get_last(i) ||
+						!FORKER && CNT->forker->get_starred_end() >= 0 && p == CNT->forker->get_last(i)
+						))
+					CNT->FRAME.load()->sync(true, CNT, ff);
+
+				if (variants)
+					variants->delete_from(i);
+				else
+					delete ff;
+				delete variants;
+
+				if (CNT != CONTEXT)
+					delete CNT;
+
+				if (lb) lb->leave_critical();
+				if (rb) rb->get_corresponding()->enter_critical();
+
+				return result;
+			}
+
 			CNT->ptrTRACE.pop();
 			if (f && ff)
 				f->sync(false, CNT, ff);
@@ -7836,7 +8093,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 	stack<predicate_left_bracket *> brackets;
 	stack< stack<predicate_or *> > ors;
 	stack<int> or_levels;
-	stack<predicate_item_fork*> fork_stack;
+	stack<predicate_item*> fork_stack;
 	int bracket_level = 0;
 	stack<int> fork_bracket_levels;
 	bool or_branch = false;
@@ -7958,6 +8215,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 			bool once = false;
 			bool call = false;
 			bool star = false;
+			bool starred = false;
 			bool locals_in_forked = false;
 			bool transactable_facts = false;
 			std::recursive_mutex * starlock = &STARLOCK;
@@ -7998,6 +8256,14 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					}
 				} else if (s[p] == '{')
 					locals_in_forked = true;
+			}
+			else if (p + 1 < s.length() && s[p] == '*' && isalpha(s[p + 1])) {
+				cl->set_forking(true);
+				pr->set_forking(true);
+				atomizer.set_forking(true);
+				forking = true;
+				starred = true;
+				p++;
 			}
 
 			if (p + 1 < s.length() && s[p] == '\\' && s[p + 1] == '+') {
@@ -8046,7 +8312,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					else {
 						// {...
 						pi = new predicate_item_fork(locals_in_forked, transactable_facts, false, false, false, num, cl, this);
-						fork_stack.push(dynamic_cast<predicate_item_fork *>(pi));
+						fork_stack.push(pi);
 						fork_bracket_levels.push(bracket_level);
 						cl->set_forking(true);
 						pr->set_forking(true);
@@ -8075,29 +8341,37 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 						exit(2);
 					}
 					// Handle
-					fork_stack.top()->set_end(num);
-					bypass_spaces(s, p);
-					if (p < s.length() && s[p] == '*') {
-						p++;
+					predicate_item_fork* forker = dynamic_cast<predicate_item_fork*>(fork_stack.top());
+					if (forker) {
+						forker->set_end(num);
 						bypass_spaces(s, p);
-						value* v = parse(CTX, false, false, ff, s, p);
-						if (v)
-							fork_stack.top()->set_n_threads(v);
-						else {
-							std::cout << "Variable or int expected after '}*' [" << s.substr(p - 30, 100) << "]!" << endl;
-							exit(2);
+						if (p < s.length() && s[p] == '*') {
+							p++;
+							bypass_spaces(s, p);
+							value* v = parse(CTX, false, false, ff, s, p);
+							if (v)
+								forker->set_n_threads(v);
+							else {
+								std::cout << "Variable or int expected after '}*' [" << s.substr(p - 30, 100) << "]!" << endl;
+								exit(2);
+							}
 						}
+						if (p < s.length() && s[p] == '}') {
+							// Do not p++
+							pi = new predicate_item_join(true, new int_number(-1), false, false, false, num, cl, this);
+						}
+						bypass_spaces(s, p);
+						if (p < s.length() && s[p] == '{')
+							s.insert(s.begin() + p, 1, ',');
 					}
-					if (p < s.length() && s[p] == '}') {
-						// Do not p++
+					else {
+						predicate_item* last = fork_stack.top();
+						last->set_starred_end(num);
+
 						pi = new predicate_item_join(true, new int_number(-1), false, false, false, num, cl, this);
 					}
 					fork_stack.pop();
 					fork_bracket_levels.pop();
-
-					bypass_spaces(s, p);
-					if (p < s.length() && s[p] == '{')
-						s.insert(s.begin() + p, 1, ',');
 				}
 				else {
 					s.insert(s.begin() + p, 1, ')');
@@ -8106,6 +8380,10 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 			else {
 				bypass_spaces(s, p);
 				if (s.substr(p, 5) == "once(") {
+					if (starred) {
+						cout << "*once() is not allowed!" << endl;
+						exit(2);
+					}
 					if (neg) {
 						p += 4;
 					}
@@ -8117,6 +8395,10 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 					}
 				}
 				else if (s.substr(p, 5) == "call(") {
+					if (starred) {
+						cout << "*call() is not allowed!" << endl;
+						exit(2);
+					}
 					if (!neg) call = true;
 					p += 4;
 				}
@@ -8580,6 +8862,10 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 								exit(1730);
 							}
 						}
+						if (starred) {
+							fork_stack.push(pi);
+							fork_bracket_levels.push(bracket_level);
+						}
 					}
 
 					if (p < s.length() && s[p] == '(') {
@@ -8634,7 +8920,17 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 
 			bypass_spaces(s, p);
 			if (p < s.length()) {
-				if (!open_bracket && (s[p] == ',' && (or_levels.size() == 0 || or_levels.top() != brackets.size()))) p++;
+				if (!open_bracket && s[p] == '{') {
+					if (starred) {
+						p++;
+						s.insert(s.begin() + p, 1, '(');
+					}
+					else {
+						std::cout << "'*Predicate(...){...}' expected in " << id << " clause [" << s.substr(p - 10, 100) << "]" << endl;
+						exit(2);
+					}
+				}
+				else if (!open_bracket && (s[p] == ',' && (or_levels.size() == 0 || or_levels.top() != brackets.size()))) p++;
 				else if (!open_bracket && (s[p] == ';' || s[p] == ',' && or_levels.size() > 0 && or_levels.top() == brackets.size())) {
 					p++;
 					if (brackets.size() == 0) {
@@ -8699,7 +8995,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 							or_branch = false;
 						}
 						brackets.pop();
-						stack<predicate_or *> & or_items = ors.top();
+						stack<predicate_or*>& or_items = ors.top();
 						while (!or_items.empty()) {
 							or_items.top()->set_ending(pi);
 							or_items.pop();
@@ -8819,6 +9115,8 @@ void interpreter::run() {
 }
 
 interpreter::interpreter(const string & fname, const string & starter_name) {
+	NUM_PROCS = getTotalProcs();
+
 	file_num = 0;
 	current_input = STD_INPUT;
 	current_output = STD_OUTPUT;
@@ -9063,6 +9361,10 @@ unsigned long long getTotalSystemMemory()
 	long page_size = sysconf(_SC_PAGE_SIZE);
 	return (long long)pages * page_size;
 }
+unsigned int getTotalProcs()
+{
+	return sysconf(_SC_NPROCESSORS_ONLN);
+}
 #else
 unsigned long long getTotalSystemMemory()
 {
@@ -9070,6 +9372,12 @@ unsigned long long getTotalSystemMemory()
 	status.dwLength = sizeof(status);
 	GlobalMemoryStatusEx(&status);
 	return status.ullTotalPhys;
+}
+unsigned int getTotalProcs()
+{
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
+	return sysinfo.dwNumberOfProcessors;
 }
 #endif
 
@@ -9164,6 +9472,8 @@ int main(int argc, char ** argv) {
 			
 			delete pi;
 			delete f;
+
+			prolog.CONTEXT->clearDBJournals();
 		}
 	}
 	else if (argc - main_part == 3 && (string(argv[main_part]) == "-consult" || string(argv[main_part]) == "--consult")) {

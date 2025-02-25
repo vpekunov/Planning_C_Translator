@@ -29,6 +29,7 @@ const int once_flag = 0x1;
 const int call_flag = 0x2;
 
 unsigned long long getTotalSystemMemory();
+unsigned int getTotalProcs();
 void * __alloc(size_t size);
 void __free(void * ptr);
 
@@ -89,82 +90,15 @@ class journal;
 
 typedef enum { jInsert = 0, jDelete } jTypes;
 
+typedef enum { seqNone = 0, seqGenerated, seqStopped, seqTrue } seqModes;
+
 class context {
 public:
-	context(bool locals_in_forked, bool transactable_facts, predicate_item * forker, int RESERVE, context * parent, tframe_item * tframe, predicate_item * starting, predicate_item * ending, interpreter * prolog) {
-		this->parent = parent;
-		this->locals_in_forked = locals_in_forked;
-		this->transactable_facts = transactable_facts;
+	context(bool locals_in_forked, bool transactable_facts, predicate_item* forker, int RESERVE, context* parent, tframe_item* tframe, predicate_item* starting, predicate_item* ending, interpreter* prolog);
 
-		if (!transactable_facts && parent != NULL) {
-			DBLOCK = parent->DBLOCK;
-			DB = parent->DB;
-			DBJournal = parent->DBJournal;
-		}
-		else {
-			DBLOCK = new std::mutex();
-			DB = new map< string, vector<term*>*>();
-			if (parent) {
-				std::unique_lock<std::mutex> lock(*parent->DBLOCK);
-				map< string, vector<term*>*>::iterator itd = parent->DB->begin();
-				while (itd != parent->DB->end()) {
-					if (itd->second) {
-						(*DB)[itd->first] = new vector<term*>(*itd->second);
-					}
-					itd++;
-				}
-				lock.unlock();
-			}
-			DBJournal = new map<string, journal*>();
-		}
+	virtual void clearDBJournals();
 
-		rollback = false;
-
-		CALLS.reserve(RESERVE);
-		FRAMES.reserve(RESERVE);
-		CTXS.reserve(RESERVE);
-		NEGS.reserve(RESERVE);
-		_FLAGS.reserve(RESERVE);
-		PARENT_CALLS.reserve(RESERVE);
-		PARENT_CALL_VARIANT.reserve(RESERVE);
-		CLAUSES.reserve(RESERVE);
-		// FLAGS;
-		LEVELS.reserve(RESERVE);
-		TRACE.reserve(RESERVE);
-		TRACEARGS.reserve(RESERVE);
-		TRACERS.reserve(RESERVE);
-		ptrTRACE.reserve(RESERVE);
-
-		THR = NULL;
-		FRAME.store(tframe);
-		this->forker = forker;
-		this->starting = starting;
-		this->ending = ending;
-		this->prolog = prolog;
-	}
-
-	virtual ~context() {
-		for (context* C : CONTEXTS)
-			delete C;
-		if (transactable_facts || parent == NULL) {
-			map< string, vector<term*>*>::iterator itd = DB->begin();
-			while (itd != DB->end()) {
-				delete itd->second;
-				itd++;
-			}
-			delete DBLOCK;
-			delete DB;
-
-			map<string, journal*>::iterator itj = DBJournal->begin();
-			while (itj != DBJournal->end()) {
-				delete itj->second;
-				itj++;
-			}
-			delete DBJournal;
-		}
-		delete THR;
-		delete FRAME.load();
-	}
+	virtual ~context();
 
 	bool forked() {
 		context* C = this;
@@ -186,6 +120,10 @@ public:
 	bool locals_in_forked;
 	bool transactable_facts;
 	bool rollback;
+
+	stack_container<seqModes> SEQ_MODE;
+	stack_container<predicate_item *> SEQ_START;
+	stack_container<predicate_item*> SEQ_END;
 
 	std::mutex * DBLOCK;
 	map< string, vector<term*>*> * DB;
@@ -214,11 +152,13 @@ public:
 
 	virtual context* add_page(bool locals_in_forked, bool transactable_facts, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
 
+	virtual void REFRESH(bool sequential_mode, frame_item* f, context* CTX, interpreter* INTRP);
+
 	virtual void register_db_read(const std::string& iid);
 
 	virtual void register_db_write(const std::string& iid, jTypes t, value* data, int position);
 	
-	virtual bool join(int K, frame_item* f, interpreter* INTRP);
+	virtual bool join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP);
 };
 
 class interpreter {
@@ -320,6 +260,8 @@ public:
 		id_rollback
 	} ids;
 
+	unsigned int NUM_PROCS;
+
 	map<string, ids> MAP;
 
 	string CLASSES_ROOT;
@@ -401,7 +343,7 @@ public:
 	void close_file(const string & obj);
 	std::basic_fstream<char> & get_file(const string & obj, int & fn);
 
-	void block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier);
+	void block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier, bool frontier_enough = false);
 
 	double evaluate(context* CTX, frame_item * ff, const string & expression, int & p);
 
@@ -523,12 +465,16 @@ public:
 			free(deleted);
 	}
 
+	virtual void forced_import_transacted_globs(context* CTX, frame_item* inheriting) {
+		for (mapper& m : inheriting->vars) {
+			if (m._name[0] == '*')
+				set(CTX, m._name, m.ptr);
+		}
+	}
+
 	virtual void import_transacted_globs(context* CTX, frame_item* inheriting) {
 		if (CTX && inheriting && (CTX->THR || CTX->forked())) {
-			for (mapper& m : inheriting->vars) {
-				if (m._name[0] == '*')
-					set(CTX, m._name, m.ptr);
-			}
+			forced_import_transacted_globs(CTX, inheriting);
 		}
 	}
 
@@ -878,6 +824,16 @@ public:
 			return 0;
 	}
 
+	virtual void set_written_new(frame_item* src) {
+		for (mapper& m : vars)
+			if (m._name[0] != '*') {
+				bool found;
+				src->find(m._name, found);
+				if (!found)
+					register_write(m._name);
+			}
+	}
+
 	virtual void statistics(const std::string & vname, clock_t & cr, clock_t &fw, clock_t &fr, clock_t &lw, clock_t &lr) {
 		bool found = false;
 		int it = find(vname.c_str(), found);
@@ -1053,6 +1009,7 @@ public:
 class predicate_item {
 protected:
 	int self_number;
+	int starred_end;
 	clause * parent;
 	std::list<string> args;
 	std::list<value *> _args;
@@ -1067,10 +1024,23 @@ protected:
 	std::recursive_mutex* critical;
 public:
 	predicate_item(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : neg(_neg), once(_once), call(_call),
-		self_number(num), parent(c), critical(NULL), prolog(_prolog) { }
+		self_number(num), starred_end(-1), parent(c), critical(NULL), prolog(_prolog) { }
+
 	virtual ~predicate_item() {
 		for (value * v : _args)
 			v->free();
+	}
+
+	virtual void set_starred_end(int end) {
+		this->starred_end = end;
+	}
+
+	virtual int get_starred_end() {
+		return this->starred_end;
+	}
+
+	virtual predicate_item* get_last(int variant) {
+		return this->starred_end < 0 ? NULL : parent->get_item(this->starred_end - 1);
 	}
 
 	void set_critical(std::recursive_mutex* critical) {
@@ -1116,10 +1086,17 @@ public:
 
 	virtual predicate_item * get_next(int variant) {
 		if (!is_last()) {
-			return parent->items[self_number + 1];
+			if (starred_end >= 0)
+				return parent->get_item(starred_end);
+			else
+				return parent->items[self_number + 1];
 		}
 		else
 			return NULL;
+	}
+
+	virtual predicate_item* get_strict_next() {
+		return parent->get_item(self_number + 1);
 	}
 
 	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) { return NULL; }
@@ -1135,7 +1112,7 @@ public:
 
 	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) = 0;
 
-	virtual bool execute(context * CTX, frame_item * f) {
+	virtual bool execute(context * CTX, frame_item * &f, int i, generated_vars* variants) {
 		return true;
 	}
 };
@@ -1214,7 +1191,7 @@ public:
 	}
 
 	virtual ~journal_item() {
-		if (this->type == jInsert)
+		if (this->type == jDelete)
 			this->data->free();
 	}
 };
