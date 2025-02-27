@@ -568,9 +568,9 @@ tframe_item* frame_item::tcopy(context* CTX, interpreter* INTRP, bool import_glo
 				string new_name = it->first;
 				new_name.insert(0, 1, '*');
 				bool use_local_copy = false;
-				find(new_name.c_str(), use_local_copy);
-				if (!use_local_copy)
-					result->set(CTX, new_name.c_str(), it->second ? it->second->copy(CTX, this) : NULL);
+				// find(new_name.c_str(), use_local_copy);
+				// if (!use_local_copy)
+				result->set(CTX, new_name.c_str(), it->second);
 			}
 			it++;
 		}
@@ -865,9 +865,10 @@ public:
 	}
 
 	virtual void free() {
-		for (int i = 0; i < args.size(); i++)
-			args[i]->free();
 		refs--;
+		for (int i = 0; i < args.size(); i++)
+			if (args[i]->get_refs() >= refs)
+				args[i]->free();
 		if (refs == 0)
 			delete this;
 	}
@@ -1669,6 +1670,11 @@ context::context(bool locals_in_forked, bool transactable_facts, predicate_item*
 	this->locals_in_forked = locals_in_forked;
 	this->transactable_facts = transactable_facts;
 
+	if (tframe && parent)
+		INIT = tframe->tcopy(parent, prolog);
+	else
+		INIT = NULL;
+
 	if (!transactable_facts && parent != NULL) {
 		DBLOCK = parent->DBLOCK;
 		DB = parent->DB;
@@ -1676,10 +1682,10 @@ context::context(bool locals_in_forked, bool transactable_facts, predicate_item*
 	}
 	else {
 		DBLOCK = new std::mutex();
-		DB = new map< string, vector<term*>*>();
+		DB = new map< string, std::atomic<vector<term*>*>>();
 		if (parent) {
 			std::unique_lock<std::mutex> lock(*parent->DBLOCK);
-			map< string, vector<term*>*>::iterator itd = parent->DB->begin();
+			map< string, std::atomic<vector<term*>*>>::iterator itd = parent->DB->begin();
 			while (itd != parent->DB->end()) {
 				if (itd->second) {
 					(*DB)[itd->first] = new vector<term*>(*itd->second);
@@ -1690,7 +1696,7 @@ context::context(bool locals_in_forked, bool transactable_facts, predicate_item*
 			}
 			lock.unlock();
 		}
-		DBJournal = new map<string, journal*>();
+		DBJournal = new map<string, std::atomic<journal*>>();
 	}
 
 	rollback = false;
@@ -1718,14 +1724,6 @@ context::context(bool locals_in_forked, bool transactable_facts, predicate_item*
 	this->prolog = prolog;
 }
 
-void context::REFRESH(bool sequential_mode, frame_item* f, context* CTX, interpreter* INTRP) {
-	if (sequential_mode) {
-		FRAME.load()->forced_import_transacted_globs(CTX, f);
-		f = FRAME.load();
-	}
-	FRAME.store(f->tcopy(CTX, INTRP, false));
-}
-
 context* context::add_page(bool locals_in_forked, bool transactable_facts, predicate_item* forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog) {
 	std::unique_lock<std::mutex> plock(pages_mutex);
 
@@ -1741,21 +1739,21 @@ context* context::add_page(bool locals_in_forked, bool transactable_facts, predi
 }
 
 void context::register_db_read(const std::string& iid) {
-	map<string, journal*>::iterator it = DBJournal->find(iid);
+	map<string, std::atomic<journal*>>::iterator it = DBJournal->find(iid);
 	if (it == DBJournal->end()) {
 		(*DBJournal)[iid] = new journal();
 		it = DBJournal->find(iid);
 	}
-	it->second->register_read();
+	it->second.load()->register_read();
 }
 
 void context::register_db_write(const std::string& iid, jTypes t, value* data, int position) {
-	map<string, journal*>::iterator it = DBJournal->find(iid);
+	map<string, std::atomic<journal*>>::iterator it = DBJournal->find(iid);
 	if (it == DBJournal->end()) {
 		(*DBJournal)[iid] = new journal();
 		it = DBJournal->find(iid);
 	}
-	it->second->register_write(t, data, position);
+	it->second.load()->register_write(t, data, position);
 }
 
 bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP) {
@@ -1775,7 +1773,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 	int joined = 0;
 	int success = 0;
 	int sequential = sequential_mode ? 0 : -1;
-	bool converged = false;
+	bool stopped_by_true = false;
 	vector<bool> joineds(CONTEXTS.size(), false);
 	std::set<string> names;
 	vector<std::set<string>> lnames(CONTEXTS.size(), std::set<string>());
@@ -1797,7 +1795,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 		names.insert(lnames[CONTEXTS.size() - 1].begin(), lnames[CONTEXTS.size() - 1].end());
 		while (stopped < CONTEXTS.size()) {
 			for (int i = 0; i < CONTEXTS.size(); i++)
-				if (!joineds[i] && !stoppeds[i] && CONTEXTS[i]->THR->is_stopped()) {
+				if (!joineds[i] && !stoppeds[i] && !rollback[i] && CONTEXTS[i]->THR->is_stopped()) {
 					rollback[i] = CONTEXTS[i]->rollback;
 					stoppeds[i] = !rollback[i];
 					if (stoppeds[i]) {
@@ -1962,18 +1960,19 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 		}
 		if (sequential >= 0 && (other_winners.size() == 0 || abs(*other_winners.begin()) != sequential)) {
 			other_winners.clear();
-			other_winners.insert(sequential);
+			if (!rollback[sequential])
+				other_winners.insert(sequential);
 		}
 		// Set vars by threads with non-zero first_writes
+		stopped_by_true = false;
 		for (int _winner : other_winners) {
 			int winner = abs(_winner);
-			if (sequential >= 0 && winner != sequential) {
-				set<int>::iterator ito = other_winners.find(winner);
-				while (ito != other_winners.end()) {
-					int _ito = abs(*ito);
-					stoppeds[_ito] = false;
-					rollback[_ito] = true;
-					ito = other_winners.erase(ito);
+			if (sequential >= 0 && (rollback[winner] || winner != sequential)) {
+				for (int rollb = sequential; rollb < CONTEXTS.size()-1; rollb++) {
+					stoppeds[rollb] = false;
+					rollback[rollb] = true;
+					other_winners.erase(rollb);
+					other_winners.erase(-rollb);
 					stopped--;
 				}
 				break;
@@ -1983,11 +1982,12 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 				{
 					if (vname[0] == '!') {
 						std::unique_lock<std::mutex> dblock(*DBLOCK);
+						std::unique_lock<std::mutex> wdblock(*CONTEXTS[winner]->DBLOCK);
 						string fact = vname.substr(1);
-						map<string, journal*>::iterator its = CONTEXTS[winner]->DBJournal->find(fact);
+						map<string, std::atomic<journal*>>::iterator its = CONTEXTS[winner]->DBJournal->find(fact);
 						if (its != CONTEXTS[winner]->DBJournal->end()) {
 							journal* SRC = its->second;
-							map<string, vector<term*>*>::iterator it = DB->find(fact);
+							map<string, std::atomic<vector<term*>*>>::iterator it = DB->find(fact);
 							if (it == DB->end()) {
 								(*DB)[fact] = new vector<term*>();
 								it = DB->find(fact);
@@ -1996,12 +1996,13 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 							for (journal_item* jlog : SRC->log) {
 								if (jlog->type == jInsert) {
 									register_db_write(fact, jInsert, jlog->data, jlog->position);
-									it->second->insert(it->second->begin() + jlog->position, (term*)jlog->data);
+									it->second.load()->insert(it->second.load()->begin() + jlog->position, (term*)jlog->data);
 									jlog->data->use(); // to prevent free in ~journal_item()
 								}
 								else if (jlog->type == jDelete) {
 									register_db_write(fact, jDelete, jlog->data, jlog->position);
-									it->second->erase(it->second->begin() + jlog->position);
+									it->second.load()->erase(it->second.load()->begin() + jlog->position);
+									jlog->data->use(); // to prevent free in ~journal_item()
 								}
 								else {
 									cout << "Internal error : unknown DB journal record type!" << endl;
@@ -2012,6 +2013,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 							delete SRC;
 							CONTEXTS[winner]->DBJournal->erase(fact);
 						}
+						wdblock.unlock();
 						dblock.unlock();
 					}
 					else if (vname[0] == '*' || CONTEXTS[winner]->THR->get_result())
@@ -2030,38 +2032,40 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 			if (sequential >= 0) {
 				sequential++;
 				if (CONTEXTS[winner]->THR->get_result()) {
-					set<int>::iterator ito = other_winners.find(sequential);
-					while (ito != other_winners.end()) {
-						int _ito = abs(*ito);
-						stoppeds[_ito] = false;
-						rollback[_ito] = true;
-						ito = other_winners.erase(ito);
+					for (int rollb = sequential; rollb < CONTEXTS.size()-1; rollb++) {
+						stoppeds[rollb] = false;
+						rollback[rollb] = true;
+						other_winners.erase(rollb);
+						other_winners.erase(-rollb);
 						stopped--;
 					}
+					stopped_by_true = true;
+					break;
 				}
 			}
 		}
-		converged = sequential >= 0 && (sequential == CONTEXTS.size() - 1 || CONTEXTS[sequential - 1]->THR->get_result());
 		// Join first_winner && other_winners
 		for (int i = 0; i < CONTEXTS.size(); i++)
 			if (stoppeds[i] || rollback[i]) {
-				if (other_winners.find(i) == other_winners.end() && other_winners.find(-i) == other_winners.end()) {
+				if (rollback[i] || other_winners.find(i) == other_winners.end() && other_winners.find(-i) == other_winners.end()) {
 					tframe_item* OLD = CONTEXTS[i]->FRAME.load();
 					if (CONTEXTS[i]->transactable_facts) { // Undo facts
 						std::unique_lock<std::mutex> lock(*DBLOCK);
+						std::unique_lock<std::mutex> ilock(*CONTEXTS[i]->DBLOCK);
 						// Delete journal, including deleted nodes
-						map<string, journal*>::iterator itj = CONTEXTS[i]->DBJournal->begin();
+						map<string, std::atomic<journal*>>::iterator itj = CONTEXTS[i]->DBJournal->begin();
 						while (itj != CONTEXTS[i]->DBJournal->end()) {
 							delete itj->second;
 							itj++;
 						}
 						CONTEXTS[i]->DBJournal->clear();
+						vector<term*> Q;
 						// Clear local DB
-						map< string, vector<term*>*>::iterator itd = CONTEXTS[i]->DB->begin();
+						map< string, std::atomic<vector<term*>*>>::iterator itd = CONTEXTS[i]->DB->begin();
 						while (itd != CONTEXTS[i]->DB->end()) {
 							if (itd->second) {
 								for (term* v : *itd->second)
-									v->free();
+									Q.push_back(v);
 								delete itd->second;
 							}
 							itd++;
@@ -2077,10 +2081,14 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 							}
 							itd++;
 						}
+						for (term* v : Q) {
+							v->free();
+						}
+						ilock.unlock();
 						lock.unlock();
 					}
-					CONTEXTS[i]->REFRESH(sequential_mode, f, this, INTRP);
-					if (converged) {
+					// CONTEXTS[i]->REFRESH(sequential_mode, f, this, INTRP);
+					if (stopped_by_true) {
 						CONTEXTS[i]->THR->set_terminated(true);
 						CONTEXTS[i]->THR->set_stopped(false);
 						CONTEXTS[i]->THR->join();
@@ -2090,6 +2098,13 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 						joined++;
 					}
 					else {
+						if (sequential >= 0) {
+							tframe_item* newf = CONTEXTS[i]->INIT.load()->tcopy(this, INTRP);
+							newf->forced_import_transacted_globs(this, f);
+							CONTEXTS[i]->FRAME.store(newf);
+						}
+						else
+							CONTEXTS[i]->FRAME.store(f->tcopy(this, INTRP, false));
 						CONTEXTS[i]->set_rollback(false);
 						CONTEXTS[i]->THR->set_stopped(false);
 					}
@@ -2111,7 +2126,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 	CONTEXTS.pop_back();
 
 	bool result =
-		(converged && sequential > 0 && CONTEXTS[sequential - 1]->THR->get_result()) ||
+		(sequential >= 0 && stopped_by_true) ||
 		(sequential < 0 && (K < 0 && success == CONTEXTS.size() || K >= 0 && success >= K));
 
 	prolog->GLOCK.lock();
@@ -2141,7 +2156,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 }
 
 void context::clearDBJournals() {
-	map<string, journal*>::iterator itj = DBJournal->begin();
+	map<string, std::atomic<journal*>>::iterator itj = DBJournal->begin();
 	while (itj != DBJournal->end()) {
 		delete itj->second;
 		itj++;
@@ -2152,8 +2167,9 @@ void context::clearDBJournals() {
 context::~context() {
 	for (context* C : CONTEXTS)
 		delete C;
+	delete INIT;
 	if (transactable_facts || parent == NULL) {
-		map< string, vector<term*>*>::iterator itd = DB->begin();
+		map< string, std::atomic<vector<term*>*>>::iterator itd = DB->begin();
 		while (itd != DB->end()) {
 			for (term* v : *itd->second)
 				v->free();
@@ -2163,7 +2179,7 @@ context::~context() {
 		delete DBLOCK;
 		delete DB;
 
-		map<string, journal*>::iterator itj = DBJournal->begin();
+		map<string, std::atomic<journal*>>::iterator itj = DBJournal->begin();
 		while (itj != DBJournal->end()) {
 			delete itj->second;
 			itj++;
@@ -2199,7 +2215,7 @@ generated_vars * predicate_item_user::generate_variants(context * CTX, frame_ite
 			}
 		}
 		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map<string, vector<term*>*>::iterator it = CTX->DB->find(iid);
+		map<string, std::atomic<vector<term*>*>>::iterator it = CTX->DB->find(iid);
 		if (dummy && it != CTX->DB->end()) {
 			CTX->register_db_read(iid);
 			vector<term *> * terms = it->second;
@@ -3118,10 +3134,10 @@ public:
 		map<string, value *>::iterator itf = prolog->GVars.find("$ObjFactID");
 		if (itf != prolog->GVars.end()) {
 			std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-			map< string, vector<term *> *>::iterator itd = CTX->DB->find(itf->second->to_str());
+			map< string, std::atomic<vector<term *> *>>::iterator itd = CTX->DB->find(itf->second->to_str());
 			if (itd != CTX->DB->end()) {
 				CTX->register_db_read(itd->first);
-				n_objs = itd->second->size();
+				n_objs = itd->second.load()->size();
 			}
 			lock.unlock();
 		}
@@ -3231,12 +3247,12 @@ public:
 				wstring Lang;
 				S->LoadFromXML(Lang, utf8_to_wstring(FName));
 				std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-				map<string, vector<term *>*>::iterator it = CTX->DB->find(ObjFactID);
+				map<string, std::atomic<vector<term *>*>>::iterator it = CTX->DB->find(ObjFactID);
 				if (it != CTX->DB->end()) {
 					CTX->register_db_read(ObjFactID);
 					for (term * t : *it->second)
 						CTX->register_db_write(ObjFactID, jDelete, t, 0);
-					it->second->clear();
+					it->second.load()->clear();
 				}
 				lock.unlock();
 				S->EnumerateObjs(
@@ -3265,7 +3281,7 @@ public:
 					CTX->register_db_read(LinkFactID);
 					for (term * t : *it->second)
 						CTX->register_db_write(LinkFactID, jDelete, t, 0);
-					it->second->clear();
+					it->second.load()->clear();
 				}
 				lock.unlock();
 				S->EnumerateLinks(
@@ -5371,18 +5387,18 @@ public:
 		result->push_back(r);
 
 		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map< string, vector<term *> *>::iterator it = CTX->DB->begin();
+		map< string, std::atomic<vector<term *> *>>::iterator it = CTX->DB->begin();
 		while (it != CTX->DB->end()) {
 			if (!t || it->first == t->get_name()) {
 				CTX->register_db_read(it->first);
-				for (int i = 0; i < it->second->size(); i++)
-					if (!t || it->second->at(i)->get_args().size() == t->get_arity()) {
+				for (int i = 0; i < it->second.load()->size(); i++)
+					if (!t || it->second.load()->at(i)->get_args().size() == t->get_arity()) {
 						if (prolog->out_buf.size() == 0) {
-							(*prolog->outs) << it->second->at(i)->export_str(false, false);
+							(*prolog->outs) << it->second.load()->at(i)->export_str(false, false);
 							(*prolog->outs) << "." << endl;
 						}
 						else {
-							prolog->out_buf += it->second->at(i)->export_str(false, false);
+							prolog->out_buf += it->second.load()->at(i)->export_str(false, false);
 							prolog->out_buf += ".\n";
 						}
 					}
@@ -5418,12 +5434,12 @@ public:
 				exit(-3);
 			}
 			std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-			map< string, vector<term *> *>::iterator it = CTX->DB->begin();
+			map< string, std::atomic<vector<term *> *>>::iterator it = CTX->DB->begin();
 			while (it != CTX->DB->end()) {
 				if (it->first == t->get_name()) {
 					CTX->register_db_read(it->first);
-					for (int i = 0; i < it->second->size(); i++)
-						if (it->second->at(i)->get_args().size() == t->get_arity()) {
+					for (int i = 0; i < it->second.load()->size(); i++)
+						if (it->second.load()->at(i)->get_args().size() == t->get_arity()) {
 							frame_item* r = f->copy(CTX);
 							result->push_back(r);
 
@@ -5440,13 +5456,13 @@ public:
 		}
 
 		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map< string, vector<term *> *>::iterator it = CTX->DB->begin();
+		map< string, std::atomic<vector<term *> *>>::iterator it = CTX->DB->begin();
 		value * t = dynamic_cast<value *>(positional_vals->at(0));
 		while (it != CTX->DB->end()) {
 			set<int> seen;
 			CTX->register_db_read(it->first);
-			for (int i = 0; i < it->second->size(); i++) {
-				int n = it->second->at(i)->get_args().size();
+			for (int i = 0; i < it->second.load()->size(); i++) {
+				int n = it->second.load()->at(i)->get_args().size();
 				if (seen.find(n) == seen.end()) {
 					frame_item * r = f->copy(CTX);
 					indicator * tt = new indicator(it->first, n);
@@ -6851,12 +6867,14 @@ public:
 
 		string atid = t->get_name();
 		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map<string, vector<term*>*>::iterator it = CTX->DB->find(atid);
+		map<string, std::atomic<vector<term*>*>>::iterator it = CTX->DB->find(atid);
 		if (it == CTX->DB->end()) {
 			(*CTX->DB)[atid] = new vector<term*>();
 			it = CTX->DB->find(atid);
 		}
 		
+		CTX->register_db_read(atid);
+
 		vector<term *> * terms = it->second;
 		term* tt = (term*)t->copy(CTX, f);
 		if (z) {
@@ -6910,14 +6928,14 @@ public:
 		}
 
 		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map<string, vector<term*>*>::iterator itdb = CTX->DB->find(t->get_name());
+		map<string, std::atomic<vector<term*>*>>::iterator itdb = CTX->DB->find(t->get_name());
 		if (itdb == CTX->DB->end()) {
 			(*CTX->DB)[t->get_name()] = new vector<term*>();
 			itdb = CTX->DB->find(t->get_name());
 		}
 		CTX->register_db_read(itdb->first);
 
-		vector<term*>* terms = itdb->second;
+		vector<term*>* terms = itdb->second.load();
 		vector<term*>::iterator it = terms->begin();
 		while (it != terms->end()) {
 			term* tt = (term*)t->copy(CTX, f);
@@ -6931,9 +6949,6 @@ public:
 					value* v1 = new int_number((long long)(*it));
 					ff->set(CTX, "$RETRACTOR$", v1);
 					v1->free();
-					value* v2 = new int_number((long long)terms);
-					ff->set(CTX, "$VECTOR$", v2);
-					v2->free();
 					value* v3 = new term(itdb->first);
 					ff->set(CTX, "$FUNCTOR$", v3);
 					v3->free();
@@ -6962,28 +6977,32 @@ public:
 	virtual bool execute(context * CTX, frame_item* &f, int i, generated_vars* variants) {
 		if (all) return true;
 
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+
 		string iid = ((term*)f->get(CTX, "$FUNCTOR$"))->get_name();
 		f->get(CTX, "$FUNCTOR$")->free();
 		f->unset(CTX, "$FUNCTOR$");
+
+		map<string, std::atomic<vector<term*>*>>::iterator itdb = CTX->DB->find(iid);
 
 		CTX->register_db_read(iid);
 
 		term* v = (term*)((long long)(0.5 + ((int_number*)f->get(CTX, "$RETRACTOR$"))->get_value()));
 		f->get(CTX, "$RETRACTOR$")->free();
 		f->unset(CTX, "$RETRACTOR$");
-		vector<term*>* db = (vector<term*> *)((long long)(0.5 + ((int_number*)f->get(CTX, "$VECTOR$"))->get_value()));
-		f->get(CTX, "$VECTOR$")->free();
-		f->unset(CTX, "$VECTOR$");
-		if (v && db) {
-			vector<term*>::iterator it = find(db->begin(), db->end(), v);
-			if (it != db->end()) {
-				CTX->register_db_write(iid, jDelete, *it, it - db->begin());
-				db->erase(it);
+		if (v && itdb->second.load()) {
+			vector<term*>::iterator it = find(itdb->second.load()->begin(), itdb->second.load()->end(), v);
+			if (it != itdb->second.load()->end()) {
+				CTX->register_db_write(iid, jDelete, *it, it - itdb->second.load()->begin());
+				itdb->second.load()->erase(it);
 			}
+			lock.unlock();
 			return true;
 		}
-		else
+		else {
+			lock.unlock();
 			return false;
+		}
 	}
 };
 
@@ -7164,24 +7183,54 @@ public:
 				CTX->SEQ_MODE.pop();
 				CTX->SEQ_START.pop();
 				CTX->SEQ_END.pop();
-				return CTX->CONTEXTS.size() > 0 && CTX->join(true, -1, f, prolog);
+				CTX->GENERATORS.pop();
+
+				bool result = CTX->CONTEXTS.size() > 0 && CTX->join(true, -1, CTX->SEQ_RESULT.top(), prolog);
+
+				if (result) {
+					delete f;
+					f = CTX->SEQ_RESULT.top();
+					if (variants)
+						variants->at(i) = f;
+				}
+				else
+					delete CTX->SEQ_RESULT.top();
+
+				CTX->SEQ_RESULT.pop();
+
+				return result;
 			}
 			else if (CTX->SEQ_MODE.top() == seqTrue) {
 				CTX->SEQ_MODE.pop();
+				CTX->GENERATORS.pop();
+
+				delete f;
+				f = CTX->SEQ_RESULT.top();
+				if (variants)
+					variants->at(i) = f;
+
+				CTX->SEQ_RESULT.pop();
 				CTX->SEQ_START.pop();
 				CTX->SEQ_END.pop();
 				return true;
 			}
 
-			if (CTX->CONTEXTS.size() == prolog->NUM_PROCS) {
-				if (CTX->join(true, -1, f, prolog)) {
-					CTX->SEQ_MODE.at(CTX->SEQ_MODE.size()-1) = seqTrue;
-				}
-				return false;
-			}
 			predicate_item* starting = CTX->SEQ_START.top();
 			predicate_item* ending = CTX->SEQ_END.top();
-			CTX->add_page(false, true, this, f->tcopy(CTX, prolog, true), starting, ending, prolog);
+			tframe_item* new_f = f->tcopy(CTX, prolog, true);
+			new_f->set_written_new(CTX->SEQ_RESULT.top());
+			CTX->add_page(false, true, this, new_f, starting, ending, prolog);
+
+			if (CTX->CONTEXTS.size() == prolog->NUM_PROCS) {
+				if (CTX->join(true, -1, CTX->SEQ_RESULT.top(), prolog)) {
+					CTX->SEQ_MODE.at(CTX->SEQ_MODE.size() - 1) = seqTrue;
+
+					stack_container<predicate_item*>::reverse_iterator it = find(CTX->TRACERS.rbegin(), CTX->TRACERS.rend(), CTX->GENERATORS.top());
+					CTX->PARENT_CALLS.push(NULL);
+					prolog->block_process(CTX, false, true, *(--it), true); // cut!
+					CTX->PARENT_CALLS.pop();
+				}
+			}
 
 			return false;
 		}
@@ -7635,6 +7684,8 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 
 	if (p && p->get_starred_end() >= 0) {
 		CONTEXT->SEQ_MODE.push(variants ? seqGenerated : seqStopped);
+		CONTEXT->SEQ_RESULT.push(f->copy(CNT));
+		CONTEXT->GENERATORS.push(p);
 		CONTEXT->SEQ_START.push(p->get_strict_next());
 		CONTEXT->SEQ_END.push(p->get_parent()->get_item(p->get_starred_end()));
 	}
@@ -7702,7 +7753,8 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 							bool result = false;
 
 							if (p && p->get_starred_end() >= 0) {
-								CONTEXT->SEQ_MODE.at(CONTEXT->SEQ_MODE.size() - 1) = seqStopped;
+								if (CONTEXT->SEQ_MODE.top() != seqTrue)
+									CONTEXT->SEQ_MODE.at(CONTEXT->SEQ_MODE.size() - 1) = seqStopped;
 
 								vector<value*>* next_args = new vector<value*>();
 								result = process(CNT, neg, this_clause, next, ff, &next_args);
@@ -8567,7 +8619,7 @@ void interpreter::parse_clause(context * CTX, vector<string> & renew, frame_item
 						string expr;
 						bool in_quote = false;
 						int br_level = 0;
-						while (p < s.length() && (
+						while (p < s.length() && (p+1 >= s.length() || s[p] != '-' || s[p+1] != '>') && (
 							(in_quote || s[p] == '_' || isspace(s[p]) || isalnum(s[p]) || expr_chars.find(s[p]) != string::npos) ||
 							(s[p] == ',' || s[p] == ';') && br_level ||
 							p + 1 < s.length() && s[p] == '.' && isdigit(s[p + 1])

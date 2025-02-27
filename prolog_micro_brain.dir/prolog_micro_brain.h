@@ -75,10 +75,69 @@ class clause;
 class predicate_item;
 class predicate_item_user;
 class generated_vars;
-class value;
 class term;
 class tthread;
+class context;
 class tframe_item;
+
+class value {
+protected:
+	std::atomic<int> refs;
+public:
+	value() { refs = 1; }
+
+	virtual void use() { refs++; }
+	virtual void free() { refs--; if (refs == 0) delete this; }
+
+	virtual int get_refs() { return refs; }
+
+	virtual value* fill(context* CTX, frame_item* vars) = 0;
+	virtual value* copy(context* CTX, frame_item* f, int unwind = 0) = 0;
+	virtual value* const_copy(context* CTX, frame_item* f) {
+		if (this->defined()) {
+			this->use();
+			return this;
+		}
+		else
+			return copy(CTX, f);
+	}
+	virtual bool unify(context* CTX, frame_item* ff, value* from) = 0;
+	virtual bool defined() = 0;
+
+	virtual string to_str(bool simple = false) = 0;
+
+	virtual void escape_vars(context* CTX, frame_item* ff) = 0;
+
+	virtual string make_str() {
+		return to_str();
+	}
+
+	virtual string export_str(bool simple = false, bool double_slashes = true) {
+		return to_str();
+	}
+
+	virtual void write(basic_ostream<char>* outs, bool simple = false) {
+		(*outs) << to_str(simple);
+	}
+
+	void* operator new (size_t size) {
+		if (fast_memory_manager)
+			return __alloc(size);
+		else {
+			void* ptr = ::operator new(size);
+			//			cout<<"new:"<<ptr<<endl;
+			return ptr;
+		}
+	}
+
+	void operator delete (void* ptr) {
+		//	cout << "del:" << ptr << endl;
+		if (fast_memory_manager)
+			__free(ptr);
+		else
+			::operator delete(ptr);
+	}
+};
 
 typedef struct {
 	char* _name;
@@ -122,14 +181,17 @@ public:
 	bool rollback;
 
 	stack_container<seqModes> SEQ_MODE;
+	stack_container<frame_item*> SEQ_RESULT;
+	stack_container<predicate_item*> GENERATORS;
 	stack_container<predicate_item *> SEQ_START;
 	stack_container<predicate_item*> SEQ_END;
 
 	std::mutex * DBLOCK;
-	map< string, vector<term*>*> * DB;
-	map<string, journal*> * DBJournal;
+	map< string, std::atomic<vector<term*>*>> * DB;
+	map<string, std::atomic<journal*>> * DBJournal;
 
 	vector<context*> CONTEXTS;
+	std::atomic<tframe_item*> INIT;
 	std::atomic<tframe_item*> FRAME;
 	tthread* THR;
 
@@ -151,8 +213,6 @@ public:
 	std::mutex pages_mutex;
 
 	virtual context* add_page(bool locals_in_forked, bool transactable_facts, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
-
-	virtual void REFRESH(bool sequential_mode, frame_item* f, context* CTX, interpreter* INTRP);
 
 	virtual void register_db_read(const std::string& iid);
 
@@ -370,64 +430,6 @@ public:
 	bool loaded();
 };
 
-class value {
-protected:
-	int refs;
-public:
-	value() { refs = 1; }
-
-	virtual void use() { refs++; }
-	virtual void free() { refs--; if (refs == 0) delete this; }
-
-	virtual int get_refs() { return refs; }
-
-	virtual value * fill(context * CTX, frame_item * vars) = 0;
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) = 0;
-	virtual value * const_copy(context * CTX, frame_item * f) {
-		if (this->defined()) {
-			this->use();
-			return this;
-		} else
-			return copy(CTX, f);
-	}
-	virtual bool unify(context * CTX, frame_item * ff, value * from) = 0;
-	virtual bool defined() = 0;
-
-	virtual string to_str(bool simple = false) = 0;
-
-	virtual void escape_vars(context * CTX, frame_item * ff) = 0;
-
-	virtual string make_str() {
-		return to_str();
-	}
-
-	virtual string export_str(bool simple = false, bool double_slashes = true) {
-		return to_str();
-	}
-
-	virtual void write(basic_ostream<char> * outs, bool simple = false) {
-		(*outs) << to_str(simple);
-	}
-
-	void * operator new (size_t size){
-		if (fast_memory_manager)
-		return __alloc(size);
-		else {
-			void *ptr = ::operator new(size);
-//			cout<<"new:"<<ptr<<endl;
-			return ptr;
-		}
-	}
-
-	void operator delete (void * ptr) {
-//	cout << "del:" << ptr << endl;
-	if (fast_memory_manager)
-		__free(ptr);
-	else
-		::operator delete(ptr);
-	}
-};
-
 class stack_values : public stack_container<value *> {
 public:
 	virtual void free() {
@@ -468,7 +470,7 @@ public:
 	virtual void forced_import_transacted_globs(context* CTX, frame_item* inheriting) {
 		for (mapper& m : inheriting->vars) {
 			if (m._name[0] == '*')
-				set(CTX, m._name, m.ptr);
+				set(CTX, m._name, m.ptr, true);
 		}
 	}
 
@@ -587,7 +589,7 @@ public:
 		}
 	}
 
-	virtual void set(context * CTX, const char * name, value * v) {
+	virtual void set(context * CTX, const char * name, value * v, bool set_time_zero = false) {
 		bool found = false;
 		int it = find(name, found);
 		if (found) {
@@ -629,13 +631,15 @@ public:
 			char* oldp = names.size() == 0 ? NULL : &names[0];
 			int oldn = names.size();
 			names.erase(names.begin() + (vars[it]._name - oldp), names.begin() + (vars[it]._name - oldp) + n + 1);
-			char* newp = &names[0];
-			for (int i = 0; i < vars.size(); i++)
-				if (i != it)
-					if (vars[i]._name < vars[it]._name)
-						vars[i]._name += newp - oldp;
-					else
-						vars[i]._name += newp - oldp - n - 1;
+			if (names.size() > 0) {
+				char* newp = &names[0];
+				for (int i = 0; i < vars.size(); i++)
+					if (i != it)
+						if (vars[i]._name < vars[it]._name)
+							vars[i]._name += newp - oldp;
+						else
+							vars[i]._name += newp - oldp - n - 1;
+			}
 			vars.erase(vars.begin() + it);
 			return it;
 		} else
@@ -716,7 +720,7 @@ public:
 		creation = clock();
 	}
 
-	virtual void set(context * CTX, const char* name, value* v) {
+	virtual void set(context * CTX, const char* name, value* v, bool set_time_zero = false) {
 		bool locked = mutex.try_lock();
 		bool found = false;
 		int it = find(name, found);
@@ -742,9 +746,14 @@ public:
 				vars[it].ptr->free();
 			vars[it].ptr = v ? v->copy(CTX, this) : NULL;
 		}
-		if (first_writes[it] == 0)
-			first_writes[it] = clock();
-		last_writes[it] = clock();
+		if (set_time_zero) {
+			first_writes[it] = last_writes[it] = first_reads[it] = last_reads[it] = 0;
+		}
+		else {
+			if (first_writes[it] == 0)
+				first_writes[it] = clock();
+			last_writes[it] = clock();
+		}
 		if (locked) mutex.unlock();
 	}
 
@@ -854,22 +863,26 @@ public:
 	virtual void unregister_fact_group(context* CTX, string & fact);
 
 	virtual void register_facts(context* CTX, std::set<string>& names) {
-		map<string, journal*>::iterator it = CTX->DBJournal->begin();
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
 		while (it != CTX->DBJournal->end()) {
 			string fact = it->first;
 			register_fact_group(CTX, fact, it->second);
 			names.insert(fact);
 			it++;
 		}
+		lock.unlock();
 	}
 
 	virtual void unregister_facts(context* CTX) {
-		map<string, journal*>::iterator it = CTX->DBJournal->begin();
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
 		while (it != CTX->DBJournal->end()) {
 			string fact = it->first;
 			unregister_fact_group(CTX, fact);
 			it++;
 		}
+		lock.unlock();
 	}
 
 	virtual void sync(bool not_sync_globs, context* CTX, frame_item* other) {
