@@ -36,6 +36,7 @@ void __free(void * ptr);
 #ifdef __linux__
 #include <sys/resource.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <dlfcn.h>
 
 typedef void * HMODULE;
@@ -662,22 +663,32 @@ public:
 	virtual void unregister_facts(context* CTX) { }
 };
 
-class tthread : public std::thread {
+class tthread {
 	int _id;
 	volatile std::atomic<bool> stopped;
 	volatile std::atomic_flag terminated; // If needs to be terminated
 	volatile std::atomic<bool> result; // Logical result
 
 	context* CONTEXT;
+
+	std::thread * runner;
 public:
-	tthread(int _id, context * CTX) : std::thread(&tthread::body, this) {
+	tthread(int _id, context * CTX) {
 		this->_id = _id;
 		CONTEXT = CTX;
 		stopped.store(false);
 		terminated.clear();
 		result = false;
+
+		runner = new std::thread(&tthread::body, this);
 	}
-	virtual ~tthread() { }
+	virtual ~tthread() {
+		delete runner;
+	}
+
+	void join() {
+		runner->join();
+	}
 
 	void body();
 

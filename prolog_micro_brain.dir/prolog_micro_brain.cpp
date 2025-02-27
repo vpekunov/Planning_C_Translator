@@ -2100,7 +2100,8 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 					else {
 						if (sequential >= 0) {
 							tframe_item* newf = CONTEXTS[i]->INIT.load()->tcopy(this, INTRP);
-							newf->forced_import_transacted_globs(this, f);
+							if (sequential == i)
+								newf->forced_import_transacted_globs(this, f);
 							CONTEXTS[i]->FRAME.store(newf);
 						}
 						else
@@ -6953,7 +6954,8 @@ public:
 					ff->set(CTX, "$FUNCTOR$", v3);
 					v3->free();
 					result->push_back(ff);
-					it++;
+					tt->free();
+					break;
 				}
 			}
 			else
@@ -9441,6 +9443,13 @@ int main(int argc, char ** argv) {
 		std::cout << "setrlimit returned result = " << result << endl;
 		exit(1000);
 	}
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	size_t default_stack_size;
+	pthread_attr_getstacksize(&attr, &default_stack_size);
+
+	pthread_attr_setstacksize(&attr, 16 * default_stack_size);
+	pthread_setattr_default_np(&attr);
 #endif
 
 	setlocale(LC_ALL, "en_US.UTF-8");
