@@ -15,6 +15,7 @@
 
 #ifdef __linux__
 #include <unistd.h>
+#include <pthread.h>
 #define EXPORT __attribute__((visibility("default")))
 #else
 #define EXPORT __declspec(dllexport)
@@ -50,7 +51,14 @@ extern "C" {
 			std::cout << "setrlimit returned result = " << result << endl;
 			exit(1000);
 		}
-	#endif
+		pthread_attr_t attr;
+		pthread_attr_init(&attr);
+		size_t default_stack_size;
+		pthread_attr_getstacksize(&attr, &default_stack_size);
+
+		pthread_attr_setstacksize(&attr, 16 * default_stack_size);
+		pthread_setattr_default_np(&attr);
+#endif
 
 		setlocale(LC_ALL, "en_US.UTF-8");
 

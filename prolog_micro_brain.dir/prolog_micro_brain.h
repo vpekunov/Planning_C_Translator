@@ -7,6 +7,7 @@
 #include <string>
 #include <set>
 #include <thread>
+#include <condition_variable>
 #include <mutex>
 #include <functional>
 #include <algorithm>
@@ -71,6 +72,7 @@ public:
 
 class interpreter;
 class frame_item;
+class thread_pool;
 class predicate;
 class clause;
 class predicate_item;
@@ -186,6 +188,7 @@ public:
 	stack_container<predicate_item*> GENERATORS;
 	stack_container<predicate_item *> SEQ_START;
 	stack_container<predicate_item*> SEQ_END;
+	stack_container<tframe_item*> FRAMES_TO_DELETE;
 
 	std::mutex * DBLOCK;
 	map< string, std::atomic<vector<term*>*>> * DB;
@@ -217,9 +220,11 @@ public:
 
 	virtual void register_db_read(const std::string& iid);
 
-	virtual void register_db_write(const std::string& iid, jTypes t, value* data, int position);
+	virtual void register_db_write(const std::string& iid, jTypes t, value* data, int position, journal * src = NULL);
 	
 	virtual bool join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP);
+
+	virtual void apply_transactional_db_to_parent(const std::string& fact);
 };
 
 class interpreter {
@@ -294,6 +299,8 @@ public:
 		id_told,
 		id_see,
 		id_tell,
+		id_set_iteration_star_packet,
+		id_repeat,
 		id_random,
 		id_randomize,
 		id_char_code,
@@ -321,7 +328,9 @@ public:
 		id_rollback
 	} ids;
 
-	unsigned int NUM_PROCS;
+	thread_pool* THREAD_POOL;
+	std::mutex VARLOCK;
+	unsigned int ITERATION_STAR_PACKET;
 
 	map<string, ids> MAP;
 
@@ -492,7 +501,7 @@ public:
 		while (it < other->vars.size()) {
 			char * itc = other->vars[it]._name;
 			if (not_sync_globs || *itc == '*')
-				set(CTX, itc, other->vars[it].ptr);
+				set(CTX, itc, other->vars[it].ptr, true);
 			it++;
 		}
 		if (not_sync_globs && other->deleted) {
@@ -659,52 +668,93 @@ public:
 			return NULL;
 	}
 
-	virtual void register_facts(context* CTX, std::set<string>& names) { }
-	virtual void unregister_facts(context* CTX) { }
+	virtual void register_facts(context* CTX, std::set<string>& names) {
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
+		while (it != CTX->DBJournal->end()) {
+			string fact = it->first;
+			register_fact_group(CTX, fact, it->second);
+			names.insert(fact);
+			it++;
+		}
+		lock.unlock();
+	}
+
+	virtual void unregister_facts(context* CTX) {
+		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
+		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
+		while (it != CTX->DBJournal->end()) {
+			string fact = it->first;
+			unregister_fact_group(CTX, fact);
+			it++;
+		}
+		lock.unlock();
+	}
+
+	virtual void register_fact_group(context* CTX, string& fact, journal* J);
+
+	virtual void unregister_fact_group(context* CTX, string& fact);
 };
 
 class tthread {
-	int _id;
+	volatile std::atomic<int> _id;
 	volatile std::atomic<bool> stopped;
-	volatile std::atomic_flag terminated; // If needs to be terminated
+	volatile std::atomic<bool> terminated; // If needs to be terminated
 	volatile std::atomic<bool> result; // Logical result
+	volatile std::atomic<bool> allow_stop;
 
-	context* CONTEXT;
+	volatile std::atomic<context*> CONTEXT;
+
+	std::condition_variable cv;
+	std::mutex cv_m;
+
+	std::condition_variable cvs;
+	std::mutex cvs_m;
+
+	std::condition_variable cvt;
+	std::mutex cvt_m;
+
+	std::condition_variable cvf;
+	std::mutex cvf_m;
 
 	std::thread * runner;
 public:
-	tthread(int _id, context * CTX) {
-		this->_id = _id;
-		CONTEXT = CTX;
-		stopped.store(false);
-		terminated.clear();
-		result = false;
+	tthread(int _id, context * CTX) : CONTEXT(NULL) {
+		reinit(_id, CTX);
+
+		allow_stop.store(false);
 
 		runner = new std::thread(&tthread::body, this);
 	}
-	virtual ~tthread() {
-		delete runner;
-	}
 
-	void join() {
-		runner->join();
-	}
+	void reinit(int _id, context* CTX);
+
+	virtual ~tthread();
 
 	void body();
 
+	virtual std::condition_variable& get_stopped_var() { return cvs; }
+	virtual std::mutex& get_stopped_mutex() { return cvs_m; }
+
+	virtual std::condition_variable& get_terminated_var() { return cvt; }
+	virtual std::mutex& get_terminated_mutex() { return cvt_m; }
+
+	virtual std::condition_variable& get_finished_var() { return cvf; }
+	virtual std::mutex& get_finished_mutex() { return cvf_m; }
+
 	virtual context* get_context() { return CONTEXT; }
+	virtual void set_context(context* CTX) {
+		CONTEXT.store(CTX);
+	}
 
 	virtual int get_nthread() { return _id; }
 	virtual bool is_stopped() { return stopped.load(); }
 	virtual void set_stopped(bool v) { stopped.store(v); }
 	virtual bool is_terminated() {
-		bool state = terminated.test_and_set();
-		if (!state) terminated.clear();
-		return state;
+		return terminated.load();
 	}
 	virtual void set_terminated(bool v) {
-		if (v) terminated.test_and_set();
-		else terminated.clear();
+		terminated.store(v);
 	}
 	virtual bool get_result() {
 		return result.load();
@@ -712,6 +762,21 @@ public:
 	virtual void set_result(bool v) {
 		result.store(v);
 	}
+};
+
+class thread_pool {
+private:
+	std::set<tthread*> available;
+	std::set<tthread*> used;
+	std::mutex guard;
+public:
+	thread_pool() { }
+
+	tthread* get_thread(int _id, context* CTX);
+
+	void free_thread(tthread* t);
+
+	virtual ~thread_pool();
 };
 
 class tframe_item : public frame_item {
@@ -871,30 +936,7 @@ public:
 
 	virtual void register_fact_group(context* CTX, string & fact, journal* J);
 
-	virtual void unregister_fact_group(context* CTX, string & fact);
-
-	virtual void register_facts(context* CTX, std::set<string>& names) {
-		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
-		while (it != CTX->DBJournal->end()) {
-			string fact = it->first;
-			register_fact_group(CTX, fact, it->second);
-			names.insert(fact);
-			it++;
-		}
-		lock.unlock();
-	}
-
-	virtual void unregister_facts(context* CTX) {
-		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
-		while (it != CTX->DBJournal->end()) {
-			string fact = it->first;
-			unregister_fact_group(CTX, fact);
-			it++;
-		}
-		lock.unlock();
-	}
+	virtual void unregister_fact_group(context* CTX, string& fact);
 
 	virtual void sync(bool not_sync_globs, context* CTX, frame_item* other) {
 		bool locked = mutex.try_lock();
@@ -909,7 +951,7 @@ public:
 			bool f;
 			char* itc = _other->vars[it]._name;
 			if (not_sync_globs || *itc == '*') {
-				set(CTX, itc, _other->vars[it].ptr);
+				set(CTX, itc, _other->vars[it].ptr, true);
 				int _it = find(itc, f);
 				if (f) {
 					first_writes[_it] = _other->first_writes[it];
@@ -1244,10 +1286,23 @@ public:
 		last_read = clock();
 	}
 
-	virtual void register_write(jTypes t, value* data, int position) {
-		if (!first_write)
-			first_write = clock();
-		last_write = clock();
+	virtual void register_write(jTypes t, value* data, int position, journal * src = NULL) {
+		if (src) {
+			if (!first_write || src->first_write < first_write)
+				first_write = src->first_write;
+			if (!last_write || src->last_write > last_write)
+				last_write = src->last_write;
+			if (!first_read || src->first_read < first_read)
+				first_read = src->first_read;
+			if (!last_read || src->last_read > last_read)
+				last_read = src->last_read;
+		}
+		else {
+			if (!first_write) {
+				first_write = clock();
+			}
+			last_write = clock();
+		}
 
 		log.push_back(new journal_item(t, data, position));
 	}
