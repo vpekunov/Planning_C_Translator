@@ -492,9 +492,9 @@ typedef struct {
 } used_freed;
 
 used_freed * memory = NULL;
-std::atomic<long long> allocated = 0;
-std::atomic<long long> freed = 0;
-std::atomic<long long> non_freed = 0;
+std::atomic<long long> allocated(0);
+std::atomic<long long> freed(0);
+std::atomic<long long> non_freed(0);
 
 unsigned char shift = 0;
 
