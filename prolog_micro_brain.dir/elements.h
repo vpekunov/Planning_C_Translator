@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <functional>
 #include <cstdint>
+#include <cwctype>
 #include <stdexcept>
 #include <cwchar>
 
@@ -100,14 +101,31 @@ class TContactReg;
 class TLinkReg;
 class TObject;
 
-inline void ltrim(std::wstring &s);
-inline void rtrim(std::wstring &s);
-inline void trim(std::wstring &s);
+// trim from start (in place)
+inline void ltrim(std::wstring& s) {
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](wchar_t ch) {
+		return !std::iswspace(ch);
+		}));
+}
+
+// trim from end (in place)
+inline void rtrim(std::wstring& s) {
+	s.erase(std::find_if(s.rbegin(), s.rend(), [](wchar_t ch) {
+		return !std::iswspace(ch);
+		}).base(), s.end());
+}
+
+// trim from both ends (in place)
+inline void trim(std::wstring& s) {
+	rtrim(s);
+	ltrim(s);
+}
+
 wstring utf8_to_wstring(const string & str);
 string wstring_to_utf8(const wstring& str);
 
 template <class S>
-bool bypass_spaces(const S & s, int & p) {
+bool bypass_spaces(const S & s, size_t & p) {
 	do {
 		while (p < s.length() && (s[p] == ' ' || s[p] == '\t' || s[p] == '\n' || s[p] == '\r'))
 			p++;
@@ -116,7 +134,7 @@ bool bypass_spaces(const S & s, int & p) {
 			if (lpos == S::npos)
 				p = s.length();
 			else
-				p = lpos + 1;
+				p = (size_t)(lpos + 1);
 		}
 		else
 			break;
@@ -124,7 +142,7 @@ bool bypass_spaces(const S & s, int & p) {
 	return p < s.length();
 }
 
-wstring get_complex(const wstring & s, int & p, wchar_t Before);
+wstring get_complex(const wstring & s, size_t & p, wchar_t Before);
 
 typedef std::function<void(const wstring &, const wstring &)> DescHandler;
 
@@ -260,11 +278,11 @@ extern CreateDOMContactF CreateDOMContact;
 typedef wchar_t (*GetMSGF)();
 extern GetMSGF GetMSG;
 
-typedef struct {
+typedef struct TParameter {
 	wstring Name;
 	wstring DefValue;
-	TElementReg * Definer;
-	bool Redefined;
+	TElementReg * Definer = NULL;
+	bool Redefined = false;
 } TParameter;
 
 class TLinkReg {
@@ -323,8 +341,9 @@ public:
 					throw logic_error("Unknown Link Type");
 			else if (Nm == strLinks) {
 				wchar_t links[1024];
-				wcsncpy(links, Val.c_str(), sizeof(links)/sizeof(wchar_t));
-				wchar_t * ptr;
+				wcsncpy(links, Val.c_str(), sizeof(links)/sizeof(wchar_t) - 1);
+				links[1023] = 0;
+				wchar_t * ptr = NULL;
 				wchar_t * link = std::wcstok(links, L" ;\t", &ptr);
 				while (link) {
 					RegisterLinkType(this->ClsID, this->CntID, wstring(link));
@@ -370,7 +389,7 @@ public:
 						if (Val == "1") this->Inherit = true;
 			});
 			for (const wstring & Prm : NewPrms) {
-				int p = 0;
+				size_t p = 0;
 				bypass_spaces(Prm, p);
 				if (p < Prm.length()) {
 					if (Prm[p] == '{') {
@@ -419,7 +438,7 @@ public:
 				throw logic_error("Unknown class");
 		}
 	}
-	bool getUsed() { return FUsed; }
+	bool getUsed() const { return FUsed; }
 	void setUsed(bool Value) {
 		FUsed = Value;
 		if (Value && Inherit && Parent)
@@ -489,7 +508,7 @@ public:
 	int Flags;
 	int X, Y;
 public:
-	TElement() { }
+	TElement() : Flags(0), Ref(NULL), X(0), Y(0) { }
 	TElement(TElementReg * _Ref, const wstring & ID, int Flgs);
 	void Move(int x, int y);
 	TContact * AddContact(const wstring & ID, const wstring & Name,
@@ -506,7 +525,7 @@ public:
 	virtual bool GenerateCalls(wstring & Parameter);
 	void FindConnectedByType(const wstring & ClsID,
 		TIODirection Dir,
-		vector<TElement *> & objs);
+		vector<TElement *> & objs) const;
 	virtual ~TElement();
 };
 

@@ -45,11 +45,11 @@ void __free(void* ptr, unsigned short int tid);
 
 typedef void * HMODULE;
 
-HMODULE LoadLibrary(wchar_t * _fname) {
+HMODULE LoadLibrary(const wchar_t * _fname) {
 	return dlopen(wstring_to_utf8(_fname).c_str(), RTLD_LAZY);
 }
 
-void * GetProcAddress(HMODULE handle, char * fname) {
+void * GetProcAddress(HMODULE handle, const char * fname) {
 	return dlsym(handle, fname);
 }
 
@@ -144,6 +144,14 @@ public:
 		}
 	}
 
+	void operator delete (void* ptr, unsigned short int) {
+		//	cout << "del:" << ptr << endl;
+		if (fast_memory_manager)
+			__free(ptr, 0);
+		else
+			::operator delete(ptr);
+	}
+
 	void operator delete (void* ptr) {
 		//	cout << "del:" << ptr << endl;
 		if (fast_memory_manager)
@@ -162,8 +170,6 @@ class journal_item;
 class journal;
 
 typedef enum { jInsert = 0, jDelete } jTypes;
-
-typedef enum { seqNone = 0, seqGenerated, seqStopped, seqTrue } seqModes;
 
 class context {
 public:
@@ -196,7 +202,9 @@ public:
 	bool transactable_facts;
 	bool rollback;
 
-	stack_container<seqModes> SEQ_MODE;
+	stack_container<std::function<bool(interpreter*, context*)>> cut_query;
+
+	stack_container<bool> SEQUENTIAL;
 	stack_container<frame_item*> SEQ_RESULT;
 	stack_container<predicate_item*> GENERATORS;
 	stack_container<predicate_item *> SEQ_START;
@@ -235,7 +243,7 @@ public:
 
 	virtual void register_db_write(const std::string& iid, jTypes t, value* data, int position, journal * src = NULL);
 	
-	virtual bool join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP);
+	virtual bool join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP, int & sequential, vector<frame_item*> * rest);
 
 	virtual void apply_transactional_db_to_parent(const std::string& fact);
 };
@@ -374,10 +382,10 @@ public:
 	interpreter(const string & fname, const string & starter_name);
 	~interpreter();
 
-	bool XPathCompiled() {
+	bool XPathCompiled() const {
 		return xpath_compiled;
 	}
-	bool XPathLoaded() {
+	bool XPathLoaded() const {
 		return xpath_loaded;
 	}
 	void SetXPathCompiled(bool v) {
@@ -426,9 +434,9 @@ public:
 	void close_file(const string & obj);
 	std::basic_fstream<char> & get_file(const string & obj, int & fn);
 
-	void block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier, bool frontier_enough = false);
+	bool block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier, bool frontier_enough = false);
 
-	double evaluate(context* CTX, frame_item * ff, const string & expression, int & p);
+	double evaluate(context* CTX, frame_item * ff, const string & expression, size_t & p);
 
 	bool check_consistency(set<string> & dynamic_prefixes);
 
@@ -444,9 +452,9 @@ public:
 	void bind();
 	predicate_item_user * load_program(const string & fname, const string & starter_name);
 
-	value * parse(context* CTX, bool exit_on_error, bool parse_complex_terms, frame_item * ff, const string & s, int & p);
+	value * parse(context* CTX, bool exit_on_error, bool parse_complex_terms, frame_item * ff, const string & s, size_t & p);
 	void parse_program(vector<string> & renew, string & s);
-	void parse_clause(context* CTX, vector<string> & renew, frame_item * ff, string & s, int & p);
+	void parse_clause(context* CTX, vector<string> & renew, frame_item * ff, string & s, size_t & p);
 	bool unify(context* CTX, frame_item * ff, value * from, value * to);
 
 	void run();
@@ -473,7 +481,7 @@ protected:
 
 	char* deleted;
 public:
-	frame_item(int _name_capacity = 32, int _vars_capacity = 8, context * CTX = NULL, frame_item* inheriting = NULL) {
+	frame_item(unsigned int _name_capacity = 32, unsigned int _vars_capacity = 8, context * CTX = NULL, frame_item* inheriting = NULL) {
 		names_capacity = _name_capacity;
 		names = (char *) malloc(names_capacity*sizeof(char));
 		names_length = 0;
@@ -529,7 +537,7 @@ public:
 	}
 
 	virtual frame_item * copy(context * CTX) {
-		frame_item * result = new frame_item(names_capacity, vars.size());
+		frame_item * result = new frame_item(names_capacity, (unsigned int)vars.size());
 		result->names_length = names_length;
 		memmove(result->names, names, names_length*sizeof(char));
 		long long d = &result->names[0] - &names[0];
@@ -545,7 +553,7 @@ public:
 
 	virtual void register_write(const std::string & name) { }
 
-	int get_size() { return vars.size(); }
+	int get_size() { return (int)vars.size(); }
 
 	value * at(int i) {
 		return vars[i].ptr;
@@ -563,10 +571,10 @@ public:
 		if (strcmp(what, vars[0]._name) < 0)
 			return 0;
 		if (strcmp(what, vars.back()._name) > 0)
-			return vars.size();
+			return (int)vars.size();
 
 		int a = 0;
-		int b = vars.size() - 1;
+		int b = (int)vars.size() - 1;
 		while (a < b) {
 			int c = (a + b) / 2;
 			int r = strcmp(what, vars[c]._name);
@@ -584,29 +592,64 @@ public:
 		return b;
 	}
 
-	void escape(const char * name, char prepend) {
+	void escape(string & _name) {
 		bool found = false;
-		int it = find(name, found);
+		int it = find(_name.c_str(), found);
 		if (found) {
 			char * oldp = &names[0];
 			char * s = atn(it);
-			names_length++;
-			if (names_length >= names_capacity) {
-				names_capacity += 24;
-				names = (char*)realloc(names, names_capacity * sizeof(char));
+			int inserted = 0;
+			if (*s == '$') {
+				char* nn = s + 1;
+				(*nn)++;
+				if (*nn == 'a' + 0x40) {
+					*nn++ = 'a';
+					(*nn)++;
+					if (*nn == 'a' + 0x40) {
+						*nn++ = 'a';
+						(*nn)++;
+						if (*nn == 'a' + 0x40) {
+							*nn++ = 'a';
+							(*nn)++;
+						}
+					}
+				}
 			}
-			for (int i = names_length - 1; i > (s - oldp); i--)
-				names[i] = names[i - 1];
-			names[s - oldp] = prepend;
+			else {
+				inserted = 5;
+				names_length += inserted;
+				if (names_length >= names_capacity) {
+					names_capacity += 24;
+					char * new_mem = (char*)realloc(names, names_capacity * sizeof(char));
+					if (!new_mem) {
+						cout << "escape: insufficient memory!" << endl;
+						exit(1307);
+					}
+					names = new_mem;
+				}
+				char* from = &names[names_length - inserted - 1];
+				char* to = &names[names_length - 1];
+				for (int i = 0; i < inserted; i++)
+#pragma warning(push)
+#pragma warning(disable: 6001)
+					*to++ = *from++;
+#pragma warning(pop)
+				names[s - oldp] = '$';
+				names[s - oldp + 1] = 'b';
+				names[s - oldp + 2] = 'a';
+				names[s - oldp + 3] = 'a';
+				names[s - oldp + 4] = 'a';
+			}
 			// names.insert(names.begin() + (s - oldp), prepend);
 			char * newp = &names[0];
 			char * news = newp + (s - oldp);
-			for (int i = 0; i < vars.size(); i++)
-				if (i != it)
-					if (atn(i) > s)
-						vars[i]._name += (newp - oldp) + 1;
-					else
-						vars[i]._name += (newp - oldp);
+			if (inserted)
+				for (int i = 0; i < vars.size(); i++)
+					if (i != it)
+						if (atn(i) > s)
+							vars[i]._name += (newp - oldp) + inserted;
+						else
+							vars[i]._name += (newp - oldp);
 			value * v = vars[it].ptr;
 			vars.erase(vars.begin() + it);
 
@@ -621,6 +664,23 @@ public:
 				vars.insert(vars.begin() + it, m);
 			}
 		}
+		if (_name.size() >= 5 && _name[0] == '$') {
+			_name[1]++;
+			if (_name[1] == 'a' + 0x40) {
+				_name[1] = 'a';
+				_name[2]++;
+				if (_name[2] == 'a' + 0x40) {
+					_name[2] = 'a';
+					_name[3]++;
+					if (_name[3] == 'a' + 0x40) {
+						_name[3] = 'a';
+						_name[4]++;
+					}
+				}
+			}
+		}
+		else
+			_name.insert(0, "$baaa");
 	}
 
 	virtual void set(bool _locked, context * CTX, const char * name, value * v, bool set_time_zero = false) {
@@ -633,11 +693,16 @@ public:
 		else {
 			char * oldp = &names[0];
 			int oldn = names_length;
-			int n = strlen(name);
+			int n = (int)strlen(name);
 			names_length += n + 1;
 			if (names_length >= names_capacity) {
 				names_capacity += 24 + n + 1;
-				names = (char*)realloc(names, names_capacity * sizeof(char));
+				char * new_mem = (char*)realloc(names, names_capacity * sizeof(char));
+				if (!new_mem) {
+					cout << "set: Insufficient memory in realloc?!" << endl;
+					exit(3702);
+				}
+				names = new_mem;
 			}
 			// names.resize(oldn + n + 1);
 			char * newp = &names[0];
@@ -658,10 +723,10 @@ public:
 			if (deleted) {
 				char* ptr = deleted;
 				while (*ptr++ || *ptr);
-				size_deleted = ptr - deleted + 1;
+				size_deleted = (int)(ptr - deleted + 1);
 			}
 			int old_size = size_deleted ? size_deleted : 1;
-			int n = strlen(name);
+			int n = (int)strlen(name);
 			int _size_deleted = size_deleted;
 			size_deleted = old_size + n + 1;
 			deleted = (char *) realloc(deleted, /*_size_deleted * sizeof(char),*/ size_deleted * sizeof(char));
@@ -672,7 +737,7 @@ public:
 			int oldn = names_length;
 			char* start = vars[it]._name;
 			char* end = start + n + 1;
-			for (int to_move = names_length - (vars[it]._name - oldp) - n - 1; to_move > 0; to_move--)
+			for (int to_move = (int)(names_length - (vars[it]._name - oldp) - n - 1); to_move > 0; to_move--)
 				*start++ = *end++;
 			names_length -= n + 1;
 			// names.erase(names.begin() + (vars[it]._name - oldp), names.begin() + (vars[it]._name - oldp) + n + 1);
@@ -697,7 +762,24 @@ public:
 		if (found)
 			return vars[it].ptr;
 		else if (unwind && name[0] == '$') {
-			return get(_locked, CTX, &name[1], unwind-1);
+			int n = (((int)(name[1] - 'a'))) + (((int)(name[2] - 'a')) << 6) + (((int)(name[3] - 'a')) << 12) + (((int)(name[4] - 'a')) << 18);
+			if (unwind >= n)
+				return get(_locked, CTX, &name[5], unwind - n);
+			else
+			{
+				int k = n - unwind;
+				char buf[1024];
+				buf[0] = '$';
+				buf[1] = 'a' + (k & 0x3F);
+				k >>= 6;
+				buf[2] = 'a' + (k & 0x3F);
+				k >>= 6;
+				buf[3] = 'a' + (k & 0x3F);
+				k >>= 6;
+				buf[4] = 'a' + (k & 0x3F);
+				strcpy(&buf[5], &name[5]);
+				return get(_locked, CTX, buf, 0);
+			}
 		}
 		else
 			return NULL;
@@ -828,7 +910,7 @@ class tframe_item : public frame_item {
 
 	std::mutex mutex;
 public:
-	tframe_item(int _name_capacity = 32, int _vars_capacity = 5) : frame_item(_name_capacity, _vars_capacity) {
+	tframe_item(unsigned int _name_capacity = 32, unsigned int _vars_capacity = 5) : frame_item(_name_capacity, _vars_capacity) {
 		creation = clock();
 		info_capacity = _vars_capacity;
 		info_vars = (var_info*)malloc(info_capacity * sizeof(var_info));
@@ -848,7 +930,7 @@ public:
 		if (!found) {
 			char* oldp = &names[0];
 			int oldn = names_length;
-			int n = strlen(name);
+			int n = (int)strlen(name);
 			names_length += n + 1;
 			if (names_length >= names_capacity) {
 				names_capacity += 24 + n + 1;
@@ -867,7 +949,7 @@ public:
 				info_capacity += 10;
 				info_vars = (var_info*)realloc(info_vars, /*_info_capacity * sizeof(var_info),*/ info_capacity * sizeof(var_info));
 			}
-			for (int i = vars.size() - 1; i > it; i--)
+			for (int i = (int)vars.size() - 1; i > it; i--)
 				info_vars[i] = info_vars[i - 1];
 			info_vars[it] = var_info_zero;
 		}
@@ -899,7 +981,7 @@ public:
 			info_vars[it].last_reads = clock();
 		}
 		else if (unwind && name[0] == '$') {
-			result = frame_item::get(locked, CTX, &name[1], unwind - 1);
+			result = frame_item::get(locked, CTX, name, unwind);
 		}
 		if (locked) unlock();
 		return result;
@@ -1057,7 +1139,11 @@ public:
 		this->resize(k);
 	}
 
-	virtual frame_item * get_next_variant(context * CTX, int i) { return at(i); }
+	virtual frame_item * get_next_variant(context * CTX, int i) { return i < size() ? at(i) : NULL; }
+
+	virtual void undo(int _i, vector<frame_item*>* list) {
+		at(_i) = NULL;
+	}
 
 	virtual void delete_from(int i) {
 		for (int j = i; j < size(); j++)
@@ -1081,11 +1167,11 @@ public:
 	void lock() { mutex.lock(); }
 	void unlock() { mutex.unlock(); }
 
-	virtual void bind();
+	virtual void bind(bool starring);
 
 	predicate * get_predicate() { return parent; }
 
-	bool is_forking() { return forking; }
+	bool is_forking() const { return forking; }
 	void set_forking(bool v) {
 		forking = v;
 	}
@@ -1115,7 +1201,7 @@ public:
 		args.push_back(a);
 	}
 
-	virtual int num_items() { return items.size(); }
+	virtual int num_items() { return (int)items.size(); }
 	virtual predicate_item * get_item(int i) { return items[i]; }
 };
 
@@ -1123,6 +1209,8 @@ class predicate_item {
 protected:
 	int self_number;
 	int starred_end;
+	bool conditional_star_mode;
+	bool is_starred;
 	clause * parent;
 	std::list<string> args;
 	std::list<value *> _args;
@@ -1137,7 +1225,8 @@ protected:
 	std::recursive_mutex* critical;
 public:
 	predicate_item(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : neg(_neg), once(_once), call(_call),
-		self_number(num), starred_end(-1), parent(c), critical(NULL), prolog(_prolog) { }
+		self_number(num), starred_end(-1), parent(c), critical(NULL), prolog(_prolog),
+		conditional_star_mode(false), is_starred(false) { }
 
 	virtual ~predicate_item() {
 		unsigned short int tid = thread_id_hash(std::this_thread::get_id());
@@ -1149,12 +1238,29 @@ public:
 		this->starred_end = end;
 	}
 
+	virtual void set_conditional_star_mode(bool v) {
+		conditional_star_mode = v;
+	}
+
+	virtual bool get_conditional_star_mode() {
+		return conditional_star_mode;
+	}
+
+	virtual void set_starred(bool v) {
+		is_starred = v;
+		if (this->starred_end >= 0)
+			parent->get_item(this->starred_end)->set_starred(v);
+	}
+
 	virtual int get_starred_end() {
-		return this->starred_end;
+		if (conditional_star_mode)
+			return is_starred ? this->starred_end : -1;
+		else
+			return this->starred_end;
 	}
 
 	virtual predicate_item* get_last(int variant) {
-		return this->starred_end < 0 ? NULL : parent->get_item(this->starred_end - 1);
+		return this->get_starred_end() < 0 ? NULL : parent->get_item(this->get_starred_end() - 1);
 	}
 
 	void set_critical(std::recursive_mutex* critical) {
@@ -1174,13 +1280,28 @@ public:
 	void lock() { mutex.lock(); }
 	void unlock() { mutex.unlock(); }
 
-	virtual void bind() { }
+	virtual bool is_not_pure(std::set<string> & work_set) {
+		work_set.insert(get_id());
+		return false;
+	}
+
+	virtual void bind(bool starring) {
+		if (starring && conditional_star_mode) {
+			std::set<string> work_set;
+			for (int i = self_number; i < starred_end; i++)
+				if (parent->get_item(i)->is_not_pure(work_set)) {
+					set_starred(false);
+					return;
+				}
+			set_starred(true);
+		}
+	}
 
 	virtual const string get_id() = 0;
 
-	bool is_negated() { return neg; }
-	bool is_once() { return once; }
-	bool is_call() { return call; }
+	bool is_negated() const { return neg; }
+	bool is_once() const { return once; }
+	bool is_call() const { return call; }
 
 	void make_once() { once = true; }
 	void clear_negated() { neg = false; }
@@ -1200,10 +1321,10 @@ public:
 
 	virtual predicate_item * get_next(int variant) {
 		if (!is_last()) {
-			if (starred_end >= 0)
-				return parent->get_item(starred_end);
+			if (get_starred_end() >= 0)
+				return parent->get_item(get_starred_end());
 			else
-				return parent->items[self_number + 1];
+				return parent->items[(size_t)(self_number + 1)];
 		}
 		else
 			return NULL;
@@ -1221,8 +1342,8 @@ public:
 
 	clause * get_parent() { return parent; }
 
-	bool is_first() { return self_number == 0; }
-	bool is_last() { return !parent || self_number == parent->items.size() - 1; }
+	bool is_first() const { return self_number == 0; }
+	bool is_last() const { return !parent || self_number == parent->items.size() - 1; }
 
 	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) = 0;
 
@@ -1242,16 +1363,16 @@ public:
 	predicate(const string & _name) : name(_name), forking(false) { }
 	~predicate();
 
-	void bind() {
+	void bind(bool starring) {
 		for (clause * c : clauses)
-			c->bind();
+			c->bind(starring);
 	}
 
 	void add_clause(clause * c) {
 		clauses.push_back(c);
 	}
 
-	bool is_forking() { return forking; }
+	bool is_forking() const { return forking; }
 	void set_forking(bool v) {
 		forking = v;
 	}
@@ -1259,7 +1380,7 @@ public:
 		return clauses[variant]->is_forking();
 	}
 
-	virtual int num_clauses() { return clauses.size(); }
+	virtual int num_clauses() { return (int) clauses.size(); }
 	virtual clause * get_clause(int i) { return clauses[i]; }
 };
 
@@ -1272,12 +1393,7 @@ public:
 		user_p = NULL;
 	}
 
-	virtual void bind() {
-		if (prolog->PREDICATES.find(id) == prolog->PREDICATES.end())
-			user_p = NULL;
-		else
-			user_p = prolog->PREDICATES[id];
-	}
+	virtual void bind(bool starring);
 
 	bool is_dynamic() { return user_p == NULL; }
 
@@ -1286,6 +1402,8 @@ public:
 	predicate * get_user_predicate() { return user_p; }
 
 	virtual const string get_id() { return id; }
+
+	virtual bool is_not_pure(std::set<string>& work_set);
 
 	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals);
 

@@ -31,26 +31,6 @@ SetDeduceLogFileF SetDeduceLogFile = NULL;
 CreateDOMContactF CreateDOMContact = NULL;
 GetMSGF GetMSG = NULL;
 
-// trim from start (in place)
-inline void ltrim(std::wstring &s) {
-	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](wchar_t ch) {
-		return !std::iswspace(ch);
-	}));
-}
-
-// trim from end (in place)
-inline void rtrim(std::wstring &s) {
-	s.erase(std::find_if(s.rbegin(), s.rend(), [](wchar_t ch) {
-		return !std::iswspace(ch);
-	}).base(), s.end());
-}
-
-// trim from both ends (in place)
-inline void trim(std::wstring &s) {
-	rtrim(s);
-	ltrim(s);
-}
-
 wstring utf8_to_wstring(const string & str)
 {
 //	wstring_convert<codecvt_utf8_utf16<wchar_t> > myconv;
@@ -60,9 +40,10 @@ wstring utf8_to_wstring(const string & str)
 
 string wstring_to_utf8(const wstring& str)
 {
-//	std::wstring_convert<std::codecvt_utf8<wchar_t>> myconv;
-//	return myconv.to_bytes(str);
-	return string(str.begin(), str.end());
+	using convert_typeX = std::codecvt_utf8<wchar_t>;
+	std::wstring_convert<convert_typeX, wchar_t> converterX;
+
+	return converterX.to_bytes(str);
 }
 
 wstring ReplaceAll(const wstring & src, const wstring & what, const wstring & to) {
@@ -107,12 +88,12 @@ wstring ShiftRight(wstring S, int n) {
 	};
 
 	int PHPBal, PHPBalOld;
-	wstring Result = L"";
+	wstring Result(L"");
 	wstring Sh = wstring(n, ' ');
 	PHPBal = 1;
 	while (S.length()) {
 		wstring::size_type P = S.find(L"\r\n");
-		if (P == wstring::npos) P = 32768*32;
+		if (P == wstring::npos) P = (wstring::size_type)32768*32;
 		wstring Cur = S.substr(0, P + 2);
 		PHPBalOld = PHPBal;
 		PHPBal += Count(Cur, tagPHPOpen) - Count(Cur, tagPHPClose);
@@ -125,7 +106,7 @@ wstring ShiftRight(wstring S, int n) {
 	return Result;
 }
 
-wstring get_complex(const wstring & s, int & p, wchar_t Before) {
+wstring get_complex(const wstring & s, size_t & p, wchar_t Before) {
 	wchar_t quote = 0x0;
 	wstring str;
 	bypass_spaces(s, p);
@@ -163,7 +144,7 @@ wstring get_complex(const wstring & s, int & p, wchar_t Before) {
 
 void ProcessDesc(const vector<wstring> & Desc, DescHandler H) {
 	for (const wstring & Dsc : Desc) {
-		int p = 0;
+		size_t p = 0;
 		bypass_spaces(Dsc, p);
 		if (p < Dsc.length()) {
 			wstring::size_type epos = Dsc.find('=', p);
@@ -584,7 +565,7 @@ int TElement::Check() {
 
 void TElement::FindConnectedByType(const wstring & ClsID, TIODirection Dir,
 	vector<TElement *> & objs
-	) {
+	) const {
 
 	auto Find = [&](const map<wstring, TContact *> & Contacts, TIODirection _Dir) {
 		map<wstring, TContact *>::const_iterator itc;
@@ -648,7 +629,7 @@ bool TElement::GenerateClasses(wstring & Code) {
 		for (it = AllParams.begin(); it != AllParams.end(); it++)
 			if (!it->second->Redefined) {
 				wstring S = Parameters[it->second->Name];
-				wchar_t * meta[3] = { L"\\", L"\"", L"$" };
+				const wchar_t * meta[3] = { L"\\", L"\"", L"$" };
 				for (int j = 0; j < sizeof(meta) / sizeof(wchar_t *); j++)
 					S = ReplaceAll(S, wstring(meta[j]), wstring(L"\\") + wstring(meta[j]));
 				S = ReplaceAll(S, L"\t", L"\\t");
@@ -681,7 +662,7 @@ bool TElement::GenerateCalls(wstring & Code) {
 	Code += wstring(L"$") + Ident + wstring(L"->") + wstring(idfunGenerate) + wstring(L"_") +
 		Ref->ClsID + wstring(L"($") + wstring(idvarStage) + wstring(L",");
 	for (it = Inputs.begin(); it != Inputs.end(); it++) {
-		sprintf(buf, "%i", it->second->Links.size());
+		sprintf(buf, "%i", (int)it->second->Links.size());
 		Code += utf8_to_wstring(buf) + wstring(L",");
 		if (it->second->Links.size() == 0)
 			Code += wstring(L"array(),");
@@ -701,7 +682,7 @@ bool TElement::GenerateCalls(wstring & Code) {
 		}
 	}
 	for (it = Outputs.begin(); it != Outputs.end(); it++) {
-		sprintf(buf, "%i", it->second->Links.size());
+		sprintf(buf, "%i", (int)it->second->Links.size());
 		Code += utf8_to_wstring(buf) + wstring(L",$") + Ident +
 			wstring(L"_") + it->first + wstring(L",");
 	}
@@ -776,7 +757,8 @@ bool TSystem::LoadFromXML(wstring & Lang, const wstring & inFileName) {
 	XMLElement * Els = D->FirstChildElement("Elements");
 	XMLElement * _El = Els->FirstChildElement("Element");
 	int NumElems;
-	sscanf(Els->Attribute("NumItems"), "%i", &NumElems);
+	if (sscanf(Els->Attribute("NumItems"), "%i", &NumElems) != 1)
+		return false;
 
 	for (int i = 0; i < NumElems; i++) {
 		wstring CID = utf8_to_wstring(_El->Attribute("ClassID"));
@@ -785,7 +767,8 @@ bool TSystem::LoadFromXML(wstring & Lang, const wstring & inFileName) {
 		if (E) {
 			XMLElement * El = _El->FirstChildElement("Parameters");
 			int N;
-			sscanf(El->Attribute("NumItems"), "%i", &N);
+			if (sscanf(El->Attribute("NumItems"), "%i", &N) != 1)
+				return false;
 			XMLElement * __El = El->FirstChildElement("Parameter");
 			for (int j = 0; j < N; j++) {
 				wstring Str = utf8_to_wstring(__El->Attribute("ID"));
@@ -796,8 +779,10 @@ bool TSystem::LoadFromXML(wstring & Lang, const wstring & inFileName) {
 				__El = __El->NextSiblingElement("Parameter");
 			}
 			El = _El->FirstChildElement("Position");
-			sscanf(El->Attribute("Left"), "%i", &E->X);
-			sscanf(El->Attribute("Top"), "%i", &E->Y);
+			if (sscanf(El->Attribute("Left"), "%i", &E->X) != 1)
+				return false;
+			if (sscanf(El->Attribute("Top"), "%i", &E->Y) != 1)
+				return false;
 		}
 		else
 			return false;
@@ -1154,7 +1139,7 @@ void * AddElementF(void * Sys, char * ClassName, char * ID, int Flags) {
 }
 
 void * AddLinkF(void * Sys, void * El, char * ContID, void * PEl, char * PContID, char ** S, bool Info) {
-	static char * retS = "";
+	static char retS[1024] = { 0 };
 	TContact * _From = ((TElement *)El)->Outputs[utf8_to_wstring(ContID)];
 	TContact * _To = ((TElement *)PEl)->Inputs[utf8_to_wstring(PContID)];
 	*S = retS;

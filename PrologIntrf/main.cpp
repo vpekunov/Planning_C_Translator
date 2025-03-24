@@ -72,7 +72,7 @@ extern "C" {
 
 		vector<string> renew;
 		string body;
-		int p = 0;
+		size_t p = 0;
 
 		frame_item * f = new frame_item();
 
@@ -119,7 +119,7 @@ extern "C" {
 		result = 5;
 
 		for (i = 0; i < 8; i++)
-			goals[i] = (char *) malloc(65536*2);
+			goals[i] = (char *) malloc((size_t)65536*2);
 
 		sprintf(goals[0], "change_directory('%s').", Dir);
 		sprintf(goals[1], "(consult('%s')->true;rename_file('%s','_erroneous.pl')).", ConsultScript, ConsultScript);
@@ -154,7 +154,7 @@ extern "C" {
 		int goal = 0;
 		while (goal < 8) {
 			string line;
-			int p = 0;
+			size_t p = 0;
 
 			line = goals[goal++];
 			std::cout << ">" << line;
@@ -189,7 +189,8 @@ extern "C" {
 			generated_vars * variants = new generated_vars();
 			variants->push_back(f);
 			predicate_item_user * pi = new predicate_item_user(false, false, false, 0, NULL, _prolog, "internal_goal");
-			pi->bind();
+			pi->bind(false);
+			pi->bind(true);
 			bool ret = pi->processing(_prolog->CONTEXT, false, 0, variants, &args, f, _prolog->CONTEXT);
 			auto end = std::chrono::high_resolution_clock::now(); // Засечка конечного времени
 			std::chrono::duration<double, std::ratio<1, 1>> elapsed = end - start; // Вычисляем длительность исполнения
