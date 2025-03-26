@@ -62,11 +62,6 @@ extern "C" {
 
 		setlocale(LC_ALL, "en_US.UTF-8");
 
-		unsigned long long memavail = getTotalSystemMemory();
-		fast_memory_manager = memavail > (long long)96 * (long long) 1024 * (long long) 1024 * (long long) 1024;
-		mem_block_size = max((unsigned int)mem_block_size, (unsigned int)(4 * (memavail / 65536)));
-		mem_block_size -= mem_block_size % 1024;
-
 		_prolog = new interpreter("", "");
 		std::cout << "Prolog MicroBrain by V.V.Pekunov V0.23beta" << endl;
 

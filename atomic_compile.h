@@ -2449,9 +2449,8 @@
     !
    }
    {
-    {analyze_part(First,Ins1,Outs1,T1)}
-    {analyze_part([H|Last1],Ins2,Outs2,T2)},
-    {&},
+    analyze_part(First,Ins1,Outs1,T1),
+    analyze_part([H|Last1],Ins2,Outs2,T2),
     intersect(Outs1,Ins2,P1),
     exclude_canals(P1, Canals, FoundCanals, P11),
     intersect(Outs2,Ins1,P2)
@@ -2973,7 +2972,7 @@
           (
             (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
               true;
-              create_split(CurGID,Canals,Privates,Splitted1)
+              {create_split(CurGID,Canals,Privates,Splitted1)}
           )
         );
         (true)
@@ -3013,7 +3012,7 @@
           (
             (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
               true;
-              create_split(CurGID,Canals,Privates,Splitted1)
+              {create_split(CurGID,Canals,Privates,Splitted1)}
           )
         );
         (true)
@@ -3079,7 +3078,7 @@
           (
             (predicate_property(atomic_split(_,_,_,_,_),'dynamic'), atomic_split(CurGID,_,_,_,_))->
               true;
-              create_split(CurGID,Canals,Privates,Splitted1)
+              {create_split(CurGID,Canals,Privates,Splitted1)}
           )
         );
         (true)

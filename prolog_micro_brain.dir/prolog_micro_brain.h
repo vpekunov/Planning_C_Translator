@@ -20,9 +20,6 @@ using namespace std;
 
 #include "elements.h"
 
-extern bool fast_memory_manager;
-extern unsigned int mem_block_size;
-
 extern const char * STD_INPUT;
 extern const char * STD_OUTPUT;
 
@@ -31,11 +28,6 @@ const int call_flag = 0x2;
 
 unsigned long long getTotalSystemMemory();
 unsigned int getTotalProcs();
-
-void * __alloc(size_t size, unsigned short int tid);
-void* __realloc(void* ptr, size_t old_size, size_t size, unsigned short int tid);
-unsigned short int thread_id_hash(const std::thread::id& id);
-void __free(void* ptr, unsigned short int tid);
 
 #ifdef __linux__
 #include <sys/resource.h>
@@ -93,13 +85,10 @@ public:
 	value() { refs = 1; }
 
 	virtual void use() { refs++; }
-	virtual void free(unsigned short int tid) {
+	virtual void free() {
 		refs--;
 		if (refs == 0) {
-			if (fast_memory_manager)
-				__free(this, tid);
-			else
-				::operator delete(this);
+			delete(this);
 		}
 	}
 
@@ -107,13 +96,13 @@ public:
 
 	virtual value* fill(context* CTX, frame_item* vars) = 0;
 	virtual value* copy(context* CTX, frame_item* f, int unwind = 0) = 0;
-	virtual value* const_copy(context* CTX, frame_item* f) {
+	virtual value* const_copy(context* CTX, frame_item* f, int unwind = 0) {
 		if (this->defined()) {
 			this->use();
 			return this;
 		}
 		else
-			return copy(CTX, f);
+			return copy(CTX, f, unwind);
 	}
 	virtual bool unify(context* CTX, frame_item* ff, value* from) = 0;
 	virtual bool defined() = 0;
@@ -132,32 +121,6 @@ public:
 
 	virtual void write(basic_ostream<char>* outs, bool simple = false) {
 		(*outs) << to_str(simple);
-	}
-
-	void* operator new (size_t size, unsigned short int tid) {
-		if (fast_memory_manager)
-			return __alloc(size, tid);
-		else {
-			void* ptr = ::operator new(size);
-			//			cout<<"new:"<<ptr<<endl;
-			return ptr;
-		}
-	}
-
-	void operator delete (void* ptr, unsigned short int) {
-		//	cout << "del:" << ptr << endl;
-		if (fast_memory_manager)
-			__free(ptr, 0);
-		else
-			::operator delete(ptr);
-	}
-
-	void operator delete (void* ptr) {
-		//	cout << "del:" << ptr << endl;
-		if (fast_memory_manager)
-			__free(ptr, 0);
-		else
-			::operator delete(ptr);
 	}
 };
 
@@ -190,8 +153,6 @@ public:
 	virtual void set_rollback(bool val) {
 		rollback = val;
 	}
-
-	std::atomic<unsigned short int> tid;
 
 	context* parent;
 	interpreter* prolog;
@@ -353,7 +314,102 @@ public:
 	std::mutex VARLOCK;
 	unsigned int ITERATION_STAR_PACKET;
 
-	map<string, ids> MAP;
+	map<string, ids> MAP{
+		{ "append", id_append },
+		{ "sublist", id_sublist },
+		{ "delete", id_delete },
+		{ "member", id_member },
+		{ "last", id_last },
+		{ "reverse", id_reverse },
+		{ "for", id_for },
+		{ "length", id_length },
+		{ "max_list", id_max_list },
+		{ "atom_length", id_atom_length },
+		{ "nth", id_nth },
+		{ "page_id", id_page_id },
+		{ "thread_id", id_thread_id },
+		{ "atom_concat", id_atom_concat },
+		{ "atom_chars", id_atom_chars },
+		{ "atom_codes", id_atom_codes },
+		{ "atom_hex", id_atom_hex },
+		{ "atom_hexs", id_atom_hexs },
+		{ "number_atom", id_number_atom },
+		{ "number", id_number },
+		{ "consistency", id_consistency },
+		{ "listing", id_listing },
+		{ "current_predicate", id_current_predicate },
+		{ "findall", id_findall },
+		{ "functor", id_functor },
+		{ "predicate_property", id_predicate_property },
+		{ "$predicate_property_pi", id_spredicate_property_pi },
+		{ "eq", id_eq },
+		{ "=", id_eq },
+		{ "==", id_eq },
+		{ "neq", id_neq },
+		{ "\\=", id_neq },
+		{ "less", id_less },
+		{ "<", id_less },
+		{ "greater", id_greater },
+		{ ">", id_greater },
+		{ "term_split", id_term_split },
+		{ "=..", id_term_split },
+		{ "g_assign", id_g_assign },
+		{ "g_assign_nth", id_g_assign_nth },
+		{ "g_read", id_g_read },
+		{ "fail", id_fail },
+		{ "true", id_true },
+		{ "change_directory", id_change_directory },
+		{ "open", id_open },
+		{ "close", id_close },
+		{ "get_char", id_get_char },
+		{ "peek_char", id_peek_char },
+		{ "read_token", id_read_token },
+		{ "read_token_from_atom", id_read_token_from_atom },
+		{ "mars", id_mars },
+		{ "mars_decode", id_mars_decode },
+		{ "unset", id_unset },
+		{ "write", id_write },
+		{ "write_to_atom", id_write_to_atom },
+		{ "write_term", id_write_term },
+		{ "write_term_to_atom", id_write_term_to_atom },
+		{ "nl", id_nl },
+		{ "file_exists", id_file_exists },
+		{ "unlink", id_unlink },
+		{ "rename_file", id_rename_file },
+		{ "seeing", id_seeing },
+		{ "telling", id_telling },
+		{ "seen", id_seen },
+		{ "told", id_told },
+		{ "see", id_see },
+		{ "tell", id_tell },
+		{ "set_iteration_star_packet", id_set_iteration_star_packet },
+		{ "repeat", id_repeat },
+		{ "random", id_random },
+		{ "randomize", id_randomize },
+		{ "char_code", id_char_code },
+		{ "get_code", id_get_code },
+		{ "at_end_of_stream", id_at_end_of_stream },
+		{ "open_url", id_open_url },
+		{ "track_post", id_track_post },
+		{ "consult", id_consult },
+		{ "assert", id_assert },
+		{ "asserta", id_asserta },
+		{ "assertz", id_assertz },
+		{ "retract", id_retract },
+		{ "retractall", id_retractall },
+		{ "inc", id_inc },
+		{ "halt", id_halt },
+		{ "load_classes", id_load_classes },
+		{ "init_xpathing", id_init_xpathing },
+		{ "induct_xpathing", id_induct_xpathing },
+		{ "import_model_after_induct", id_import_model_after_induct },
+		{ "unload_classes", id_unload_classes },
+		{ "var", id_var },
+		{ "nonvar", id_nonvar },
+		{ "get_icontacts", id_get_icontacts },
+		{ "get_ocontacts", id_get_ocontacts },
+		{ "rollback", id_rollback }
+	};
 
 	string CLASSES_ROOT;
 	string INDUCT_MODE;
@@ -463,9 +519,9 @@ public:
 
 class stack_values : public stack_container<value *> {
 public:
-	virtual void free(short unsigned int tid) {
+	virtual void free() {
 		for (int i = 0; i < this->size(); i++)
-			at(i)->free(tid);
+			at(i)->free();
 	}
 };
 
@@ -687,8 +743,8 @@ public:
 		bool found = false;
 		int it = find(name, found);
 		if (found) {
-			if (vars[it].ptr) vars[it].ptr->free(CTX->tid);
-			vars[it].ptr = v ? v->copy(CTX, this) : NULL;
+			if (vars[it].ptr) vars[it].ptr->free();
+			vars[it].ptr = v ? v->const_copy(CTX, this) : NULL;
 		}
 		else {
 			char * oldp = &names[0];
@@ -710,7 +766,7 @@ public:
 				vars[i]._name += newp - oldp;
 			char * _name = newp + oldn;
 			strcpy(_name, name);
-			mapper m = { _name, v ? v->copy(CTX, this) : NULL };
+			mapper m = { _name, v ? v->const_copy(CTX, this) : NULL };
 			vars.insert(vars.begin() + it, m);
 		}
 	}
@@ -910,10 +966,12 @@ class tframe_item : public frame_item {
 
 	std::mutex mutex;
 public:
-	tframe_item(unsigned int _name_capacity = 32, unsigned int _vars_capacity = 5) : frame_item(_name_capacity, _vars_capacity) {
+	tframe_item(unsigned int _name_capacity = 32, unsigned int _vars_capacity = 5, context* CTX = NULL, frame_item* inheriting = NULL) : frame_item(_name_capacity, _vars_capacity) {
 		creation = clock();
 		info_capacity = _vars_capacity;
 		info_vars = (var_info*)malloc(info_capacity * sizeof(var_info));
+
+		import_transacted_globs(CTX, inheriting);
 	}
 
 	virtual ~tframe_item();
@@ -942,7 +1000,7 @@ public:
 				vars[i]._name += newp - oldp;
 			char* _name = newp + oldn;
 			strcpy(_name, name);
-			mapper m = { _name, v ? v->copy(CTX, this) : NULL };
+			mapper m = { _name, v ? v->const_copy(CTX, this) : NULL };
 			vars.insert(vars.begin() + it, m);
 			if (vars.size() > info_capacity) {
 				int _info_capacity = info_capacity;
@@ -955,8 +1013,8 @@ public:
 		}
 		else {
 			if (vars[it].ptr)
-				vars[it].ptr->free(CTX->tid);
-			vars[it].ptr = v ? v->copy(CTX, this) : NULL;
+				vars[it].ptr->free();
+			vars[it].ptr = v ? v->const_copy(CTX, this) : NULL;
 		}
 		if (set_time_zero) {
 			info_vars[it] = var_info_zero;
@@ -1229,9 +1287,8 @@ public:
 		conditional_star_mode(false), is_starred(false) { }
 
 	virtual ~predicate_item() {
-		unsigned short int tid = thread_id_hash(std::this_thread::get_id());
 		for (value * v : _args)
-			v->free(tid);
+			v->free();
 	}
 
 	virtual void set_starred_end(int end) {
@@ -1424,7 +1481,7 @@ public:
 
 	virtual ~journal_item() {
 		if (this->type == jDelete)
-			this->data->free(thread_id_hash(std::this_thread::get_id()));
+			this->data->free();
 	}
 };
 
