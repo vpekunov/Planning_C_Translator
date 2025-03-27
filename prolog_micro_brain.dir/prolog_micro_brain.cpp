@@ -4552,7 +4552,7 @@ public:
 			frame_item * r = f->copy(CTX);
 			L1->iterate([&](value * v) {
 				if (!V2->unify(CTX, r, v))
-					LL1.push_back(v->const_copy(CTX, r));
+					LL1.push_back(v->copy(CTX, r));
 			});
 			::list * LL3 = new ::list(LL1, NULL);
 
@@ -4574,7 +4574,7 @@ public:
 			frame_item * r = f->copy(CTX);
 			L1->iterate([&](value * v) {
 				if (!V2->unify(CTX, r, v))
-					LL1.push_back(v->const_copy(CTX, r));
+					LL1.push_back(v->copy(CTX, r));
 			});
 			::list * LL3 = new ::list(LL1, NULL);
 

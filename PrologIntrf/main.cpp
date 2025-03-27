@@ -36,7 +36,7 @@ interpreter * _prolog = NULL;
 extern "C" {
 	EXPORT int init_gprolog7(char * gprolog_console_out) {
 		static int argc = 1;
-		static char * argv[] = { ".\\Automodeling.exe" };
+		static const char * argv[] = { ".\\Automodeling.exe" };
 
 		F.open(gprolog_console_out, ios::out | ios::trunc);
 		std::streambuf * coutbuf = std::cout.rdbuf(); //save old buf
