@@ -81,7 +81,7 @@ extern "C" {
 
 		bypass_spaces(body, p);
 		while (p < body.length()) {
-			_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p);
+			_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p, false);
 			bypass_spaces(body, p);
 		}
 		_prolog->bind();
@@ -174,7 +174,7 @@ extern "C" {
 			body.append("\n");
 			bypass_spaces(body, p);
 			while (p < body.length()) {
-				_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p);
+				_prolog->parse_clause(_prolog->CONTEXT, renew, f, body, p, false);
 				bypass_spaces(body, p);
 			}
 			_prolog->bind();
@@ -210,6 +210,8 @@ extern "C" {
 
 			_prolog->CONTEXT->clearDBJournals();
 		}
+
+		_prolog->writeOptimized();
 
 		for (i = 0; i < 8; i++)
 			free(goals[i]);

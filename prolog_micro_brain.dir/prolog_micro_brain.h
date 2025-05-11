@@ -14,7 +14,7 @@
 #include <atomic>
 
 #include <stdlib.h>
-#include <time.h>
+#include <chrono>
 
 using namespace std;
 
@@ -25,6 +25,10 @@ extern const char * STD_OUTPUT;
 
 const int once_flag = 0x1;
 const int call_flag = 0x2;
+
+const int PAR_NONE = 0;
+const int PAR_SEQ = 1;
+const int PAR_SEQ_JOIN_AFTER = 2;
 
 unsigned long long getTotalSystemMemory();
 unsigned int getTotalProcs();
@@ -51,6 +55,11 @@ void FreeLibrary(HMODULE handle) {
 #else
 #include <Windows.h>
 #endif
+
+typedef unsigned long long clock_rdtsc;
+clock_rdtsc __clock();
+
+typedef std::mutex fastmux;
 
 template<class T> class stack_container : public vector<T>{
 public:
@@ -125,9 +134,37 @@ public:
 };
 
 typedef struct {
-	char* _name;
+	unsigned long long * _name;
 	value* ptr;
 } mapper;
+
+inline unsigned int get_name_code(unsigned long long name) {
+	return (unsigned int)(name & 0xFFFFFFFF);
+}
+
+inline char get_first_char(unsigned long long name) {
+	return (char)((name >> 32) & 0xFF);
+}
+
+inline unsigned int get_wind(unsigned long long name) {
+	return (unsigned int)((name >> 40) & 0xFFFFFF);
+}
+
+inline unsigned long long construct_var_name(unsigned int wind, unsigned long long _name, char first) {
+	return _name + (((unsigned long long)first) << 32) + (((unsigned long long)wind) << 40);
+}
+
+inline void escape_name(unsigned long long& name) {
+	unsigned int wind = get_wind(name);
+	name &= 0xFFFFFFFFFFLL;
+	name += ((unsigned long long)(wind + 1)) << 40;
+}
+
+inline void unescape_name(unsigned long long& name, unsigned int n) {
+	unsigned int wind = get_wind(name);
+	name &= 0xFFFFFFFFFFLL;
+	name += ((unsigned long long)(wind - n)) << 40;
+}
 
 class journal_item;
 class journal;
@@ -163,18 +200,19 @@ public:
 	bool transactable_facts;
 	bool rollback;
 
+	long long pseudo_time;
+
 	stack_container<std::function<bool(interpreter*, context*)>> cut_query;
 
-	stack_container<bool> SEQUENTIAL;
 	stack_container<frame_item*> SEQ_RESULT;
 	stack_container<predicate_item*> GENERATORS;
 	stack_container<predicate_item *> SEQ_START;
 	stack_container<predicate_item*> SEQ_END;
 	stack_container<tframe_item*> FRAMES_TO_DELETE;
 
-	std::mutex * DBLOCK;
+	fastmux * DBLOCK;
 	map< string, std::atomic<vector<term*>*>> * DB;
-	map<string, std::atomic<journal*>> * DBJournal;
+	map<unsigned long long, std::atomic<journal*>> * DBJournal;
 
 	vector<context*> CONTEXTS;
 	std::atomic<tframe_item*> INIT;
@@ -192,21 +230,23 @@ public:
 	std::list<int> FLAGS;
 	stack_container<int> LEVELS;
 	stack_container<generated_vars*> TRACE;
+	stack_container<long long> START_TIMES;
+	stack_container<clause *> START_CLAUSES;
 	stack_container<vector<value*>**> TRACEARGS;
 	stack_container<predicate_item*> TRACERS;
 	stack_container<int> ptrTRACE;
 
-	std::mutex pages_mutex;
+	fastmux pages_mutex;
 
 	virtual context* add_page(bool locals_in_forked, bool transactable_facts, predicate_item * forker, tframe_item* f, predicate_item* starting, predicate_item* ending, interpreter* prolog);
 
-	virtual void register_db_read(const std::string& iid);
+	virtual void register_db_read(const unsigned long long iid);
 
-	virtual void register_db_write(const std::string& iid, jTypes t, value* data, int position, journal * src = NULL);
+	virtual void register_db_write(const unsigned long long iid, jTypes t, value* data, int position, journal * src = NULL);
 	
-	virtual bool join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP, int & sequential, vector<frame_item*> * rest);
+	virtual bool join(bool sequential_mode, int K, frame_item* f, interpreter* INTRP, int & sequential, vector<frame_item*> * rest, long long & pseudo_duration, predicate_item * starred);
 
-	virtual void apply_transactional_db_to_parent(const std::string& fact);
+	virtual void apply_transactional_db_to_parent(const std::string & fact);
 };
 
 class interpreter {
@@ -307,12 +347,20 @@ public:
 		id_nonvar,
 		id_get_icontacts,
 		id_get_ocontacts,
-		id_rollback
+		id_rollback,
+		id_optimize_load,
+		id_parallelize_level
 	} ids;
 
 	thread_pool* THREAD_POOL;
-	std::mutex VARLOCK;
+	fastmux VARLOCK;
 	unsigned int ITERATION_STAR_PACKET;
+
+	bool load_optimized = false; // true;
+	long long min_parallelizing_time = -1; // 1000;
+
+	map<string, std::set<string> *> consulted;
+	map<string, long long> consulted_cs;
 
 	map<string, ids> MAP{
 		{ "append", id_append },
@@ -408,20 +456,26 @@ public:
 		{ "nonvar", id_nonvar },
 		{ "get_icontacts", id_get_icontacts },
 		{ "get_ocontacts", id_get_ocontacts },
-		{ "rollback", id_rollback }
+		{ "rollback", id_rollback },
+		{ "optimize_load", id_optimize_load },
+		{ "load_optimized", id_optimize_load },
+		{ "parallelize_level", id_parallelize_level }
+
 	};
 
 	string CLASSES_ROOT;
 	string INDUCT_MODE;
 
 	map<string, predicate *> PREDICATES;
-	std::mutex GLOCK;
+	fastmux GLOCK;
 	map<string, value *> GVars;
 	map<string, std::recursive_mutex *> STARLOCKS;
 	std::recursive_mutex STARLOCK;
 
 	map< string, set<int>*> DBIndicators;
-	std::mutex DBILock;
+	fastmux DBILock;
+
+	bool std_body_added = false;
 
 	context* CONTEXT;
 
@@ -437,6 +491,8 @@ public:
 
 	interpreter(const string & fname, const string & starter_name);
 	~interpreter();
+
+	virtual string export_str(bool introduce_new_parallelism, std::set<string>* exported);
 
 	bool XPathCompiled() const {
 		return xpath_compiled;
@@ -486,6 +542,10 @@ public:
 		return env;
 	}
 
+	void writeOptimized();
+
+	long long calculate_check_sum(ifstream& in);
+
 	string open_file(const string & fname, const string & mode);
 	void close_file(const string & obj);
 	std::basic_fstream<char> & get_file(const string & obj, int & fn);
@@ -509,8 +569,8 @@ public:
 	predicate_item_user * load_program(const string & fname, const string & starter_name);
 
 	value * parse(context* CTX, bool exit_on_error, bool parse_complex_terms, frame_item * ff, const string & s, size_t & p);
-	void parse_program(vector<string> & renew, string & s);
-	void parse_clause(context* CTX, vector<string> & renew, frame_item * ff, string & s, size_t & p);
+	void parse_program(vector<string> & renew, string & s, std::set<string>* loaded_predicates, bool optimized);
+	string parse_clause(context* CTX, vector<string> & renew, frame_item * ff, string & s, size_t & p, bool optimized);
 	bool unify(context* CTX, frame_item * ff, value * from, value * to);
 
 	void run();
@@ -529,17 +589,17 @@ class frame_item {
 protected:
 	friend class tframe_item;
 
-	char * names;
+	unsigned long long * names;
 	int names_length;
 	int names_capacity;
 
 	vector<mapper> vars;
 
-	char* deleted;
+	unsigned long long* deleted;
 public:
 	frame_item(unsigned int _name_capacity = 32, unsigned int _vars_capacity = 8, context * CTX = NULL, frame_item* inheriting = NULL) {
 		names_capacity = _name_capacity;
-		names = (char *) malloc(names_capacity*sizeof(char));
+		names = (unsigned long long *) malloc(names_capacity*sizeof(char));
 		names_length = 0;
 		vars.reserve(_vars_capacity);
 		deleted = NULL;
@@ -555,8 +615,8 @@ public:
 	virtual void forced_import_transacted_globs(context* CTX, frame_item* inheriting) {
 		lock();
 		for (mapper& m : inheriting->vars) {
-			if (m._name[0] == '*')
-				set(true, CTX, m._name, m.ptr, true);
+			if (get_first_char(m._name[0]) == '*')
+				set(true, CTX, m._name[0], m.ptr, true);
 		}
 		unlock();
 	}
@@ -567,26 +627,26 @@ public:
 		}
 	}
 
-	virtual void add_local_names(bool locals_in_forked, std::set<string>& s) {
+	virtual void add_local_names(bool locals_in_forked, std::set<unsigned long long>& s) {
 		for (mapper& m : vars)
-			if (m._name[0] != '$' && (!locals_in_forked || m._name[0] == '*'))
-				s.insert(m._name);
+			if (get_wind(m._name[0]) == 0 && (!locals_in_forked || get_first_char(m._name[0]) == '*'))
+				s.insert(m._name[0]);
 	}
 
 	virtual void sync(bool _locked, bool not_sync_globs, context * CTX, frame_item * other) {
 		bool locked = !_locked && lock();
 		int it = 0;
 		while (it < other->vars.size()) {
-			char * itc = other->vars[it]._name;
-			if (not_sync_globs || *itc == '*')
-				set(locked, CTX, itc, other->vars[it].ptr, true);
+			unsigned long long * itc = other->vars[it]._name;
+			if (not_sync_globs || get_first_char(*itc) == '*')
+				set(locked, CTX, *itc, other->vars[it].ptr, true);
 			it++;
 		}
 		if (not_sync_globs && other->deleted) {
-			char* cur = other->deleted;
+			unsigned long long* cur = other->deleted;
 			while (*cur) {
-				unset(locked, CTX, cur);
-				while (*cur++);
+				unset(locked, CTX, *cur);
+				cur++;
 			}
 		}
 		if (locked) unlock();
@@ -611,29 +671,52 @@ public:
 
 	int get_size() { return (int)vars.size(); }
 
-	value * at(int i) {
+	virtual value * at(int i) {
 		return vars[i].ptr;
 	}
 
-	char * atn(int i) {
-		return vars[i]._name;
-	}
+	virtual const string atn(int i);
 
-	int find(const char * what, bool & found) {
+	int find(const unsigned long long what, bool & found) {
 		found = false;
 
-		if (vars.size() == 0)
+		int sz = (int)vars.size();
+
+		if (sz == 0)
 			return 0;
-		if (strcmp(what, vars[0]._name) < 0)
+		long long n0 = what - vars[0]._name[0];
+		if (n0 <= 0) {
+			found = n0 == 0;
 			return 0;
-		if (strcmp(what, vars.back()._name) > 0)
+		}
+		if (sz <= 4) {
+			if (sz == 1)
+				return 1;
+			long long nn = what - vars.back()._name[0];
+			if (nn >= 0) {
+				found = nn == 0;
+				return found ? sz - 1 : sz;
+			}
+			if (sz == 2)
+				return 1;
+			for (int i = 1; i < sz - 1; i++) {
+				long long ni = what - vars[i]._name[0];
+				if (ni <= 0) {
+					found = ni == 0;
+					return i;
+				}
+			}
+			return sz - 1;
+		}
+
+		if (what > vars.back()._name[0])
 			return (int)vars.size();
 
 		int a = 0;
-		int b = (int)vars.size() - 1;
+		int b = sz - 1;
 		while (a < b) {
 			int c = (a + b) / 2;
-			int r = strcmp(what, vars[c]._name);
+			long long r = what - vars[c]._name[0];
 			if (r == 0) {
 				found = true;
 				return c;
@@ -643,103 +726,37 @@ public:
 			else
 				a = c + 1;
 		}
-		if (strcmp(what, vars[b]._name) == 0)
+		if (what == vars[b]._name[0])
 			found = true;
 		return b;
 	}
 
-	void escape(string & _name) {
+	void escape(unsigned long long & _name) {
 		bool found = false;
-		int it = find(_name.c_str(), found);
+		int it = find(_name, found);
+		escape_name(_name);
 		if (found) {
-			char * oldp = &names[0];
-			char * s = atn(it);
-			int inserted = 0;
-			if (*s == '$') {
-				char* nn = s + 1;
-				(*nn)++;
-				if (*nn == 'a' + 0x40) {
-					*nn++ = 'a';
-					(*nn)++;
-					if (*nn == 'a' + 0x40) {
-						*nn++ = 'a';
-						(*nn)++;
-						if (*nn == 'a' + 0x40) {
-							*nn++ = 'a';
-							(*nn)++;
-						}
-					}
-				}
-			}
-			else {
-				inserted = 5;
-				names_length += inserted;
-				if (names_length >= names_capacity) {
-					names_capacity += 24;
-					char * new_mem = (char*)realloc(names, names_capacity * sizeof(char));
-					if (!new_mem) {
-						cout << "escape: insufficient memory!" << endl;
-						exit(1307);
-					}
-					names = new_mem;
-				}
-				char* from = &names[names_length - inserted - 1];
-				char* to = &names[names_length - 1];
-				for (int i = 0; i < inserted; i++)
-#pragma warning(push)
-#pragma warning(disable: 6001)
-					*to++ = *from++;
-#pragma warning(pop)
-				names[s - oldp] = '$';
-				names[s - oldp + 1] = 'b';
-				names[s - oldp + 2] = 'a';
-				names[s - oldp + 3] = 'a';
-				names[s - oldp + 4] = 'a';
-			}
+			unsigned long long * oldp = &names[0];
+			unsigned long long * s = vars[it]._name;
+			*s = _name;
 			// names.insert(names.begin() + (s - oldp), prepend);
-			char * newp = &names[0];
-			char * news = newp + (s - oldp);
-			if (inserted)
-				for (int i = 0; i < vars.size(); i++)
-					if (i != it)
-						if (atn(i) > s)
-							vars[i]._name += (newp - oldp) + inserted;
-						else
-							vars[i]._name += (newp - oldp);
 			value * v = vars[it].ptr;
 			vars.erase(vars.begin() + it);
 
 			found = false;
-			it = find(news, found);
+			it = find(*s, found);
 			if (found) {
-				cout << "Internal FRAME collision : " << news << " already exists and can't be escaped?!" << endl;
+				cout << "Internal FRAME collision : [" << _name << "] already exists and can't be escaped?!" << endl;
 				exit(4000);
 			}
 			else {
-				mapper m = { news, v };
+				mapper m = { s, v };
 				vars.insert(vars.begin() + it, m);
 			}
 		}
-		if (_name.size() >= 5 && _name[0] == '$') {
-			_name[1]++;
-			if (_name[1] == 'a' + 0x40) {
-				_name[1] = 'a';
-				_name[2]++;
-				if (_name[2] == 'a' + 0x40) {
-					_name[2] = 'a';
-					_name[3]++;
-					if (_name[3] == 'a' + 0x40) {
-						_name[3] = 'a';
-						_name[4]++;
-					}
-				}
-			}
-		}
-		else
-			_name.insert(0, "$baaa");
 	}
 
-	virtual void set(bool _locked, context * CTX, const char * name, value * v, bool set_time_zero = false) {
+	virtual void set(bool _locked, context * CTX, const unsigned long long name, value * v, bool set_time_zero = false) {
 		bool found = false;
 		int it = find(name, found);
 		if (found) {
@@ -747,13 +764,12 @@ public:
 			vars[it].ptr = v ? v->const_copy(CTX, this) : NULL;
 		}
 		else {
-			char * oldp = &names[0];
-			int oldn = names_length;
-			int n = (int)strlen(name);
-			names_length += n + 1;
+			unsigned long long * oldp = &names[0];
+			int n = (int)sizeof(name);
+			names_length += n;
 			if (names_length >= names_capacity) {
-				names_capacity += 24 + n + 1;
-				char * new_mem = (char*)realloc(names, names_capacity * sizeof(char));
+				names_capacity += 24 + n;
+				unsigned long long * new_mem = (unsigned long long*)realloc(names, names_capacity * sizeof(char));
 				if (!new_mem) {
 					cout << "set: Insufficient memory in realloc?!" << endl;
 					exit(3702);
@@ -761,50 +777,46 @@ public:
 				names = new_mem;
 			}
 			// names.resize(oldn + n + 1);
-			char * newp = &names[0];
+			unsigned long long * newp = &names[0];
 			for (int i = 0; i < vars.size(); i++)
 				vars[i]._name += newp - oldp;
-			char * _name = newp + oldn;
-			strcpy(_name, name);
+			unsigned long long * _name = newp + vars.size();
+			*_name = name;
 			mapper m = { _name, v ? v->const_copy(CTX, this) : NULL };
 			vars.insert(vars.begin() + it, m);
 		}
 	}
 
-	virtual int unset(bool _locked, context* CTX, const char* name) {
+	virtual int unset(bool _locked, context* CTX, const unsigned long long name) {
 		bool found = false;
 		int it = find(name, found);
 		if (found) {
-			int size_deleted = 0;
+			int size_deleted = 1;
 			if (deleted) {
-				char* ptr = deleted;
-				while (*ptr++ || *ptr);
-				size_deleted = (int)(ptr - deleted + 1);
+				unsigned long long* ptr = deleted;
+				while (*ptr++);
+				size_deleted = (int)(ptr - deleted);
 			}
-			int old_size = size_deleted ? size_deleted : 1;
-			int n = (int)strlen(name);
-			int _size_deleted = size_deleted;
-			size_deleted = old_size + n + 1;
-			deleted = (char *) realloc(deleted, /*_size_deleted * sizeof(char),*/ size_deleted * sizeof(char));
-			strcpy(&deleted[size_deleted - n - 2], name);
+			size_deleted++;
+			deleted = (unsigned long long *) realloc(deleted, size_deleted * sizeof(unsigned long long));
+			deleted[size_deleted - 2] = name;
 			deleted[size_deleted - 1] = 0;
 
-			char* oldp = &names[0];
-			int oldn = names_length;
-			char* start = vars[it]._name;
-			char* end = start + n + 1;
-			for (int to_move = (int)(names_length - (vars[it]._name - oldp) - n - 1); to_move > 0; to_move--)
+			unsigned long long* oldp = &names[0];
+			unsigned long long* start = vars[it]._name;
+			unsigned long long* end = start + 1;
+			for (int to_move = (int)(vars.size() - (vars[it]._name - oldp) - 1); to_move > 0; to_move--)
 				*start++ = *end++;
-			names_length -= n + 1;
+			names_length -= sizeof(unsigned long long);
 			// names.erase(names.begin() + (vars[it]._name - oldp), names.begin() + (vars[it]._name - oldp) + n + 1);
 			if (names_length > 0) {
-				char* newp = &names[0];
+				unsigned long long* newp = &names[0];
 				for (int i = 0; i < vars.size(); i++)
 					if (i != it)
 						if (vars[i]._name < vars[it]._name)
 							vars[i]._name += newp - oldp;
 						else
-							vars[i]._name += newp - oldp - n - 1;
+							vars[i]._name += newp - oldp - 1;
 			}
 			vars.erase(vars.begin() + it);
 			return it;
@@ -812,63 +824,36 @@ public:
 			return -1;
 	}
 
-	virtual value * get(bool _locked, context * CTX, const char * name, int unwind = 0) {
+	virtual value * get(bool _locked, context * CTX, unsigned long long name, int unwind = 0) {
 		bool found = false;
 		int it = find(name, found);
 		if (found)
 			return vars[it].ptr;
-		else if (unwind && name[0] == '$') {
-			int n = (((int)(name[1] - 'a'))) + (((int)(name[2] - 'a')) << 6) + (((int)(name[3] - 'a')) << 12) + (((int)(name[4] - 'a')) << 18);
-			if (unwind >= n)
-				return get(_locked, CTX, &name[5], unwind - n);
+		else if (unwind) {
+			unsigned int n = get_wind(name);
+			if (n == 0)
+				return NULL;
+			if (unwind >= (int)n) {
+				unescape_name(name, n);
+				return get(_locked, CTX, name, unwind - n);
+			}
 			else
 			{
-				int k = n - unwind;
-				char buf[1024];
-				buf[0] = '$';
-				buf[1] = 'a' + (k & 0x3F);
-				k >>= 6;
-				buf[2] = 'a' + (k & 0x3F);
-				k >>= 6;
-				buf[3] = 'a' + (k & 0x3F);
-				k >>= 6;
-				buf[4] = 'a' + (k & 0x3F);
-				strcpy(&buf[5], &name[5]);
-				return get(_locked, CTX, buf, 0);
+				unescape_name(name, unwind);
+				return get(_locked, CTX, name, 0);
 			}
 		}
 		else
 			return NULL;
 	}
 
-	virtual void register_facts(bool _locked, context* CTX, std::set<string>& names) {
-		bool locked = !_locked && lock();
-		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
-		while (it != CTX->DBJournal->end()) {
-			string fact = it->first;
-			register_fact_group(locked, CTX, fact, it->second);
-			names.insert(fact);
-			it++;
-		}
-		if (locked) lock.unlock();
-	}
+	virtual void register_facts(bool _locked, context* CTX, std::set<unsigned long long>& names);
 
-	virtual void unregister_facts(bool _locked, context* CTX) {
-		bool locked = !_locked && lock();
-		std::unique_lock<std::mutex> lock(*CTX->DBLOCK);
-		map<string, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
-		while (it != CTX->DBJournal->end()) {
-			string fact = it->first;
-			unregister_fact_group(locked, CTX, fact);
-			it++;
-		}
-		if (locked) lock.unlock();
-	}
+	virtual void unregister_facts(bool _locked, context* CTX);
 
-	virtual void register_fact_group(bool _locked, context* CTX, string& fact, journal* J);
+	virtual void register_fact_group(bool _locked, context* CTX, unsigned long long& fact, journal* J);
 
-	virtual void unregister_fact_group(bool _locked, context* CTX, string& fact);
+	virtual void unregister_fact_group(bool _locked, context* CTX, unsigned long long& fact);
 };
 
 class tthread {
@@ -880,17 +865,17 @@ class tthread {
 
 	volatile std::atomic<context*> CONTEXT;
 
-	std::condition_variable cv;
-	std::mutex cv_m;
+	std::condition_variable_any cv;
+	fastmux cv_m;
 
-	std::condition_variable cvs;
-	std::mutex cvs_m;
+	std::condition_variable_any cvs;
+	fastmux cvs_m;
 
-	std::condition_variable cvt;
-	std::mutex cvt_m;
+	std::condition_variable_any cvt;
+	fastmux cvt_m;
 
-	std::condition_variable cvf;
-	std::mutex cvf_m;
+	std::condition_variable_any cvf;
+	fastmux cvf_m;
 
 	std::thread * runner;
 public:
@@ -902,14 +887,14 @@ public:
 
 	void body();
 
-	virtual std::condition_variable& get_stopped_var() { return cvs; }
-	virtual std::mutex& get_stopped_mutex() { return cvs_m; }
+	virtual std::condition_variable_any& get_stopped_var() { return cvs; }
+	virtual fastmux& get_stopped_mutex() { return cvs_m; }
 
-	virtual std::condition_variable& get_terminated_var() { return cvt; }
-	virtual std::mutex& get_terminated_mutex() { return cvt_m; }
+	virtual std::condition_variable_any& get_terminated_var() { return cvt; }
+	virtual fastmux& get_terminated_mutex() { return cvt_m; }
 
-	virtual std::condition_variable& get_finished_var() { return cvf; }
-	virtual std::mutex& get_finished_mutex() { return cvf_m; }
+	virtual std::condition_variable_any& get_finished_var() { return cvf; }
+	virtual fastmux& get_finished_mutex() { return cvf_m; }
 
 	virtual context* get_context() { return CONTEXT; }
 	virtual void set_context(context* CTX) {
@@ -937,7 +922,7 @@ class thread_pool {
 private:
 	std::set<tthread*> available;
 	std::set<tthread*> used;
-	std::mutex guard;
+	fastmux guard;
 public:
 	thread_pool() { }
 
@@ -949,27 +934,35 @@ public:
 };
 
 class tframe_item : public frame_item {
+	static const int nn = 6;
+
 	friend class frame_item;
 	friend class journal;
 
 	typedef struct {
-		clock_t last_reads;
-		clock_t first_writes;
-		clock_t last_writes;
-		clock_t first_reads;
+		clock_rdtsc last_reads;
+		clock_rdtsc first_writes;
+		clock_rdtsc last_writes;
+		clock_rdtsc first_reads;
 	} var_info;
 
 	int info_capacity;
+	var_info micro_info[nn] = { 0 };
 	var_info* info_vars;
 
-	clock_t creation;
+	clock_rdtsc creation;
 
-	std::mutex mutex;
+	fastmux mutex;
 public:
 	tframe_item(unsigned int _name_capacity = 32, unsigned int _vars_capacity = 5, context* CTX = NULL, frame_item* inheriting = NULL) : frame_item(_name_capacity, _vars_capacity) {
-		creation = clock();
+		creation = __clock();
 		info_capacity = _vars_capacity;
-		info_vars = (var_info*)malloc(info_capacity * sizeof(var_info));
+		if (info_capacity <= nn) {
+			info_vars = micro_info;
+			info_capacity = nn;
+		}
+		else
+			info_vars = (var_info*)malloc(info_capacity * sizeof(var_info));
 
 		import_transacted_globs(CTX, inheriting);
 	}
@@ -979,33 +972,41 @@ public:
 	virtual bool lock() { return mutex.try_lock(); }
 	virtual void unlock() { mutex.unlock(); }
 
-	virtual void set(bool _locked, context * CTX, const char* name, value* v, bool set_time_zero = false) {
+	virtual void set(bool _locked, context * CTX, const unsigned long long name, value* v, bool set_time_zero = false) {
 		static var_info var_info_zero = { 0 };
 
 		bool locked = !_locked && mutex.try_lock();
 		bool found = false;
 		int it = find(name, found);
 		if (!found) {
-			char* oldp = &names[0];
-			int oldn = names_length;
-			int n = (int)strlen(name);
-			names_length += n + 1;
+			unsigned long long* oldp = &names[0];
+			int n = (int)sizeof(name);
+			names_length += n;
 			if (names_length >= names_capacity) {
-				names_capacity += 24 + n + 1;
-				names = (char*)realloc(names, names_capacity * sizeof(char));
+				names_capacity += 24 + n;
+				unsigned long long* new_mem = (unsigned long long*)realloc(names, names_capacity * sizeof(char));
+				if (!new_mem) {
+					cout << "set: Insufficient memory in realloc?!" << endl;
+					exit(3702);
+				}
+				names = new_mem;
 			}
 			// names.resize(oldn + n + 1);
-			char* newp = &names[0];
+			unsigned long long* newp = &names[0];
 			for (int i = 0; i < vars.size(); i++)
 				vars[i]._name += newp - oldp;
-			char* _name = newp + oldn;
-			strcpy(_name, name);
+			unsigned long long* _name = newp + vars.size();
+			*_name = name;
 			mapper m = { _name, v ? v->const_copy(CTX, this) : NULL };
 			vars.insert(vars.begin() + it, m);
 			if (vars.size() > info_capacity) {
 				int _info_capacity = info_capacity;
 				info_capacity += 10;
-				info_vars = (var_info*)realloc(info_vars, /*_info_capacity * sizeof(var_info),*/ info_capacity * sizeof(var_info));
+				if (info_vars == micro_info) {
+					info_vars = (var_info*)malloc(/*_info_capacity * sizeof(var_info),*/ info_capacity * sizeof(var_info));
+					memmove(info_vars, micro_info, _info_capacity * sizeof(var_info));
+				} else
+					info_vars = (var_info*)realloc(info_vars, /*_info_capacity * sizeof(var_info),*/ info_capacity * sizeof(var_info));
 			}
 			for (int i = (int)vars.size() - 1; i > it; i--)
 				info_vars[i] = info_vars[i - 1];
@@ -1020,32 +1021,34 @@ public:
 			info_vars[it] = var_info_zero;
 		}
 		else {
+			clock_rdtsc c = __clock();
 			if (info_vars[it].first_writes == 0)
-				info_vars[it].first_writes = clock();
-			info_vars[it].last_writes = clock();
+				info_vars[it].first_writes = c;
+			info_vars[it].last_writes = c;
 		}
 		if (locked) unlock();
 	}
 
-	virtual value* get(bool _locked, context * CTX, const char* name, int unwind = 0) {
+	virtual value* get(bool _locked, context * CTX, const unsigned long long name, int unwind = 0) {
 		bool locked = !_locked && mutex.try_lock();
 		value* result = NULL;
 		bool found = false;
 		int it = find(name, found);
 		if (found) {
 			result = vars[it].ptr;
+			clock_rdtsc c = __clock();
 			if (info_vars[it].first_reads == 0)
-				info_vars[it].first_reads = clock();
-			info_vars[it].last_reads = clock();
+				info_vars[it].first_reads = c;
+			info_vars[it].last_reads = c;
 		}
-		else if (unwind && name[0] == '$') {
+		else if (unwind && get_wind(name)) {
 			result = frame_item::get(locked, CTX, name, unwind);
 		}
 		if (locked) unlock();
 		return result;
 	}
 
-	virtual int unset(bool _locked, context* CTX, const char* name) {
+	virtual int unset(bool _locked, context* CTX, const unsigned long long name) {
 		bool locked = !_locked && mutex.try_lock();
 		int it = frame_item::unset(locked, CTX, name);
 		if (it >= 0) {
@@ -1056,45 +1059,46 @@ public:
 		return it;
 	}
 
-	virtual void register_write(const std::string & name) {
+	virtual void register_write(const unsigned long long name) {
 		bool found = false;
-		int it = find(name.c_str(), found);
+		int it = find(name, found);
+		clock_rdtsc c = __clock();
 		if (found && info_vars[it].first_writes == 0)
-			info_vars[it].first_writes = clock();
+			info_vars[it].first_writes = c;
 		if (found)
-			info_vars[it].last_writes = clock();
+			info_vars[it].last_writes = c;
 	}
 
-	virtual clock_t first_write(const std::string& vname) {
+	virtual clock_rdtsc first_write(const unsigned long long vname) {
 		bool found = false;
-		int it = find(vname.c_str(), found);
+		int it = find(vname, found);
 		if (found)
 			return info_vars[it].first_writes;
 		else
 			return 0;
 	}
 
-	virtual clock_t last_read(const std::string& vname) {
+	virtual clock_rdtsc last_read(const unsigned long long vname) {
 		bool found = false;
-		int it = find(vname.c_str(), found);
+		int it = find(vname, found);
 		if (found)
 			return info_vars[it].last_reads;
 		else
 			return 0;
 	}
 
-	virtual clock_t first_read(const std::string& vname) {
+	virtual clock_rdtsc first_read(const unsigned long long vname) {
 		bool found = false;
-		int it = find(vname.c_str(), found);
+		int it = find(vname, found);
 		if (found)
 			return info_vars[it].first_reads;
 		else
 			return 0;
 	}
 
-	virtual clock_t last_write(const std::string& vname) {
+	virtual clock_rdtsc last_write(const unsigned long long vname) {
 		bool found = false;
-		int it = find(vname.c_str(), found);
+		int it = find(vname, found);
 		if (found)
 			return info_vars[it].last_writes;
 		else
@@ -1103,17 +1107,17 @@ public:
 
 	virtual void set_written_new(frame_item* src) {
 		for (mapper& m : vars)
-			if (m._name[0] != '*') {
+			if (get_first_char(m._name[0]) != '*') {
 				bool found;
-				src->find(m._name, found);
+				src->find(m._name[0], found);
 				if (!found)
-					register_write(m._name);
+					register_write(m._name[0]);
 			}
 	}
 
-	virtual void statistics(const std::string & vname, clock_t & cr, clock_t &fw, clock_t &fr, clock_t &lw, clock_t &lr) {
+	virtual void statistics(const unsigned long long vname, clock_rdtsc & cr, clock_rdtsc &fw, clock_rdtsc &fr, clock_rdtsc &lw, clock_rdtsc &lr) {
 		bool found = false;
-		int it = find(vname.c_str(), found);
+		int it = find(vname, found);
 		if (found) {
 			lw = info_vars[it].last_writes;
 			lr = info_vars[it].last_reads;
@@ -1126,9 +1130,9 @@ public:
 		cr = creation;
 	}
 
-	virtual void register_fact_group(bool _locked, context* CTX, string & fact, journal* J);
+	virtual void register_fact_group(bool _locked, context* CTX, unsigned long long & fact, journal* J);
 
-	virtual void unregister_fact_group(bool _locked, context* CTX, string& fact);
+	virtual void unregister_fact_group(bool _locked, context* CTX, unsigned long long & fact);
 
 	virtual void sync(bool _locked, bool not_sync_globs, context* CTX, frame_item* other) {
 		bool locked = !_locked && mutex.try_lock();
@@ -1141,25 +1145,25 @@ public:
 		int it = 0;
 		while (it < _other->vars.size()) {
 			bool f;
-			char* itc = _other->vars[it]._name;
-			if (not_sync_globs || *itc == '*') {
-				set(locked, CTX, itc, _other->vars[it].ptr, true);
-				int _it = find(itc, f);
+			unsigned long long * itc = _other->vars[it]._name;
+			if (not_sync_globs || get_first_char(*itc) == '*') {
+				set(locked, CTX, *itc, _other->vars[it].ptr, true);
+				int _it = find(*itc, f);
 				if (f) {
 					info_vars[_it] = _other->info_vars[it];
 				}
 				else {
-					cout << "Internal ERROR : can't sync tframe_item : var '" << itc << "'" << endl;
+					cout << "Internal ERROR : can't sync tframe_item : var [" << *itc << "]" << endl;
 					exit(-60);
 				}
 			}
 			it++;
 		}
 		if (not_sync_globs && other->deleted) {
-			char* cur = other->deleted;
+			unsigned long long* cur = other->deleted;
 			while (*cur) {
-				unset(locked, CTX, cur);
-				while (*cur++);
+				unset(locked, CTX, *cur);
+				cur++;
 			}
 		}
 		if (locked) unlock();
@@ -1216,8 +1220,10 @@ private:
 	std::list<string> args;
 	std::list<value *> _args;
 	vector<predicate_item *> items;
-	std::mutex mutex;
+	fastmux mutex;
 	bool forking;
+
+	int cached_is_not_pure_result;
 public:
 	clause(predicate * pp) : parent(pp), forking(false) { }
 	~clause();
@@ -1226,6 +1232,10 @@ public:
 	void unlock() { mutex.unlock(); }
 
 	virtual void bind(bool starring);
+
+	virtual void add_export(string& result, bool introduce_new_parallelism);
+
+	virtual int is_not_pure() { return cached_is_not_pure_result; }
 
 	predicate * get_predicate() { return parent; }
 
@@ -1269,9 +1279,13 @@ protected:
 	int starred_end;
 	bool conditional_star_mode;
 	bool is_starred;
+	int star_good_tries;
+	int star_bad_tries;
 	clause * parent;
 	std::list<string> args;
 	std::list<value *> _args;
+
+	int parallelizing_status;
 
 	interpreter * prolog;
 
@@ -1279,24 +1293,40 @@ protected:
 	bool once;
 	bool call;
 
-	std::mutex mutex;
+	fastmux mutex;
 	std::recursive_mutex* critical;
 public:
 	predicate_item(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : neg(_neg), once(_once), call(_call),
 		self_number(num), starred_end(-1), parent(c), critical(NULL), prolog(_prolog),
-		conditional_star_mode(false), is_starred(false) { }
+		conditional_star_mode(false), is_starred(false), parallelizing_status(PAR_NONE),
+		star_good_tries(0), star_bad_tries(0) { }
 
 	virtual ~predicate_item() {
 		for (value * v : _args)
 			v->free();
 	}
 
+	virtual void add_export(std::set<int>& end_points, bool skip_brackets, string& result, string& offset, bool introduce_new_parallelism);
+	virtual void contextual_export(std::set<int>& end_points, string& result, string& offset, bool introduce_new_parallelism);
+	virtual void simple_export(const string& name, string& result, string& offset, bool introduce_new_parallelism);
+
+	virtual int get_parallelizing_status() { return parallelizing_status; }
+	virtual void include_parallelizing_status(int flag) { parallelizing_status |= flag; }
+	virtual void clear_parallelizing_status() { parallelizing_status = PAR_NONE; }
+
+	virtual void set_good_tries(int v) { star_good_tries = v; }
+	virtual int get_good_tries() { return star_good_tries; }
+	virtual void set_bad_tries(int v) { star_bad_tries = v; }
+	virtual int get_bad_tries() { return star_bad_tries; }
+
 	virtual void set_starred_end(int end) {
 		this->starred_end = end;
 	}
 
-	virtual void set_conditional_star_mode(bool v) {
+	virtual void set_conditional_star_mode(bool v, int goods, int bads) {
 		conditional_star_mode = v;
+		star_good_tries = goods;
+		star_bad_tries = bads;
 	}
 
 	virtual bool get_conditional_star_mode() {
@@ -1308,6 +1338,10 @@ public:
 		if (this->starred_end >= 0)
 			parent->get_item(this->starred_end)->set_starred(v);
 	}
+
+	virtual bool get_starred() { return is_starred; }
+
+	virtual int get_strict_starred_end() { return this->starred_end; }
 
 	virtual int get_starred_end() {
 		if (conditional_star_mode)
@@ -1337,20 +1371,20 @@ public:
 	void lock() { mutex.lock(); }
 	void unlock() { mutex.unlock(); }
 
-	virtual bool is_not_pure(std::set<string> & work_set) {
-		work_set.insert(get_id());
-		return false;
+	virtual int is_not_pure(std::set<string> * work_set) {
+		work_set->insert(get_id());
+		return 0;
 	}
 
 	virtual void bind(bool starring) {
 		if (starring && conditional_star_mode) {
 			std::set<string> work_set;
 			for (int i = self_number; i < starred_end; i++)
-				if (parent->get_item(i)->is_not_pure(work_set)) {
+				if (parent->get_item(i)->is_not_pure(&work_set)) {
 					set_starred(false);
 					return;
 				}
-			set_starred(true);
+			if (star_bad_tries + star_good_tries < 5 || star_bad_tries < star_good_tries) set_starred(true);
 		}
 	}
 
@@ -1391,6 +1425,10 @@ public:
 		return parent->get_item(self_number + 1);
 	}
 
+	virtual predicate_item* get_strict_prev() {
+		return parent->get_item(self_number - 1);
+	}
+
 	virtual frame_item * get_next_variant(context * CTX, frame_item * f, int & internal_variant, vector<value *> * positional_vals) { return NULL; }
 
 	const std::list<string> * get_args() {
@@ -1399,12 +1437,18 @@ public:
 
 	clause * get_parent() { return parent; }
 
-	bool is_first() const { return self_number == 0; }
-	bool is_last() const { return !parent || self_number == parent->items.size() - 1; }
+	bool is_first(bool skip_brackets = false) const {
+		return skip_brackets ? self_number <= 1 : self_number == 0;
+	}
+	bool is_last(bool skip_brackets = false) const {
+		return skip_brackets ? !parent || self_number >= parent->items.size() - 2 : !parent || self_number == parent->items.size() - 1;
+	}
+
+	virtual int get_self_number() { return self_number; }
 
 	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals) = 0;
 
-	virtual bool execute(context * CTX, frame_item * &f, int i, generated_vars* variants) {
+	virtual bool execute(context * CTX, frame_item * &f, int i, generated_vars* variants, long long & pseudo_duration) {
 		return true;
 	}
 };
@@ -1415,14 +1459,27 @@ class predicate {
 private:
 	string name;
 	vector<clause *> clauses;
+	bool runned;
 	bool forking;
 public:
-	predicate(const string & _name) : name(_name), forking(false) { }
+	predicate(const string & _name) : name(_name), runned(false), forking(false) { }
 	~predicate();
+
+	const string& get_name() { return name; }
+
+	void mark_runned() { runned = true; }
+	bool is_runned() { return runned; }
 
 	void bind(bool starring) {
 		for (clause * c : clauses)
 			c->bind(starring);
+	}
+
+	virtual void add_export(string& result, bool introduce_new_parallelism) {
+		for (clause* c : clauses) {
+			c->add_export(result, introduce_new_parallelism);
+			result += "\n";
+		}
 	}
 
 	void add_clause(clause * c) {
@@ -1445,9 +1502,13 @@ class predicate_item_user : public predicate_item {
 private:
 	string id;
 	predicate * user_p;
+	bool cached_is_not_pure;
+	int cached_is_not_pure_result;
 public:
 	predicate_item_user(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog, const string & _name) : predicate_item(_neg, _once, _call, num, c, _prolog), id(_name) {
 		user_p = NULL;
+		cached_is_not_pure = false;
+		cached_is_not_pure_result = 0;
 	}
 
 	virtual void bind(bool starring);
@@ -1460,11 +1521,12 @@ public:
 
 	virtual const string get_id() { return id; }
 
-	virtual bool is_not_pure(std::set<string>& work_set);
+	virtual int is_not_pure(std::set<string> * work_set);
 
 	virtual generated_vars * generate_variants(context * CTX, frame_item * f, vector<value *> * & positional_vals);
 
-	virtual bool processing(context * CONTEXT, bool line_neg, int variant, generated_vars * variants, vector<value *> ** positional_vals, frame_item * up_f, context * up_c);
+	virtual bool processing(context * CONTEXT, bool line_neg, int variant, generated_vars * variants, vector<value *> ** positional_vals,
+		frame_item * up_f, context * up_c);
 };
 
 class journal_item {
@@ -1487,13 +1549,13 @@ public:
 
 class journal {
 public:
-	clock_t creation;
-	clock_t first_write, last_write, first_read, last_read;
+	clock_rdtsc creation;
+	clock_rdtsc first_write, last_write, first_read, last_read;
 
 	vector<journal_item*> log;
 
 	journal() {
-		creation = clock();
+		creation = __clock();
 
 		first_write = last_write = first_read = last_read = 0;
 	}
@@ -1504,9 +1566,10 @@ public:
 	}
 
 	virtual void register_read() {
+		clock_rdtsc c = __clock();
 		if (!first_read)
-			first_read = clock();
-		last_read = clock();
+			first_read = c;
+		last_read = c;
 	}
 
 	virtual void register_write(jTypes t, value* data, int position, journal * src = NULL) {
@@ -1521,10 +1584,11 @@ public:
 				last_read = src->last_read;
 		}
 		else {
+			clock_rdtsc c = __clock();
 			if (!first_write) {
-				first_write = clock();
+				first_write = c;
 			}
-			last_write = clock();
+			last_write = c;
 		}
 
 		log.push_back(new journal_item(t, data, position));
