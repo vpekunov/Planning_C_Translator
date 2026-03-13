@@ -2,7 +2,7 @@
 
 SRC_DIR := ./Examples
 LDFLAGS := -lm -lpthread
-CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++11
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++17
 
 SRCS=$(wildcard $(SRC_DIR)/*.cpp)
 
