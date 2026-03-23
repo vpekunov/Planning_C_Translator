@@ -170,7 +170,7 @@ Begin
   _Out.Add('  cl_int ret;');
   _Out.Add('  size_t sz;');
   _Out.Add('');
-  _Out.Add('  cl_uint n_units = 0;');
+  _Out.Add('  size_t max_work_size = 0;');
   _Out.Add('');
   _Out.Add('  set<string> tensor_architectures = { "Volta", "Turing", "Ampere", "Ada Lovelace", "Hopper", "Blackwell", "Rubin", "Feynman" };');
   _Out.Add('  map<string, string> archs;');
@@ -199,8 +199,8 @@ Begin
   _Out.Add('            device[n++] = ''.''; device[n++] = ''X''; device[n] = 0x0;');
   _Out.Add('          }');
   _Out.Add('          d.max_work_size *= d.n_units;');
-  _Out.Add('          if (d.n_units > n_units) {');
-  _Out.Add('             n_units = d.n_units;');
+  _Out.Add('          if (d.max_work_size > max_work_size) {');
+  _Out.Add('             max_work_size = d.max_work_size;');
   _Out.Add('             __powerfulest_device = device;');
   _Out.Add('          }');
   _Out.Add('          d.has_tensor_cores = tensor_architectures.find(archs[device]) != tensor_architectures.end();');
@@ -588,6 +588,9 @@ Begin
   _Out.Add('#include <time.h>');
   _Out.Add('#include <string>');
   _Out.Add('#include <stdlib.h>');
+  _Out.Add('#ifdef _MSC_VER');
+  _Out.Add('#define unlink _unlink');
+  _Out.Add('#endif');
   _Out.Add('using namespace std;');
   _Out.Add('#ifdef _OPENMP');
   _Out.Add('  #include <omp.h>');
