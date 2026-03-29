@@ -2381,8 +2381,12 @@ begin
                                           '  __plan_unlocking__;'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
-                                          'auto _plan_group_vectorize = [&] (const char * Device)->int {' + CRLF +
-                                          '  m_plan_group_vectorize(Device);'+CRLF+
+                                          'auto _plan_group_vectorize = [&] (const char * Device, int GRP)->int {' + CRLF +
+                                          '  m_plan_group_vectorize(Device,GRP);'+CRLF+
+                                          '  return 1;' + CRLF +
+                                          '};' + CRLF +
+                                          'auto _plan_group_typize = [&] (const char * Device)->int {' + CRLF +
+                                          '  m_plan_group_vectorize(Device,32);'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
                                           'auto _clear_plan = [&] ()->int {' + CRLF +
@@ -2431,8 +2435,12 @@ begin
                                           '  m_plan_group_soft_atomize;'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
-                                          'auto _plan_group_vectorize = [&] (const char * Device)->int {' + CRLF +
-                                          '  m_plan_group_vectorize(Device);'+CRLF+
+                                          'auto _plan_group_vectorize = [&] (const char * Device, int GRP)->int {' + CRLF +
+                                          '  m_plan_group_vectorize(Device,GRP);'+CRLF+
+                                          '  return 1;' + CRLF +
+                                          '};' + CRLF +
+                                          'auto _plan_group_typize = [&] (const char * Device)->int {' + CRLF +
+                                          '  m_plan_group_vectorize(Device,32);'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
                                           'auto _clear_plan = [&] ()->int {' + CRLF +
@@ -2453,6 +2461,7 @@ begin
                                           '#define plan_group_atomize 1' + CRLF +
                                           '#define plan_group_soft_atomize 1' + CRLF +
                                           '#define plan_group_vectorize(S) 1' + CRLF +
+                                          '#define plan_group_typize(S) 1' + CRLF +
                                           '#define throw_num_stages() 1' + CRLF +
                                           '#define throw_stage() 0' + CRLF +
                                           '#define clear_plan 1' + CRLF +

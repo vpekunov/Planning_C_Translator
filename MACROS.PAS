@@ -93,7 +93,7 @@ Begin
   _Out.Add('   __plan_unlocking__; \');
   _Out.Add('   } while(0)');
   _Out.Add('#ifdef __REENT_GPU__');
-  _Out.Add('#define m_plan_group_vectorize(S) \');
+  _Out.Add('#define m_plan_group_vectorize(S,GROUP) \');
   _Out.Add('   do { \');
   _Out.Add('      __plan_locking__; \');
   _Out.Add('      __device & d = __open_device(S); \');
@@ -156,11 +156,11 @@ Begin
   _Out.Add('int n_items[n_args+1] = {0}; \');
   _Out.Add('      '+Ldecl+'<_params_'+ID+'>::iterator it; \');
   _Out.Add('      cl_kernel kernel = __compile_on_device(d, __gpu_common, gpu_'+ID+', "gpu_'+ID+'"); \');
-  _Out.Add('      __run_opencl_kernel__; \');
+  _Out.Add('      __run_opencl_kernel__(GROUP); \');
   _Out.Add('      __plan_unlocking__; \');
   _Out.Add('   } while(0)');
   _Out.Add('#else');
-  _Out.Add('#define m_plan_group_vectorize(S) m_plan_group_parallelize');
+  _Out.Add('#define m_plan_group_vectorize(S,GROUP) m_plan_group_parallelize');
   _Out.Add('#endif');
 End;
 
@@ -193,7 +193,7 @@ Begin
   _Out.Add('   while(0)');
   _Out.Add('#define m_plan_group_soft_atomize \');
   _Out.Add('   while(0)');
-  _Out.Add('#define m_plan_group_vectorize(S) \');
+  _Out.Add('#define m_plan_group_vectorize(S,GROUP) \');
   _Out.Add('   while(0)');
   _Out.Add('#define m_plan_group_first \');
   _Out.Add('   while(0)');

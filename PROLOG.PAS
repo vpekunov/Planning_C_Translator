@@ -345,7 +345,7 @@ Begin
   _Out.Add('   return prg->kernel;');
   _Out.Add('}');
   _Out.Add('');
-  _Out.Add('void __run_kernel(__device & d, cl_kernel kernel,');
+  _Out.Add('void __run_kernel(int GRP, __device & d, cl_kernel kernel,');
   _Out.Add('                  int n_args,');
   _Out.Add('                  int * size_items, int * offs_items, int * mode_items, bool * is_global,');
   _Out.Add('                  long long * n_pointer, int * n_items,');
@@ -372,8 +372,9 @@ Begin
   _Out.Add('  size_t work_groups = d.n_units;');
   _Out.Add('  while (work_groups > 1 && work_size % work_groups != 0)');
   _Out.Add('    work_groups--;');
+  _Out.Add('  if (GRP) work_groups = work_size / GRP;');
   _Out.Add('  size_t _group_size = work_size/work_groups;');
-  _Out.Add('  while ((_group_size > __max_group_threads || _group_size > max_group_size) && work_size%(2*work_groups) == 0) {');
+  _Out.Add('  while (!GRP && (_group_size > __max_group_threads || _group_size > max_group_size) && work_size%(2*work_groups) == 0) {');
   _Out.Add('     work_groups *= 2;');
   _Out.Add('     _group_size /= 2;');
   _Out.Add('  }');
@@ -480,7 +481,7 @@ Begin
   _Out.Add('#define plan_vector_id() 0');
   _Out.Add('#define plan_vector_size() 1');
   _Out.Add('');
-  _Out.Add('#define __run_opencl_kernel__ \');
+  _Out.Add('#define __run_opencl_kernel__(GROUP) \');
   _Out.Add('  do { \');
   _Out.Add('    char * cpu_data[n_args+1]; \');
   _Out.Add('    cl_int ret; \');
@@ -531,7 +532,7 @@ Begin
   _Out.Add('                memmove(&cpu_data[j][i*__nn__*size_items[j]],reinterpret_cast<char *>(&__planned__)+offs_items[j],__nn__*size_items[j]); \');
   _Out.Add('          } \');
   _Out.Add('    } \');
-  _Out.Add('    __run_kernel(d, kernel, n_args, size_items, offs_items, mode_items, is_global, n_pointer, n_items, cpu_data, __n__); \');
+  _Out.Add('    __run_kernel(GROUP, d, kernel, n_args, size_items, offs_items, mode_items, is_global, n_pointer, n_items, cpu_data, __n__); \');
   _Out.Add('    /* reverse_pump */ \');
   _Out.Add('    memset(__offs, 0, __nl__*sizeof(int)); \');
   _Out.Add('    for (int i = 0; i < __n__; i++) { \');
@@ -612,8 +613,8 @@ Begin
   _Out.Add('#define plan_group_parallelize _plan_group_parallelize()');
   _Out.Add('#define plan_group_atomize _plan_group_atomize()');
   _Out.Add('#define plan_group_soft_atomize _plan_group_soft_atomize()');
-  _Out.Add('#define plan_group_vectorize(S) _plan_group_vectorize(S)');
-  _Out.Add('#define plan_group_typize(S) _plan_group_vectorize(S)');
+  _Out.Add('#define plan_group_vectorize(S) _plan_group_vectorize(S,0)');
+  _Out.Add('#define plan_group_typize(S) _plan_group_vectorize(S,32)');
   _Out.Add('#ifdef __REENT_MPI__');
   _Out.Add('#define __throw_cluster__(ID,InputProcName,__Direction__) \');
   _Out.Add(' if (__clustered_topology(plan_topology_num())) { \');

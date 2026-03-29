@@ -41,8 +41,9 @@
       <Unit0>
         <Filename Value="Reenterable.lpr"/>
         <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
         <WindowIndex Value="1"/>
-        <TopLine Value="3416"/>
+        <TopLine Value="3437"/>
         <CursorPos X="64" Y="3456"/>
         <UsageCount Value="201"/>
         <Loaded Value="True"/>
@@ -102,7 +103,6 @@
         <Filename Value="PROLOG.PAS"/>
         <IsPartOfProject Value="True"/>
         <UnitName Value="Prolog"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="9"/>
         <WindowIndex Value="1"/>
         <CursorPos Y="9"/>
