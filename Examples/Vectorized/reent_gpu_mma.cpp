@@ -9,7 +9,7 @@ reenterable void mma_m8n8k4(bool init, bool tensored, int nMatrices, _global(nMa
   int i, j;
   if (init) {
      if (tensored) {
-        for (j = 0; j < 32; j++) {
+        for (j = 0; j < 32*nMatrices; j++) {
             plan_last(false, tensored, nMatrices, A, B, C);
         }
         plan_group_typize(NULL);
@@ -22,47 +22,39 @@ reenterable void mma_m8n8k4(bool init, bool tensored, int nMatrices, _global(nMa
      }
   } else {
      if (tensored) {
-        #ifdef NVIDIA_TENSOR_CAPABLE
         int id = plan_vector_id();
         int item = id % 32;
-        int matr;
-        for (matr = 0; matr < nMatrices; matr++) {
-            int base = matr*32;
-            double C0[2] = { C[base*2 + item*2], C[base*2 + item*2 + 1] };
-            double A0 = A[base + item];
-            double B0 = B[base + item/4 + (item%4)*8];
-            asm volatile(
-             "mma.sync.aligned.m8n8k4.row.col.f64.f64.f64.f64"
-             "{%0,%1}, {%2}, {%3}, {%4,%5};\n"
-             : "=d"(C0[0]), "=d"(C0[1])
-             :
-               "d"(A0),
-               "d"(B0),
-               "d"(C0[0]), "d"(C0[1])
-            );
-            barrier(0);
-            C[base*2 + item*2]   = C0[0];
-            C[base*2 + item*2 + 1] = C0[1];
-        }
+        int matr = id / 32;
+        int base = matr*32;
+        #ifdef NVIDIA_TENSOR_CAPABLE
+        double C0[2] = { C[base*2 + item*2], C[base*2 + item*2 + 1] };
+        double A0 = A[base + item];
+        double B0 = B[base + item/4 + (item%4)*8];
+        asm volatile(
+         "mma.sync.aligned.m8n8k4.row.col.f64.f64.f64.f64"
+         "{%0,%1}, {%2}, {%3}, {%4,%5};\n"
+         : "=d"(C0[0]), "=d"(C0[1])
+         :
+           "d"(A0),
+           "d"(B0),
+           "d"(C0[0]), "d"(C0[1])
+        );
+        barrier(0);
+        C[base*2 + item*2]   = C0[0];
+        C[base*2 + item*2 + 1] = C0[1];
         #else
-        int _matr;
-        for (_matr = 0; _matr < nMatrices; _matr += 4) {
-            int id = plan_vector_id();
-            int matr = _matr + id/8;
-            if (matr < nMatrices) {
-               int base = matr*32;
-               int item = id % 8;
-               int ptr = base*2 + item*8;
-               for (i = 0; i < 8; i++) {
-                   double S = C[ptr];
-                   int ptr2 = base + item*4;
-                   int ptr3 = base + i;
-                   for (j = 0; j < 4; j++, ptr3 += 8)
-                       S += A[ptr2++]*B[ptr3];
-                   C[ptr++] = S;
-               }
-            }
+        if (item < 8) {
+           int ptr = base*2 + item*8;
+           for (i = 0; i < 8; i++) {
+               double S = C[ptr];
+               int ptr2 = base + item*4;
+               int ptr3 = base + i;
+               for (j = 0; j < 4; j++, ptr3 += 8)
+                   S += A[ptr2++]*B[ptr3];
+               C[ptr++] = S;
+           }
         }
+        barrier(0);
         #endif
      } else {
         int id = plan_vector_id();
