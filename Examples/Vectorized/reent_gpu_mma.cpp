@@ -12,7 +12,7 @@ reenterable void mma_m8n8k4(bool init, bool tensored, int nMatrices, _global(nMa
         for (j = 0; j < 32*nMatrices; j++) {
             plan_last(false, tensored, nMatrices, A, B, C);
         }
-        plan_group_typize(NULL);
+        plan_group_typize(NULL, 32);
      }
      else {
         for (j = 0; j < 8*nMatrices; j++) {

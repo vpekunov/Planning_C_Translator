@@ -14,6 +14,13 @@
 //       автоматический для простого конвейера или по plan_topology_quit() для топологии.
 //   p - параллельный ли режим.
 
+{ 31.03.2026 Release V0.95beta2 (Planning C)                                     }
+{ - Bugs fixed                                                                   }
+{ + Теперь plan_group_typize запускает план на векторном расширителе с группой   }
+{   размером 32 (фиксированным по умолчанию) или с размером, указанным во втором }
+{   аргументе, в отличие от plan_group_vectorize, где размер группы подбирается  }
+{   динамически.                                                                 }
+
 { 01.07.2023 Release V0.95beta1 (Planning C)                                   }
 { - Lot of bugs fixed                                                          }
 { + Теперь все примеры в Linux компилируются инсталлятором автоматически       }
@@ -1429,8 +1436,8 @@ begin
      SetMultiByteRTLFileSystemCodePage(CP_UTF8);
      If ParamCount=0 Then
         Begin
-          WriteLn('Planning C (R) Translator V0.95beta1');
-          WriteLn('free for any purposes. Original author: V.V.Pekunov, 2008-2017, 2019-2023');
+          WriteLn('Planning C (R) Translator V0.95beta2');
+          WriteLn('free for any purposes. Original author: V.V.Pekunov, 2008-2017, 2019-2023, 2026');
           WriteLn('Usage: Reenterable [-nosourcelines] [-extensionsonly] [-followdefines] [-Dmacro[=val]] <inputfile.cpp> [outputfile]');
           WriteLn('  -nosourcelines     Removes references to source line numbers, therefore');
           WriteLn('                     C++ compiler will use the line numbers from the generated file,');
@@ -2385,8 +2392,11 @@ begin
                                           '  m_plan_group_vectorize(Device,GRP);'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
-                                          'auto _plan_group_typize = [&] (const char * Device)->int {' + CRLF +
-                                          '  m_plan_group_vectorize(Device,32);'+CRLF+
+                                          'auto _plan_group_typize = [&] (const char * Device, ...)->int {' + CRLF +
+                                          '  va_list args;' + CRLF +
+                                          '  va_start(args, Device);' + CRLF +
+                                          '  int GRP = va_arg(args, int);' + CRLF +
+                                          '  m_plan_group_vectorize(Device,GRP == 0 ? 32 : GRP);'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
                                           'auto _clear_plan = [&] ()->int {' + CRLF +
@@ -2439,8 +2449,11 @@ begin
                                           '  m_plan_group_vectorize(Device,GRP);'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
-                                          'auto _plan_group_typize = [&] (const char * Device)->int {' + CRLF +
-                                          '  m_plan_group_vectorize(Device,32);'+CRLF+
+                                          'auto _plan_group_typize = [&] (const char * Device, ...)->int {' + CRLF +
+                                          '  va_list args;' + CRLF +
+                                          '  va_start(args, Device);' + CRLF +
+                                          '  int GRP = va_arg(args, int);' + CRLF +
+                                          '  m_plan_group_vectorize(Device,GRP == 0 ? 32 : GRP);'+CRLF+
                                           '  return 1;' + CRLF +
                                           '};' + CRLF +
                                           'auto _clear_plan = [&] ()->int {' + CRLF +
@@ -2461,7 +2474,7 @@ begin
                                           '#define plan_group_atomize 1' + CRLF +
                                           '#define plan_group_soft_atomize 1' + CRLF +
                                           '#define plan_group_vectorize(S) 1' + CRLF +
-                                          '#define plan_group_typize(S) 1' + CRLF +
+                                          '#define plan_group_typize(S,...) 1' + CRLF +
                                           '#define throw_num_stages() 1' + CRLF +
                                           '#define throw_stage() 0' + CRLF +
                                           '#define clear_plan 1' + CRLF +
