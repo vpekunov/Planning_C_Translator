@@ -493,6 +493,8 @@ Begin
   _Out.Add('       cout<<"Error: too many items in vectorized section of plan: exceeds "<<d.max_work_size<<endl; \');
   _Out.Add('       exit(-1); \');
   _Out.Add('    } \');
+  _Out.Add('    it = __event_list__->begin(); \');
+  _Out.Add('    if (it != __event_list__->end()) __planned__ = *it; \');
   _Out.Add('    for (int i = 0; i < n_args; i++) { \');
   _Out.Add('        if (is_global[i]) n_items[i] = n_pointer[i] ? n_pointer[i] : loc_items(i); \');
   _Out.Add('        else if (n_pointer[i] == 0) n_items[i] = __n__; \');
