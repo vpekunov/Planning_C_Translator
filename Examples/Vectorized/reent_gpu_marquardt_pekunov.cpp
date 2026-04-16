@@ -132,7 +132,7 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
     for (j=i+1;j<NN;j++)
         {
          float Fact = Kf*LU[iRow[j]*NN+i];
-
+         barrier(CLK_GLOBAL_MEM_FENCE);
          if (id == j) LU[iRow[j]*NN+i] = Fact;
          barrier(CLK_GLOBAL_MEM_FENCE);
          if (id > i && id < NN)
@@ -192,10 +192,12 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 			_global(1) int * iters) {
 		if (init) {
 			int work_size = n*n > nProbes ? n*n : nProbes;
+			int rest = work_size % 32;
+			if (rest) work_size += 32 - rest;
 
 			for (int i = 0; i < work_size; i++)
 				plan_last(false, EPS, nProbes, mu0, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, iters);
-			plan_group_vectorize(NULL);
+			plan_group_typize(NULL);
 		} else {
 			int id = plan_vector_id();
 			float mu = mu0;
@@ -213,8 +215,13 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 			}
 			barrier(CLK_GLOBAL_MEM_FENCE);
 			do {
-				for (int i = 0; i < n; i++)
-					x[i] = x0[i] + (r - 2*r*genrandom(&SEEDS[id]));
+				if (id < nProbes)
+					for (int i = 0; i < n; i++)
+						x[i] = x0[i] + (r - 2*r*genrandom(&SEEDS[id]));
+				else
+					for (int i = 0; i < n; i++)
+						x[i] = x0[i];
+				barrier(CLK_GLOBAL_MEM_FENCE);
 				float Fp = @goal:-write(FUN).;
 				if (id < n) B[id] = Fk1;
 				barrier(CLK_GLOBAL_MEM_FENCE);

@@ -69,7 +69,7 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
     for (i = 0; i < NN; i++)
         LU[k + i] = A[k + i];
  }
- barrier(CLK_GLOBAL_MEM_FENCE);
+ barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 
  for (i=0; !stop && i<NN-1; i++)
    {
@@ -77,7 +77,7 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
        *iBig = i;
        *Big = 0.0f;
     }
-    barrier(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
     float size = 0.0f;
 
     if (id >= i && id < NN) {
@@ -88,7 +88,7 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
        if (size > *Big) *Big = size;
        #endif
     }
-    barrier(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
     if (id >= i && id < NN) {
        if (*Big == size)
           #ifdef ON_GPU
@@ -97,7 +97,7 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
           if (id > *iBig) *iBig = id;
           #endif
     }
-    barrier(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 
     if (*iBig!=i && id == 0)
        {
@@ -105,27 +105,27 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
         iRow[i] = iRow[*iBig];
         iRow[*iBig] = V;
        }
-    barrier(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
     float Divider = LU[iRow[i]*NN+i];
     if (fabs(Divider) < 1E-12)
        stop = 1;
     float Kf = !stop ? 1.0/Divider : 1.0;
-    barrier(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
     if (id == i) LU[iRow[i]*NN+i] = Kf;
-    barrier(CLK_GLOBAL_MEM_FENCE);
+    barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
     for (j=i+1;j<NN;j++)
         {
          float Fact = Kf*LU[iRow[j]*NN+i];
-
+         barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
          if (id == j) LU[iRow[j]*NN+i] = Fact;
-         barrier(CLK_GLOBAL_MEM_FENCE);
+         barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
          if (id > i && id < NN)
             atomic_sub_float(&LU[iRow[j]*NN+id], Fact*LU[iRow[i]*NN+id]);
-         barrier(CLK_GLOBAL_MEM_FENCE);
+         barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
         }
    }
  if (!stop && id == NN-1) LU[(iRow[NN-1]+1)*NN-1] = 1.0/LU[(iRow[NN-1]+1)*NN-1];
- barrier(CLK_GLOBAL_MEM_FENCE);
+ barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
  return !stop;
 }
 
@@ -135,27 +135,27 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 
  int i,j,k;
  if (id == 0) X[0] = Y[iRow[0]];
- barrier(CLK_GLOBAL_MEM_FENCE);
+ barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
  for (i=1;i<NN;i++)
      {
       if (id == i) X[i] = Y[iRow[i]];
-      barrier(CLK_GLOBAL_MEM_FENCE);
+      barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 
       if (id < i)
          atomic_sub_float(&X[i], LU[iRow[i]*NN+id]*X[id]);
-      barrier(CLK_GLOBAL_MEM_FENCE);
+      barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
      }
 
  if (id == NN-1) X[NN-1]*=LU[(iRow[NN-1]+1)*NN-1];
- barrier(CLK_GLOBAL_MEM_FENCE);
+ barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 
  for (i=1,j=NN-2;i<NN;i++,j--)
      {
       if (id > j && id < NN)
          atomic_sub_float(&X[j], LU[iRow[j]*NN+id]*X[id]);
-      barrier(CLK_GLOBAL_MEM_FENCE);
+      barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
       if (id == j) X[j] *= LU[iRow[j]*NN+j];
-      barrier(CLK_GLOBAL_MEM_FENCE);
+      barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
      }
 }
 
@@ -165,49 +165,51 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 #def_module() levenberg_marquardt(NAME, n, FUN) {
 @goal:-brackets_off.
 	reenterable @goal:-write(NAME).(bool init, float EPS, float mu0,
-			_global(n) float * x0, _global(n) float * x1, _global(n) float * f,
+			_global(n) float * x0,
 			_global(n) int * iRow,
 			_global(n*n) float * A,
 			_global(n*n) float * LU,
 			_global(n) float * B,
 			_global(n) float * GRAD,
 			_global(n) float * D,
-			_global(1) int * iters) {
+			_global(2) int * buf) {
 		if (init) {
 			int work_size = n*n;
+			int rest = work_size % 32;
+			if (rest) work_size += 32 - rest;
 
 			for (int i = 0; i < work_size; i++)
-				plan_last(false, EPS, mu0, x0, x1, f, iRow, A, LU, B, GRAD, D, iters);
-			plan_group_vectorize(NULL);
+				plan_last(false, EPS, mu0, x0, iRow, A, LU, B, GRAD, D, buf);
+			plan_group_typize(NULL);
 		} else {
 			int id = plan_vector_id();
 			float mu = mu0;
-			float x[n], f[n];
-			for (int i = 0; i < n; i++)
-				x[i] = x0[i];
-			float Fk1[n], fk1;
-			@goal:-write(FUN).;
-			barrier(CLK_GLOBAL_MEM_FENCE);
-			for (int i = 0; i < n; i++)
-				Fk1[i] = f[i];
-			barrier(CLK_GLOBAL_MEM_FENCE);
-			fk1 = f[0]*f[0];
-			for (int i = 1; i < n; i++)
-				fk1 += f[i]*f[i];
-			barrier(CLK_GLOBAL_MEM_FENCE);
 			float d = 1E30f;
 			if (id == 0) {
 				for (int i = 0; i < n; i++)
 					GRAD[i] = 0.0f;
-				*iters = 0;
+				buf[0] = 0;
 			}
-			barrier(CLK_GLOBAL_MEM_FENCE);
+			barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+
+			float x[n], f[n];
+			float Fk1[n], fk1;
+			for (int i = 0; i < n; i++)
+				x[i] = x0[i];
+			barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+			@goal:-write(FUN).;
+			barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+			for (int i = 0; i < n; i++)
+				Fk1[i] = f[i];
+			barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+			fk1 = f[0]*f[0];
+			for (int i = 1; i < n; i++)
+				fk1 += f[i]*f[i];
+			barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 			do {
 				for (int i = 0; i < n; i++)
 					x[i] = x0[i];
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (id < n) x1[id] = x0[id];
-				barrier(CLK_GLOBAL_MEM_FENCE);
+				barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 				if (id < n*n) {
 					int i = id / n;
 					int j = id % n;
@@ -220,7 +222,7 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 					LU[id] = (FP-FM)/(2.0f*delta);
 					x[j] += delta;
 				}
-				barrier(CLK_GLOBAL_MEM_FENCE);
+				barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 				if (id < n*n) {
 					int i = id / n;
 					int j = id % n;
@@ -239,16 +241,15 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 					}
 					A[id] = a;
 				}
-				barrier(CLK_GLOBAL_MEM_FENCE);
+				barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 				d = 0.0f;
 				for (int i = 0; i < n; i++) {
-					float g = GRAD[(i+id) % n];
+					float g = GRAD[i];
 					d += g*g;
 				}
 				d = sqrt(d);
-				int _iters = *iters;
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (_GetLU(n, iRow, A, LU, iters, D)) {
+				barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+				if (_GetLU(n, iRow, A, LU, &buf[1], D)) {
 					_SolveLU(n, iRow, LU, B, D);
 					float omega = 1.0f;
 					float step = 1.0f;
@@ -256,35 +257,35 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 						step = 0.0f;
 						for (int i = 0; i < n; i++) {
 							float ds = omega*D[i];
-							x[i] = x1[i] + ds;
+							x[i] = x0[i] + ds;
 							ds = fabs(ds);
 							if (ds > step) step = ds;
 						}
 						@goal:-write(FUN).;
-						barrier(CLK_GLOBAL_MEM_FENCE);
+						barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 						float fi = 0.0f;
 						for (int i = 0; i < n; i++) {
 							fi += f[i]*f[i];
 						}
-						barrier(CLK_GLOBAL_MEM_FENCE);
+						barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 						if (fi < fk1) {
 							fk1 = fi;
 							for (int i = 0; i < n; i++)
 								Fk1[i] = f[i];
-							barrier(CLK_GLOBAL_MEM_FENCE);
-							if (id < n) x1[id] = x[id];
-							barrier(CLK_GLOBAL_MEM_FENCE);
+							barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+							if (id < n) x0[id] = x[id];
+							barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 						} else
 							omega *= 0.5f;
 					}
 				}
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (id == 0) {
-					for (int i = 0; i < n; i++)
-						x0[i] = x1[i];
-					*iters = _iters + 1;
-				}
-				barrier(CLK_GLOBAL_MEM_FENCE);
+				barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+				#ifdef ON_GPU
+				if (id == 0) atomic_add(buf, 1);
+				#else
+				if (id == 0) (*buf)++;
+				#endif
+				barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 			} while (d > EPS);
 		}
 	}
@@ -293,16 +294,16 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 levenberg_marquardt('min_l_m', 3, 'f[0] = (2.0f-x[0])*(2.0f-x[0]); f[1] = (x[2]-3.0f)*(x[2]-3.0f); f[2] = (4.0f-x[1])*(4.0f-x[1])')
 
 int main() {
-	float x0[3] = { 1.0f, 1.0f, 1.0f }, x1[3], f[3];
+	float x0[3] = { 1.0f, 1.0f, 1.0f };
 	int iRow[3];
 	float A[9];
 	float LU[9];
 	float B[3];
 	float GRAD[3];
 	float D[3];
-	int iters = 0;
-	min_l_m(true, 1E-4f, 20.0f, x0, x1, f, iRow, A, LU, B, GRAD, D, &iters);
-	cout << iters << endl;
+	int buf[2] = { 0 };
+	min_l_m(true, 1E-4f, 20.0f, x0, iRow, A, LU, B, GRAD, D, buf);
+	cout << buf[0] << endl;
 	for (int i = 0; i < 3; i++)
-		cout << x1[i] << " ";
+		cout << x0[i] << " ";
 }
