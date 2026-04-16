@@ -17,22 +17,6 @@ using namespace std;
 #pragma plan common begin
 
 #define delta 0.0001
-#define mu_min 0.000001
-
-#define QRAN_SHIFT ((unsigned int) 15)
-#define QRAN_MASK ((unsigned int)((1 << QRAN_SHIFT) - 1))
-#define QRAN_MAX ((unsigned int) QRAN_MASK)
-#define QRAN_A ((unsigned int) 1664525)
-#define QRAN_C ((unsigned int)1013904223)
-
-float genrandom(__global unsigned int * RandSeed) {
-	#ifdef ON_GPU
-	*RandSeed = ((long) QRAN_A * (*RandSeed) + QRAN_C) & 0xFFFFFFFF;
-	#else
-	*RandSeed = ((long long) QRAN_A * (*RandSeed) + QRAN_C) & 0xFFFFFFFF;
-	#endif
-	return 1.0f*(((*RandSeed) >> 16) & QRAN_MAX)/QRAN_MAX;
-}
 
 #ifdef ON_GPU
 void atomic_sub_float(volatile __global float* addr, float val) {
@@ -178,11 +162,10 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 #pragma plan common end
 
 // n -- размерность пространства
-#def_module() marquardt_pekunov(NAME, n, FUN) {
+#def_module() levenberg_marquardt(NAME, n, FUN) {
 @goal:-brackets_off.
-	reenterable @goal:-write(NAME).(bool init, float EPS, int nProbes, float mu0,
-			_global(n) float * x0, _global(n) float * x1,
-			_global(__planned__.nProbes) unsigned int * SEEDS,
+	reenterable @goal:-write(NAME).(bool init, float EPS, float mu0,
+			_global(n) float * x0, _global(n) float * x1, _global(n) float * f,
 			_global(n) int * iRow,
 			_global(n*n) float * A,
 			_global(n*n) float * LU,
@@ -191,21 +174,28 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 			_global(n) float * D,
 			_global(1) int * iters) {
 		if (init) {
-			int work_size = n*n > nProbes ? n*n : nProbes;
+			int work_size = n*n;
 
 			for (int i = 0; i < work_size; i++)
-				plan_last(false, EPS, nProbes, mu0, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, iters);
+				plan_last(false, EPS, mu0, x0, x1, f, iRow, A, LU, B, GRAD, D, iters);
 			plan_group_vectorize(NULL);
 		} else {
 			int id = plan_vector_id();
 			float mu = mu0;
-			float r = 0.1f;
-			float x[n];
+			float x[n], f[n];
 			for (int i = 0; i < n; i++)
 				x[i] = x0[i];
-			float Fk1 = @goal:-write(FUN).;
+			float Fk1[n], fk1;
+			@goal:-write(FUN).;
+			barrier(CLK_GLOBAL_MEM_FENCE);
+			for (int i = 0; i < n; i++)
+				Fk1[i] = f[i];
+			barrier(CLK_GLOBAL_MEM_FENCE);
+			fk1 = f[0]*f[0];
+			for (int i = 1; i < n; i++)
+				fk1 += f[i]*f[i];
+			barrier(CLK_GLOBAL_MEM_FENCE);
 			float d = 1E30f;
-			int Lk1 = 5*nProbes;
 			if (id == 0) {
 				for (int i = 0; i < n; i++)
 					GRAD[i] = 0.0f;
@@ -214,93 +204,40 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 			barrier(CLK_GLOBAL_MEM_FENCE);
 			do {
 				for (int i = 0; i < n; i++)
-					x[i] = x0[i] + (r - 2*r*genrandom(&SEEDS[id]));
-				float Fp = @goal:-write(FUN).;
-				if (id < n) B[id] = Fk1;
+					x[i] = x0[i];
 				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (id < n) iRow[id] = 0;
+				if (id < n) x1[id] = x0[id];
 				barrier(CLK_GLOBAL_MEM_FENCE);
-				#ifdef ON_GPU
-				atomic_min_float(&B[id % n], Fp);
-				#else
-				if (B[id % n] > Fp) B[id % n] = Fp;
-				#endif
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (Fp < Fk1)
-					#ifdef ON_GPU
-					atomic_inc(&iRow[id % n]);
-					#else
-					iRow[id % n]++;
-					#endif
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (id == 0)
-					for (int i = 1; i < n; i++)
-						iRow[0] += iRow[i];
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (id == 0)
-					for (int i = 1; i < n; i++)
-						if (B[i] < B[0]) B[0] = B[i];
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				int Lk = iRow[0];
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (id == 0) iRow[0] = nProbes - 1;
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				Fk1 = B[0];
-				if (Fk1 == Fp)
-					#ifdef ON_GPU
-					atomic_min(&iRow[0], id);
-					#else
-					if (id < iRow[0]) iRow[0] = id;
-					#endif
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (id == 0)
-					for (int i = 0; i < n; i++)
-						x1[i] = x0[i];
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (iRow[0] == id)
-					for (int i = 0; i < n; i++)
-						x1[i] = x[i];
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				if (Lk > 0) {
-					if (Lk < Lk1) {
-						if (r < 0.001) {
-							r *= 2;
-						}
-					} else if (Lk > Lk1) {
-						if (r > 0.1) {
-							r /= 2;
-						}
-					}
-					mu = (mu0*Lk*Lk)/nProbes/nProbes;
-					if (mu < mu_min) mu = mu_min;
-				}
-				barrier(CLK_GLOBAL_MEM_FENCE);
-				for (int i = 0; i < n; i++)
-					x[i] = x1[i];
 				if (id < n*n) {
 					int i = id / n;
 					int j = id % n;
-					if (i == j) {
-						x[i] += delta;
-						float fp = @goal:-write(FUN).;
-						x[i] -= 2*delta;
-						float fm = @goal:-write(FUN).;
-						A[id] = mu + (fp-2.0f*Fk1+fm)/(delta*delta);
-						GRAD[i] = (fp - fm)/(2.0f*delta);
-					} else {
-						x[i] += delta;
-						x[j] += delta;
-						float fpp = @goal:-write(FUN).;
-						x[j] -= 2*delta;
-						float fpm = @goal:-write(FUN).;
-						float gp = (fpp-fpm)/(2.0f*delta);
-						x[i] -= 2*delta;
-						float fmm = @goal:-write(FUN).;
-						x[j] += 2*delta;
-						float fmp = @goal:-write(FUN).;
-						float gm = (fmp-fmm)/(2.0f*delta);
-						A[id] = (gp - gm)/(2.0f*delta);
+					x[j] += delta;
+					@goal:-write(FUN).;
+					float FP = f[i];
+					x[j] -= 2*delta;
+					@goal:-write(FUN).;
+					float FM = f[i];
+					LU[id] = (FP-FM)/(2.0f*delta);
+					x[j] += delta;
+				}
+				barrier(CLK_GLOBAL_MEM_FENCE);
+				if (id < n*n) {
+					int i = id / n;
+					int j = id % n;
+					float a = 0.0f;
+					for (int k = 0; k < n; k++) {
+						a += LU[k*n+i]*LU[k*n+j];
 					}
+					if (i == j) {
+						float g = 0.0f;
+						for (int k = 0; k < n; k++) {
+							g += LU[k*n+i]*Fk1[k];
+						}
+						GRAD[i] = g;
+						B[i] = -g;
+						a += mu;
+					}
+					A[id] = a;
 				}
 				barrier(CLK_GLOBAL_MEM_FENCE);
 				d = 0.0f;
@@ -312,20 +249,28 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 				int _iters = *iters;
 				barrier(CLK_GLOBAL_MEM_FENCE);
 				if (_GetLU(n, iRow, A, LU, iters, D)) {
-					_SolveLU(n, iRow, LU, GRAD, D);
+					_SolveLU(n, iRow, LU, B, D);
 					float omega = 1.0f;
 					float step = 1.0f;
 					while (omega > EPS && step > EPS) {
 						step = 0.0f;
 						for (int i = 0; i < n; i++) {
 							float ds = omega*D[i];
-							x[i] = x1[i] - ds;
+							x[i] = x1[i] + ds;
 							ds = fabs(ds);
 							if (ds > step) step = ds;
 						}
-						float Fi = @goal:-write(FUN).;
-						if (Fi < Fk1) {
-							Fk1 = Fi;
+						@goal:-write(FUN).;
+						barrier(CLK_GLOBAL_MEM_FENCE);
+						float fi = 0.0f;
+						for (int i = 0; i < n; i++) {
+							fi += f[i]*f[i];
+						}
+						barrier(CLK_GLOBAL_MEM_FENCE);
+						if (fi < fk1) {
+							fk1 = fi;
+							for (int i = 0; i < n; i++)
+								Fk1[i] = f[i];
 							barrier(CLK_GLOBAL_MEM_FENCE);
 							if (id < n) x1[id] = x[id];
 							barrier(CLK_GLOBAL_MEM_FENCE);
@@ -340,30 +285,24 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 					*iters = _iters + 1;
 				}
 				barrier(CLK_GLOBAL_MEM_FENCE);
-				Lk1 = Lk;
 			} while (d > EPS);
 		}
 	}
 };
 
-marquardt_pekunov('min_m_p', 2, '4.0f*(x[0]-5.0f)*(x[0]-5.0f) + (x[1]-6.0f)*(x[1]-6.0f)')
+levenberg_marquardt('min_l_m', 3, 'f[0] = (2.0f-x[0])*(2.0f-x[0]); f[1] = (x[2]-3.0f)*(x[2]-3.0f); f[2] = (4.0f-x[1])*(4.0f-x[1])')
 
 int main() {
-	const int nProbes = 500;
-	float x0[2] = { 1.0f, 1.0f }, x1[2];
-	unsigned int SEEDS[nProbes] = { 0 };
-	int iRow[2];
-	float A[4];
-	float LU[4];
-	float B[2];
-	float GRAD[2];
-	float D[2];
+	float x0[3] = { 1.0f, 1.0f, 1.0f }, x1[3], f[3];
+	int iRow[3];
+	float A[9];
+	float LU[9];
+	float B[3];
+	float GRAD[3];
+	float D[3];
 	int iters = 0;
-	unsigned int seed = (unsigned int)time(NULL);
-	for (int i = 0; i < nProbes; i++)
-		SEEDS[i] = (unsigned int)(100000*genrandom(&seed));
-	min_m_p(true, 1E-4f, nProbes, 20.0f, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, &iters);
+	min_l_m(true, 1E-4f, 20.0f, x0, x1, f, iRow, A, LU, B, GRAD, D, &iters);
 	cout << iters << endl;
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < 3; i++)
 		cout << x1[i] << " ";
 }
