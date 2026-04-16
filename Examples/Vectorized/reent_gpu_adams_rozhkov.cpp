@@ -42,7 +42,7 @@ __constant float AdamsTableB[5][6] = {
 				kf += m;
 				sf += m;
 			}
-			plan_group_vectorize(NULL);
+			plan_group_typize(NULL, n);
 		} else {
  			int id = plan_vector_id();
 			int order = 1; // Текущий порядок метода
