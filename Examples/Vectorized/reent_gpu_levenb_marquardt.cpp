@@ -167,6 +167,7 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 #def_module() levenberg_marquardt(NAME, FIRSTS, LAST) {
 @goal:-brackets_off.
 @countl([], 0):-!.
+@countl('', 0):-!.
 @countl([H|T], N):-
    countl(T, N1),
    N is N1+1,
@@ -179,6 +180,8 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
    putf(N, H),
    N1 is N+1,
    unroll(N1, T),
+   !.
+@unroll(_, ''):-
    !.
 @unroll(N, A):-
    putf(N, A),
