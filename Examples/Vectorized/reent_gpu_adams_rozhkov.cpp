@@ -49,28 +49,28 @@ __constant float AdamsTableB[5][6] = {
 			float f[7]; // Значения функции
 			float t = 0.0f;
 			if (id < n) y[id] = y0[id];
-			barrier(0);
+			barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 			if (id < n) f[0] = y[id]*(@goal:-write(KF_EQ).)+(@goal:-write(SF_EQ).);
-			barrier(0);
+			barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 			while (fabs(t - T) > EPS) {
 				if (t + tau > T) {
 					tau = T - t;
 					// РК-4
 					float a1 = tau*(y[id]*(@goal:-write(KF_EQ).) + (@goal:-write(SF_EQ).));
 					if (id < n) y[id] = y0[id] + a1/2.0f;
-					barrier(0);
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 					float b1 = tau*(y[id]*(@goal:-write(KF_EQ).) + (@goal:-write(SF_EQ).));
 					if (id < n) y[id] = y0[id] + b1/2.0f;
-					barrier(0);
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 					float c1 = tau*(y[id]*(@goal:-write(KF_EQ).) + (@goal:-write(SF_EQ).));
 					if (id < n) y[id] = y0[id] + c1;
-					barrier(0);
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 					float d1 = tau*(y[id]*(@goal:-write(KF_EQ).) + (@goal:-write(SF_EQ).));
 					if (id < n) {
 						y0[id] += (a1+2.0f*b1+2.0f*c1+d1)/6.0f;
 						y[id] = y0[id];
 					}
-					barrier(0);
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 				} else {
 					// Адамс_Рожков_Пекунов
 					float ffp = 0.0f;
@@ -81,7 +81,7 @@ __constant float AdamsTableB[5][6] = {
 					}
 
 					if (id < n) y[id] += tau*ffp;
-					barrier(0);
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 
 					ff = AdamsTable[order-1][1]*(@goal:-write(KF_EQ).)/AdamsTable[order-1][0];
 					sc = AdamsTable[order-1][1]*(@goal:-write(SF_EQ).)/AdamsTable[order-1][0];
@@ -92,7 +92,7 @@ __constant float AdamsTableB[5][6] = {
 					float P = tau*ff;
 
 					if (id < n) y[id] = (y0[id] + tau*sc) / (1.0f - tau*ff);
-					barrier(0);
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 
 					for (int i = order; i > 0; i--) {
 						f[i] = f[i-1];
@@ -101,7 +101,7 @@ __constant float AdamsTableB[5][6] = {
 						f[0] = y[id]*(@goal:-write(KF_EQ).)+(@goal:-write(SF_EQ).);
 						y0[id] = y[id];
 					}
-					barrier(0);
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 					if (order < k) order++;
 				}
 				t += tau;
