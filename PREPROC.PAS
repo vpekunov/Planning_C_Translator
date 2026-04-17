@@ -2012,7 +2012,21 @@ begin
                                L1.GetIdent(False);
                                L1.Check(Colon);
                                L1.Check(Dash);
-                               K := Goals.Add(DelBlanks(StringReplace(L1.AnlzLine,#$07,'',[rfReplaceAll])));
+                               K := Goals.Add(
+                                 StringReplace(
+                                    DelBlanks(
+                                       StringReplace(
+                                          StringReplace(L1.AnlzLine, ' is ', '####',[rfReplaceAll]),
+                                          #$07,
+                                          '',
+                                          [rfReplaceAll]
+                                       )
+                                    ),
+                                    '####',
+                                    ' is ',
+                                    [rfReplaceAll]
+                                 )
+                               );
                                TextModule := TextModule + Chr(1) + IntToStr(K+1) + Chr(2)
                              End
                           Else
