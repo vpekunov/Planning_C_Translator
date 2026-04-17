@@ -353,24 +353,24 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 	}
 };
 
-marquardt_pekunov('min_m_p', 2, '4.0f*(x[0]-5.0f)*(x[0]-5.0f) + (x[1]-6.0f)*(x[1]-6.0f)')
+marquardt_pekunov('min_m_p', 3, 'pow(100.0f*(x[1]-x[0]*x[0])*(x[1]-x[0]*x[0])+(2.0f-x[0])*(2.0f-x[0]),2) + pow((x[2]-3.0f)*(x[2]-3.0f),2) + pow((4.0f-x[1])*(4.0f-x[1]),2)')
 
 int main() {
 	const int nProbes = 500;
-	float x0[2] = { 1.0f, 1.0f }, x1[2];
+	float x0[3] = { 2.0f, 6.0f, -5.0f }, x1[3];
 	unsigned int SEEDS[nProbes] = { 0 };
-	int iRow[2];
-	float A[4];
-	float LU[4];
-	float B[2];
-	float GRAD[2];
-	float D[2];
+	int iRow[3];
+	float A[9];
+	float LU[9];
+	float B[3];
+	float GRAD[3];
+	float D[3];
 	int iters = 0;
 	unsigned int seed = (unsigned int)time(NULL);
 	for (int i = 0; i < nProbes; i++)
 		SEEDS[i] = (unsigned int)(100000*genrandom(&seed));
-	min_m_p(true, 1E-4f, nProbes, 20.0f, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, &iters);
+	min_m_p(true, 1E-5f, nProbes, 20.0f, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, &iters);
 	cout << iters << endl;
-	for (int i = 0; i < 2; i++)
+	for (int i = 0; i < 3; i++)
 		cout << x1[i] << " ";
 }
