@@ -330,15 +330,15 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 				BARRIER(work_size, (volatile __global int *) barriers); barriers++;
 				if (Lk > 0) {
 					if (Lk < Lk1) {
-						if (r < 0.1f) {
+						if (r < 1.0f) {
 							r *= 3.0f;
 						}
 						mu /= (2.0f*Lk/Lk1 + mu);
 					} else if (Lk > Lk1) {
-						if (r > 0.001f) {
-							r /= 1.2f;
+						if (r > 0.0001f) {
+							r /= 3.0f;
 						}
-						mu += 15.0f*(Lk-Lk1)/(Lk1+1);
+						mu += 10.0f*(Lk-Lk1)/(Lk1+1);
 					}
 					if (mu < mu_min) mu = mu_min;
 				} else mu = mu_min;
@@ -433,9 +433,11 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 					BARRIER(work_size, (volatile __global int *) barriers); barriers++;
 					if (id == 0) {
 						#ifdef ON_GPU
-						atomic_xchg(buf, iters);
+						atomic_xchg(buf, iters+1);
+						atomic_xchg(FF, Fk1);
 						#else
-						buf[0] = iters;
+						buf[0] = iters+1;
+						*FF = Fk1;
 						#endif
 					}
 					BARRIER(work_size, (volatile __global int *) barriers); barriers++;
@@ -461,16 +463,24 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 	}
 };
 
-const int max_iters = 30;
+const int max_iters = 500;
 
 marquardt_pekunov('min_m_p', 3, '(100.0f*(x[1]-x[0]*x[0])*(x[1]-x[0]*x[0])+(2.0f-x[0])*(2.0f-x[0])) + ((x[2]-3.0f)*(x[2]-3.0f)) + ((4.0f-x[1])*(4.0f-x[1]))', max_iters)
 
 int main() {
 	const int nProbes = 3*3*150;
+	const int nPoints = 100;
 	float ITERS = 0.0f;
 	float Total = 0.0f;
-	for (unsigned int seed0 = 0; seed0 < 40; seed0++) {
-		float x0[3] = { 2.0f, 6.0f, -5.0f }, x1[3];
+	int nGOOD = 0;
+	unsigned int seed_points = 184415;
+	float rs[3] = { 3.0f, 6.0f, 5.0f };
+	for (unsigned int k = 0; k < nPoints; k++) {
+		float x0[3], x1[3];
+
+		for (int i = 0; i < 3; i++)
+			x0[i] = rs[i] - 2*rs[i]*genrandom(&seed_points);
+
 		unsigned int SEEDS[nProbes] = { 0 };
 		int iRow[3];
 		float A[9];
@@ -481,17 +491,21 @@ int main() {
 		int buf[2] = { 0 };
 		int barriers[(max_iters+1)*22] = { 0 };
 		float FF;
-		unsigned int seed = seed0*1500;
+
+		unsigned int seed = 184415;
 		for (int i = 0; i < nProbes; i++)
 			SEEDS[i] = (unsigned int)(100000*genrandom(&seed));
-		min_m_p(true, 1E-4f, nProbes, 10.0f, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, buf, barriers, &FF);
+
+		min_m_p(true, 1E-3f, nProbes, 10.0f, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, buf, barriers, &FF);
 		cout << buf[0] << endl;
 		for (int i = 0; i < 3; i++)
 			cout << x1[i] << " ";
 		cout << endl << "F = " << FF << endl;
 		Total += FF;
 		ITERS += buf[0];
+		if (fabs(FF) < LEPS) nGOOD++;
 	}
-	cout << "Average F = " << (Total/40) << endl;
-	cout << "Average ITERS = " << (ITERS/40) << endl;
+	cout << "Average F = " << (Total/nPoints) << endl;
+	cout << "Average ITERS = " << (ITERS/nPoints) << endl;
+	cout << "nGOODS = " << nGOOD << endl;
 }

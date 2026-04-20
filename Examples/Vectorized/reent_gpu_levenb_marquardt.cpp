@@ -16,6 +16,21 @@ using namespace std;
 
 #pragma plan gpu end
 
+#define QRAN_SHIFT ((unsigned int) 15)
+#define QRAN_MASK ((unsigned int)((1 << QRAN_SHIFT) - 1))
+#define QRAN_MAX ((unsigned int) QRAN_MASK)
+#define QRAN_A ((unsigned int) 1664525)
+#define QRAN_C ((unsigned int)1013904223)
+
+float genrandom(__global unsigned int * RandSeed) {
+	#ifdef ON_GPU
+	*RandSeed = ((long) QRAN_A * (*RandSeed) + QRAN_C) & 0xFFFFFFFF;
+	#else
+	*RandSeed = ((long long) QRAN_A * (*RandSeed) + QRAN_C) & 0xFFFFFFFF;
+	#endif
+	return 1.0f*(((*RandSeed) >> 16) & QRAN_MAX)/QRAN_MAX;
+}
+
 #pragma plan common begin
 
 #define delta 0.00001
@@ -373,13 +388,22 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 						}
 						float zk = a + alphak*(b + alphak*(c + alphak*d));
 						if (zk >= pk) mu += (zk - pk)/(alphak + EPS);
-						else mu /= (2.0f + mu);
+						else mu /= (3.0f + mu);
 					}
 					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 					fk0 = fk1;
 					dfk0 = dfk1;
 					pk = pk1;
-				} else break;
+				} else {
+					if (id == 0) {
+						fk1 = 0.0f;
+						for (int i = 0; i < @goal:-n.; i++)
+							fk1 += Fk1[i]*Fk1[i];
+						*FF = sqrt(fk1);
+					}
+					barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
+					break;
+				}
 				barrier(CLK_GLOBAL_MEM_FENCE+CLK_LOCAL_MEM_FENCE);
 				#ifdef ON_GPU
 				if (id == 0) atomic_add(buf, 1);
@@ -406,20 +430,40 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 
 solve(solve_l_m, 100.0f*(x[1]-x[0]*x[0])*(x[1]-x[0]*x[0])+(2.0f-x[0])*(2.0f-x[0]), (x[2]-3.0f)*(x[2]-3.0f), (4.0f-x[1])*(4.0f-x[1]));
 
+const int max_iters = 500;
+
 int main() {
-	float x0[3] = { 2.0f, 6.0f, -5.0f };
-	int iRow[3];
-	float A[9];
-	float LU[9], J0[9];
-	float B[3];
-	float GRAD[3];
-	float D[3];
-	int buf[2] = { 0 };
-	float FF;
-	solve_l_m(true, 0.5E-6f, 30, 10.0f, x0, iRow, A, LU, J0, B, GRAD, D, buf, &FF);
-	cout << buf[0] << endl;
-	for (int i = 0; i < 3; i++)
-		cout << x0[i] << " ";
-	cout << endl << "F = " << FF << endl;
-	cout << "Defect = " << FF*buf[0] << endl;
+	const int nPoints = 100;
+	float ITERS = 0.0f;
+	float Total = 0.0f;
+	int nGOOD = 0;
+	unsigned int seed_points = 184415;
+	float rs[3] = { 3.0f, 6.0f, 5.0f };
+	for (unsigned int k = 0; k < nPoints; k++) {
+		float x0[3], x1[3];
+
+		for (int i = 0; i < 3; i++)
+			x0[i] = rs[i] - 2*rs[i]*genrandom(&seed_points);
+
+		int iRow[3];
+		float A[9];
+		float LU[9], J0[9];
+		float B[3];
+		float GRAD[3];
+		float D[3];
+		int buf[2] = { 0 };
+		float FF;
+
+		solve_l_m(true, 0.5E-6f, max_iters, 10.0f, x0, iRow, A, LU, J0, B, GRAD, D, buf, &FF);
+		cout << buf[0] << endl;
+		for (int i = 0; i < 3; i++)
+			cout << x0[i] << " ";
+		cout << endl << "F = " << FF << endl;
+		Total += FF;
+		ITERS += buf[0];
+		if (fabs(FF) < LEPS) nGOOD++;
+	}
+	cout << "Average F = " << (Total/nPoints) << endl;
+	cout << "Average ITERS = " << (ITERS/nPoints) << endl;
+	cout << "nGOODS = " << nGOOD << endl;
 }
