@@ -218,12 +218,10 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 			_global(1) float * FF) {
 		if (init) {
 			int work_size = @goal:-n.*@goal:-n.;
-			int rest = work_size % 32;
-			if (rest) work_size += 32 - rest;
 
 			for (int i = 0; i < work_size; i++)
 				plan_last(false, EPS, MaxIters, mu0, x0, iRow, A, LU, J0, B, GRAD, D, buf, FF);
-			plan_group_typize(NULL);
+			plan_group_typize(NULL, work_size);
 		} else {
 			int id = plan_vector_id();
 			float mu = mu0;
