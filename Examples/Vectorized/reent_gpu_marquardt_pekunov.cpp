@@ -9,13 +9,16 @@ using namespace std;
 #pragma plan gpu begin
 
 #pragma OPENCL EXTENSION cl_khr_global_int32_base_atomics : enable
+#pragma OPENCL EXTENSION cl_khr_int64_base_atomics : enable
+#pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
 #pragma plan gpu end
 
 #pragma plan common begin
 
-#define delta 0.00001
-#define LEPS 0.0001f
+#define delta 0.0000001
+#define LEPS 0.000000001
+#define GOOD_EPS 0.00001
 #define mu_min 0.000001
 
 #define QRAN_SHIFT ((unsigned int) 15)
@@ -24,80 +27,84 @@ using namespace std;
 #define QRAN_A ((unsigned int) 1664525)
 #define QRAN_C ((unsigned int)1013904223)
 
-float genrandom(__global unsigned int * RandSeed) {
+double genrandom(__global unsigned int * RandSeed) {
 	#ifdef __GPU__
 	atomic_xchg(RandSeed, ((long) QRAN_A * atomic_add(RandSeed, 0) + QRAN_C) & 0xFFFFFFFF);
-	return 1.0f*((atomic_add(RandSeed, 0) >> 16) & QRAN_MAX)/QRAN_MAX;
+	return 1.0*((atomic_add(RandSeed, 0) >> 16) & QRAN_MAX)/QRAN_MAX;
 	#else
 	*RandSeed = ((long long) QRAN_A * (*RandSeed) + QRAN_C) & 0xFFFFFFFF;
-	return 1.0f*(((*RandSeed) >> 16) & QRAN_MAX)/QRAN_MAX;
+	return 1.0*(((*RandSeed) >> 16) & QRAN_MAX)/QRAN_MAX;
 	#endif
 }
 
 #ifdef __GPU__
-float atomic_sub_float(volatile __global float* addr, float val) {
-    unsigned int old, next;
-    float ret = *addr;
+double atomic_xchg_double(volatile global double* addr, double val) {
+    unsigned long old = atom_xchg((volatile global unsigned long*)addr, as_long(val));
+    return as_double(old);
+}
+double atomic_sub_double(volatile __global double* addr, double val) {
+    unsigned long old, next;
+    double ret = *addr;
     do {
-        old = as_uint(*addr);
-        next = as_uint(as_float(old) - val);
-    } while (atomic_cmpxchg((volatile __global unsigned int*)addr, old, next) != old);
+        old = as_ulong(*addr);
+        next = as_ulong(as_double(old) - val);
+    } while (atom_cmpxchg((volatile __global unsigned long*)addr, old, next) != old);
     return ret;
 }
-float atomic_add_float(volatile __global float* addr, float val) {
-    unsigned int old, next;
-    float ret = *addr;
+double atomic_add_double(volatile __global double* addr, double val) {
+    unsigned long old, next;
+    double ret = *addr;
     do {
-        old = as_uint(*addr);
-        next = as_uint(as_float(old) + val);
-    } while (atomic_cmpxchg((volatile __global unsigned int*)addr, old, next) != old);
+        old = as_ulong(*addr);
+        next = as_ulong(as_double(old) + val);
+    } while (atom_cmpxchg((volatile __global unsigned long*)addr, old, next) != old);
     return ret;
 }
-float atomic_mul_float(volatile __global float* addr, float val) {
-    unsigned int old, next;
-    float ret = *addr;
+double atomic_mul_double(volatile __global double* addr, double val) {
+    unsigned long old, next;
+    double ret = *addr;
     do {
-        old = as_uint(*addr);
-        next = as_uint(as_float(old) * val);
-    } while (atomic_cmpxchg((volatile __global unsigned int*)addr, old, next) != old);
+        old = as_ulong(*addr);
+        next = as_ulong(as_double(old) * val);
+    } while (atom_cmpxchg((volatile __global unsigned long*)addr, old, next) != old);
     return ret;
 }
-void atomic_min_float(volatile __global float* addr, float val) {
-    unsigned int old, next;
+void atomic_min_double(volatile __global double* addr, double val) {
+    unsigned long old, next;
     do {
-        old = as_uint(*addr);
-        if (as_float(old) <= val) break;
-        next = as_uint(val);
-    } while (atomic_cmpxchg((volatile __global unsigned int*)addr, old, next) != old);
+        old = as_ulong(*addr);
+        if (as_double(old) <= val) break;
+        next = as_ulong(val);
+    } while (atom_cmpxchg((volatile __global unsigned long*)addr, old, next) != old);
 }
-void atomic_max_float(volatile __global float* addr, float val) {
-    unsigned int old, next;
+void atomic_max_double(volatile __global double* addr, double val) {
+    unsigned long old, next;
     do {
-        old = as_uint(*addr);
-        if (as_float(old) >= val) break;
-        next = as_uint(val);
-    } while (atomic_cmpxchg((volatile __global unsigned int*)addr, old, next) != old);
+        old = as_ulong(*addr);
+        if (as_double(old) >= val) break;
+        next = as_ulong(val);
+    } while (atom_cmpxchg((volatile __global unsigned long*)addr, old, next) != old);
 }
 #else
-float atomic_sub_float(volatile __global float* addr, float val) {
-        float ret = *addr;
+double atomic_sub_double(volatile __global double* addr, double val) {
+        double ret = *addr;
 	*addr -= val;
 	return ret;
 }
-float atomic_add_float(volatile __global float* addr, float val) {
-        float ret = *addr;
+double atomic_add_double(volatile __global double* addr, double val) {
+        double ret = *addr;
 	*addr += val;
 	return ret;
 }
-float atomic_mul_float(volatile __global float* addr, float val) {
-        float ret = *addr;
+double atomic_mul_double(volatile __global double* addr, double val) {
+        double ret = *addr;
 	*addr *= val;
 	return ret;
 }
-void atomic_min_float(volatile __global float* addr, float val) {
+void atomic_min_double(volatile __global double* addr, double val) {
 	if (*addr > val) *addr = val;
 }
-void atomic_max_float(volatile __global float* addr, float val) {
+void atomic_max_double(volatile __global double* addr, double val) {
 	if (*addr < val) *addr = val;
 }
 int atomic_add(volatile __global int * addr, int val) {
@@ -122,7 +129,7 @@ void BARRIER(volatile __global int * barriers) {
 	#endif
 }
 
-int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU, __global int * iBig, __global int * stop, __global float * Big, __global int * barriers)
+int _GetLU(int NN, __global int * iRow, __global double * A, __global double * LU, __global int * iBig, __global int * stop, __global double * Big, __global int * barriers)
 {
  int i, j;
 
@@ -142,7 +149,7 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
     #ifdef __GPU__
     atomic_xchg(iRow+id, id);
     for (i = 0; i < NN; i++)
-        atomic_xchg(LU + k + i, atomic_add_float(A + k + i, 0.0f));
+        atomic_xchg_double(LU + k + i, atomic_add_double(A + k + i, 0.0));
     #else
     iRow[id] = id;
     for (i = 0; i < NN; i++)
@@ -157,26 +164,26 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
     if (id == 0) {
        #ifdef __GPU__
        atomic_xchg(iBig, i);
-       atomic_xchg(Big, 0.0f);
+       atomic_xchg_double(Big, 0.0);
        #else
        *iBig = i;
-       *Big = 0.0f;
+       *Big = 0.0;
        #endif
     }
     BARRIER(barriers); barriers++;
-    float size = 0.0f;
+    double size = 0.0;
 
     if (id >= i && id < NN) {
-       size = fabs(atomic_add_float(LU+atomic_add(iRow+id, 0)*NN+i, 0.0f));
+       size = fabs(atomic_add_double(LU+atomic_add(iRow+id, 0)*NN+i, 0.0));
        #ifdef __GPU__
-       atomic_max_float(Big, size);
+       atomic_max_double(Big, size);
        #else
        if (size > *Big) *Big = size;
        #endif
     }
     BARRIER(barriers); barriers++;
     if (id >= i && id < NN) {
-       if (atomic_add_float(Big, 0.0f) == size)
+       if (atomic_add_double(Big, 0.0) == size)
           #ifdef __GPU__
           atomic_max(iBig, id);
           #else
@@ -199,41 +206,41 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
         #endif
        }
     BARRIER(barriers); barriers++;
-    float Divider = atomic_add_float(LU+atomic_add(iRow+i, 0)*NN+i, 0.0f);
+    double Divider = atomic_add_double(LU+atomic_add(iRow+i, 0)*NN+i, 0.0);
     if (fabs(Divider) < 1E-12)
        #ifdef __GPU__
        atomic_inc(stop);
        #else
        iBig[1]++;
        #endif
-    float Kf = !atomic_add(stop, 0) ? 1.0/Divider : 1.0;
+    double Kf = !atomic_add(stop, 0) ? 1.0/Divider : 1.0;
     BARRIER(barriers); barriers++;
     if (id == i)
        #ifdef __GPU__
-       atomic_xchg(LU+atomic_add(iRow+i, 0)*NN+i, Kf);
+       atomic_xchg_double(LU+atomic_add(iRow+i, 0)*NN+i, Kf);
        #else
        LU[atomic_add(iRow+i, 0)*NN+i] = Kf;
        #endif
     BARRIER(barriers); barriers++;
     for (j=i+1;j<NN;j++)
         {
-         float Fact = Kf*atomic_add_float(LU+atomic_add(iRow+j, 0)*NN+i, 0.0f);
+         double Fact = Kf*atomic_add_double(LU+atomic_add(iRow+j, 0)*NN+i, 0.0);
          BARRIER(barriers); barriers++;
          if (id == j)
             #ifdef __GPU__
-            atomic_xchg(LU+atomic_add(iRow+j, 0)*NN+i, Fact);
+            atomic_xchg_double(LU+atomic_add(iRow+j, 0)*NN+i, Fact);
             #else
             LU[atomic_add(iRow+j, 0)*NN+i] = Fact;
             #endif
          BARRIER(barriers); barriers++;
          if (id > i && id < NN)
-            atomic_sub_float(LU+atomic_add(iRow+j, 0)*NN+id, Fact*atomic_add_float(LU+atomic_add(iRow+i, 0)*NN+id, 0.0f));
+            atomic_sub_double(LU+atomic_add(iRow+j, 0)*NN+id, Fact*atomic_add_double(LU+atomic_add(iRow+i, 0)*NN+id, 0.0));
          BARRIER(barriers); barriers++;
         }
    }
  if (!atomic_add(stop, 0) && id == NN-1)
     #ifdef __GPU__
-    atomic_xchg(LU+(atomic_add(iRow+NN-1, 0)+1)*NN-1, 1.0/atomic_add_float(LU+(atomic_add(iRow+NN-1, 0)+1)*NN-1, 0.0f));
+    atomic_xchg_double(LU+(atomic_add(iRow+NN-1, 0)+1)*NN-1, 1.0/atomic_add_double(LU+(atomic_add(iRow+NN-1, 0)+1)*NN-1, 0.0));
     #else
     LU[(atomic_add(iRow+NN-1, 0)+1)*NN-1] = 1.0/LU[(atomic_add(iRow+NN-1, 0)+1)*NN-1];
     #endif
@@ -241,14 +248,14 @@ int _GetLU(int NN, __global int * iRow, __global float * A, __global float * LU,
  return !atomic_add(stop, 0);
 }
 
-void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float * Y, __global float * X, __global int * barriers)
+void _SolveLU(int NN, __global int * iRow, __global double * LU, __global double * Y, __global double * X, __global int * barriers)
 {
  int id = plan_vector_id();
 
  int i,j,k;
  if (id == 0)
     #ifdef __GPU__
-    atomic_xchg(X, atomic_add_float(Y+atomic_add(iRow, 0), 0.0f));
+    atomic_xchg_double(X, atomic_add_double(Y+atomic_add(iRow, 0), 0.0));
     #else
     X[0] = Y[iRow[0]];
     #endif
@@ -257,26 +264,26 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
      {
       if (id == i)
          #ifdef __GPU__
-         atomic_xchg(X+i, atomic_add_float(Y+atomic_add(iRow+i, 0), 0.0f));
+         atomic_xchg_double(X+i, atomic_add_double(Y+atomic_add(iRow+i, 0), 0.0));
          #else
          X[i] = Y[iRow[i]];
          #endif
       BARRIER(barriers); barriers++;
 
       if (id < i)
-         atomic_sub_float(X+i, atomic_add_float(LU+atomic_add(iRow+i, 0)*NN+id, 0.0f)*atomic_add_float(X+id, 0.0f));
+         atomic_sub_double(X+i, atomic_add_double(LU+atomic_add(iRow+i, 0)*NN+id, 0.0)*atomic_add_double(X+id, 0.0));
       BARRIER(barriers); barriers++;
      }
 
- if (id == NN-1) atomic_mul_float(X+NN-1, atomic_add_float(LU+(atomic_add(iRow+NN-1, 0)+1)*NN-1, 0.0f));
+ if (id == NN-1) atomic_mul_double(X+NN-1, atomic_add_double(LU+(atomic_add(iRow+NN-1, 0)+1)*NN-1, 0.0));
  BARRIER(barriers); barriers++;
 
  for (i=1,j=NN-2;i<NN;i++,j--)
      {
       if (id > j && id < NN)
-         atomic_sub_float(X+j, atomic_add_float(LU+atomic_add(iRow+j, 0)*NN+id, 0.0f)*atomic_add_float(X+id, 0.0f));
+         atomic_sub_double(X+j, atomic_add_double(LU+atomic_add(iRow+j, 0)*NN+id, 0.0)*atomic_add_double(X+id, 0.0));
       BARRIER(barriers); barriers++;
-      if (id == j) atomic_mul_float(X+j, atomic_add_float(LU+atomic_add(iRow+j, 0)*NN+j, 0.0f));
+      if (id == j) atomic_mul_double(X+j, atomic_add_double(LU+atomic_add(iRow+j, 0)*NN+j, 0.0));
       BARRIER(barriers); barriers++;
      }
 }
@@ -286,18 +293,18 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 // n -- размерность пространства
 #def_module() marquardt_pekunov(NAME, n, FUN, MaxIters) {
 @goal:-brackets_off.
-	reenterable @goal:-write(NAME).(bool init, float EPS, int nProbes, float mu0,
-			_global(n) float * x0, _global(n) float * x1,
+	reenterable @goal:-write(NAME).(bool init, double EPS, int nProbes, double mu0,
+			_global(n) double * x0, _global(n) double * x1,
 			_global(__planned__.nProbes) unsigned int * SEEDS,
 			_global(n) int * iRow,
-			_global(n*n) float * A,
-			_global(n*n) float * LU,
-			_global(n) float * B,
-			_global(n) float * GRAD,
-			_global(n) float * D,
+			_global(n*n) double * A,
+			_global(n*n) double * LU,
+			_global(n) double * B,
+			_global(n) double * GRAD,
+			_global(n) double * D,
 			_global(3) int * buf,
 			_global((MaxIters+1)*(23+(2+4*n)+(3+6*n+3*n*n))) int * barriers,
-			_global(1) float * FF) {
+			_global(1) double * FF) {
 		int work_size = n*n > nProbes ? n*n : nProbes;
 
 		if (init) {
@@ -306,13 +313,14 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 			plan_group_vectorize(NULL);
 		} else {
 			int id = plan_vector_id();
-			float mu = mu0;
-			float r = 0.1f;
-			float x[n];
+			double mu = mu0;
+			double r = 0.1;
+			double x[n];
 			for (int i = 0; i < n; i++)
-				x[i] = atomic_add_float(x0+i, 0.0f);
-			float Fk1 = @goal:-write(FUN).;
+				x[i] = atomic_add_double(x0+i, 0.0);
+			double Fk1 = @goal:-write(FUN).;
 			double d = 1E30;
+			double dk = 0.0;
 			int iters = 0;
 			int Lk1 = 5*nProbes;
 			if (id == 0) {
@@ -326,15 +334,15 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 			do {
 				if (id < nProbes)
 					for (int i = 0; i < n; i++)
-						x[i] = atomic_add_float(x0+i, 0.0f) + (r - 2*r*genrandom(SEEDS+id));
+						x[i] = atomic_add_double(x0+i, 0.0) + (r - 2*r*genrandom(SEEDS+id));
 				else
 					for (int i = 0; i < n; i++)
-						x[i] = atomic_add_float(x0+i, 0.0f);
+						x[i] = atomic_add_double(x0+i, 0.0);
 				BARRIER((volatile __global int *) barriers); barriers++;
-				float Fp = @goal:-write(FUN).;
+				double Fp = @goal:-write(FUN).;
 				if (id < n)
 					#ifdef __GPU__
-					atomic_xchg(B+id, Fk1);
+					atomic_xchg_double(B+id, Fk1);
 					#else
 					B[id] = Fk1;
 					#endif
@@ -348,7 +356,7 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 				}
 				BARRIER((volatile __global int *) barriers); barriers++;
 				#ifdef __GPU__
-				atomic_min_float(B + id % n, Fp);
+				atomic_min_double(B + id % n, Fp);
 				#else
 				if (B[id % n] > Fp) B[id % n] = Fp;
 				#endif
@@ -369,9 +377,9 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 				BARRIER((volatile __global int *) barriers); barriers++;
 				if (id == 0)
 					for (int i = 1; i < n; i++) {
-						if (atomic_add_float(B+i, 0.0f) < atomic_add_float(B, 0.0f))
+						if (atomic_add_double(B+i, 0.0) < atomic_add_double(B, 0.0))
 							#ifdef __GPU__
-							atomic_xchg(B, atomic_add_float(B+i, 0.0f));
+							atomic_xchg_double(B, atomic_add_double(B+i, 0.0));
 							#else
 							B[0] = B[i];
 							#endif
@@ -387,7 +395,7 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 					iRow[0] = n*n*nProbes;
 					#endif
 				BARRIER((volatile __global int *) barriers); barriers++;
-				Fk1 = atomic_add_float(B, 0.0f);
+				Fk1 = atomic_add_double(B, 0.0);
 				if (Fk1 == Fp)
 					#ifdef __GPU__
 					atomic_min(iRow, id);
@@ -398,7 +406,7 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 				if (id == 0)
 					for (int i = 0; i < n; i++)
 						#ifdef __GPU__
-						atomic_xchg(x1+i, atomic_add_float(x0+i, 0.0f));
+						atomic_xchg_double(x1+i, atomic_add_double(x0+i, 0.0));
 						#else
 						x1[i] = x0[i];
 						#endif
@@ -406,78 +414,83 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 				if (atomic_add(iRow, 0) == id)
 					for (int i = 0; i < n; i++)
 						#ifdef __GPU__
-						atomic_xchg(x1+i, x[i]);
+						atomic_xchg_double(x1+i, x[i]);
 						#else
 						x1[i] = x[i];
 						#endif
 				BARRIER((volatile __global int *) barriers); barriers++;
+				for (int i = 0; i < n; i++) {
+					double s = atomic_add_double(x1+i, 0.0) - atomic_add_double(x0+i, 0.0);
+					dk += s*s;
+				}
+				dk = sqrt(dk);
 				if (Lk > 0) {
 					if (Lk < Lk1) {
-						if (r < 1.0f) {
-							r *= 3.0f;
+						if (r < 1.0) {
+							r *= 5.0;
 						}
-						mu /= (2.0f*Lk/Lk1 + mu);
+						mu /= (2.0*Lk1/(Lk+1) + mu);
 					} else if (Lk > Lk1) {
-						if (r > 0.0001f) {
-							r /= 3.0f;
+						if (r > 0.0001) {
+							r /= 5.0;
 						}
-						mu += 10.0f*(Lk-Lk1)/(Lk1+1);
+						mu += 10.0*(Lk-Lk1)/(Lk1+1);
 					}
 					if (mu < mu_min) mu = mu_min;
 				} else mu = mu_min;
 				BARRIER((volatile __global int *) barriers); barriers++;
 				for (int i = 0; i < n; i++)
-					x[i] = atomic_add_float(x1+i, 0.0f);
+					x[i] = atomic_add_double(x1+i, 0.0);
 				if (id < n*n) {
 					int i = id / n;
 					int j = id % n;
 					if (i == j) {
 						x[i] += delta;
-						float fp = @goal:-write(FUN).;
+						double fp = @goal:-write(FUN).;
 						x[i] -= 2*delta;
-						float fm = @goal:-write(FUN).;
+						double fm = @goal:-write(FUN).;
 						#ifdef __GPU__
-						atomic_xchg(GRAD+i, 0.5f*(fp - fm)/delta);
-						atomic_xchg(A+id, mu + (fp-2.0f*Fk1+fm)/(delta*delta));
+						atomic_xchg_double(GRAD+i, 0.5*(fp - fm)/delta);
+						atomic_xchg_double(A+id, mu + (fp-2.0*Fk1+fm)/(delta*delta));
 						#else
-						GRAD[j] = 0.5f*(fp - fm)/delta;
-						A[id] = mu + (fp-2.0f*Fk1+fm)/(delta*delta);
+						GRAD[j] = 0.5*(fp - fm)/delta;
+						A[id] = mu + (fp-2.0*Fk1+fm)/(delta*delta);
 						#endif
 					} else {
 						x[i] += delta;
 						x[j] += delta;
-						float fpp = @goal:-write(FUN).;
+						double fpp = @goal:-write(FUN).;
 						x[j] -= 2*delta;
-						float fpm = @goal:-write(FUN).;
-						float gp = (fpp-fpm)/(2.0f*delta);
+						double fpm = @goal:-write(FUN).;
+						double gp = (fpp-fpm)/(2.0*delta);
 						x[i] -= 2*delta;
-						float fmm = @goal:-write(FUN).;
+						double fmm = @goal:-write(FUN).;
 						x[j] += 2*delta;
-						float fmp = @goal:-write(FUN).;
-						float gm = (fmp-fmm)/(2.0f*delta);
+						double fmp = @goal:-write(FUN).;
+						double gm = (fmp-fmm)/(2.0*delta);
 						#ifdef __GPU__
-						atomic_xchg(A+id, (gp - gm)/(2.0f*delta));
+						atomic_xchg_double(A+id, (gp - gm)/(2.0*delta));
 						#else
-						A[id] = (gp - gm)/(2.0f*delta);
+						A[id] = (gp - gm)/(2.0*delta);
 						#endif
 					}
 				}
 				BARRIER((volatile __global int *) barriers); barriers++;
 				for (int i = 0; i < n; i++)
-					x[i] = atomic_add_float(x1+i, 0.0f);
+					x[i] = atomic_add_double(x1+i, 0.0);
 				BARRIER((volatile __global int *) barriers); barriers++;
 				d = 0.0;
 				for (int i = 0; i < n; i++) {
-					float g = atomic_add_float(GRAD+i, 0.0f);
+					double g = atomic_add_double(GRAD+i, 0.0);
 					d += g*g;
 				}
 				d = sqrt(d);
-				if (d <= EPS || (iters + 1) >= MaxIters) {
+				if (dk <= EPS && d <= EPS || (iters + 1) >= MaxIters) {
 					BARRIER((volatile __global int *) barriers); barriers++;
 					if (id == 0) {
 						#ifdef __GPU__
 						atomic_xchg(buf, iters+1);
-						atomic_xchg(FF, Fk1);
+						atomic_xchg_double(FF, Fk1);
 						#else
 						buf[0] = iters+1;
 						*FF = Fk1;
@@ -491,25 +504,27 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 					barriers += 3 + 6*n + n*n*3;
 					_SolveLU(n, iRow, LU, GRAD, D, barriers);
 					barriers += 2 + 4*n;
-					float omega = 1.0f;
-					float step = 1.0f;
-					float x2[n];
+					double omega = max(1.0,d);
+					double step = 1.0;
+					double x2[n];
+					dk = 0.0;
 					while (omega > LEPS && step > LEPS) {
-						step = 0.0f;
+						step = 0.0;
 						for (int i = 0; i < n; i++) {
-							float ds = omega*atomic_add_float(D+i, 0.0f);
+							double ds = omega*atomic_add_double(D+i, 0.0);
 							x2[i] = x[i];
 							x[i] -= ds;
 							ds = fabs(ds);
 							if (ds > step) step = ds;
 						}
-						float Fi = @goal:-write(FUN).;
+						double Fi = @goal:-write(FUN).;
 						if (Fi < Fk1) {
 							Fk1 = Fi;
+							dk += omega;
 						} else {
 							for (int i = 0; i < n; i++)
 								x[i] = x2[i];
-							omega *= 0.5f;
+							omega *= 0.5;
 						}
 					}
 				} else {
@@ -517,7 +532,7 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 					if (id == 0) {
 						#ifdef __GPU__
 						atomic_xchg(buf, iters+1);
-						atomic_xchg(FF, Fk1);
+						atomic_xchg_double(FF, Fk1);
 						#else
 						buf[0] = iters+1;
 						*FF = Fk1;
@@ -530,8 +545,8 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 				if (id == 0) {
 					#ifdef __GPU__
 					for (int i = 0; i < n; i++) {
-						atomic_xchg(x0+i, x[i]);
-						atomic_xchg(x1+i, x[i]);
+						atomic_xchg_double(x0+i, x[i]);
+						atomic_xchg_double(x1+i, x[i]);
 					}
 					#else
 					for (int i = 0; i < n; i++)
@@ -546,48 +561,48 @@ void _SolveLU(int NN, __global int * iRow, __global float * LU, __global float *
 	}
 };
 
-const int max_iters = 500;
+const int max_iters = 2500;
 const int n = 3;
 
-marquardt_pekunov('min_m_p', n, '(100.0f*(x[1]-x[0]*x[0])*(x[1]-x[0]*x[0])+(2.0f-x[0])*(2.0f-x[0])) + ((x[2]-3.0f)*(x[2]-3.0f)) + ((4.0f-x[1])*(4.0f-x[1]))', max_iters)
+marquardt_pekunov('min_m_p', n, '(100.0*(x[1]-x[0]*x[0])*(x[1]-x[0]*x[0])+(2.0-x[0])*(2.0-x[0])) + ((x[2]-3.0)*(x[2]-3.0)) + ((4.0-x[1])*(4.0-x[1]))', max_iters)
 
 int main() {
 	const int nProbes = n*n*150;
 	const int nPoints = 100;
-	float ITERS = 0.0f;
-	float Total = 0.0f;
+	double ITERS = 0.0;
+	double Total = 0.0;
 	int nGOOD = 0;
 	unsigned int seed_points = 184415;
-	float rs[n] = { 3.0f, 6.0f, 5.0f };
+	double rs[n] = { 3.0, 6.0, 5.0 };
 	for (unsigned int k = 0; k < nPoints; k++) {
-		float x0[n], x1[n];
+		double x0[n], x1[n];
 
 		for (int i = 0; i < n; i++)
 			x0[i] = rs[i] - 2*rs[i]*genrandom(&seed_points);
 
 		unsigned int SEEDS[nProbes] = { 0 };
 		int iRow[n];
-		float A[n*n];
-		float LU[n*n];
-		float B[n];
-		float GRAD[n];
-		float D[n];
+		double A[n*n];
+		double LU[n*n];
+		double B[n];
+		double GRAD[n];
+		double D[n];
 		int buf[3] = { 0 };
 		int barriers[(max_iters+1)*(23+(2+4*n)+(3+6*n+3*n*n))] = { 0 };
-		float FF;
+		double FF;
 
 		unsigned int seed = 184415;
 		for (int i = 0; i < nProbes; i++)
 			SEEDS[i] = (unsigned int)(100000*genrandom(&seed));
 
-		min_m_p(true, 1E-3f, nProbes, 10.0f, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, buf, barriers, &FF);
+		min_m_p(true, 1E-6, nProbes, 10.0, x0, x1, SEEDS, iRow, A, LU, B, GRAD, D, buf, barriers, &FF);
 		cout << buf[0] << endl;
 		for (int i = 0; i < n; i++)
 			cout << x1[i] << " ";
 		cout << endl << "F = " << FF << endl;
 		Total += FF;
 		ITERS += buf[0];
-		if (fabs(FF) < LEPS) nGOOD++;
+		if (fabs(FF) < GOOD_EPS) nGOOD++;
 	}
 	cout << "Average F = " << (Total/nPoints) << endl;
 	cout << "Average ITERS = " << (ITERS/nPoints) << endl;
