@@ -577,7 +577,7 @@ solve(solve_l_m, 100.0*(x[1]-x[0]*x[0])*(x[1]-x[0]*x[0])+(2.0-x[0])*(2.0-x[0]), 
 const int n = 3;
 
 int main() {
-	const int nPoints = 100;
+	const int nPoints = 300;
 	double ITERS = 0.0;
 	double Total = 0.0;
 	int nGOOD = 0;
@@ -610,5 +610,5 @@ int main() {
 	}
 	cout << "Average F = " << (Total/nPoints) << endl;
 	cout << "Average ITERS = " << (ITERS/nPoints) << endl;
-	cout << "nGOODS = " << nGOOD << endl;
+	cout << "% GOODS = " << 1.0*nGOOD/nPoints << endl;
 }
