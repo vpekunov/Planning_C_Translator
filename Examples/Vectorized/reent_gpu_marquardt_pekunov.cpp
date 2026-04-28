@@ -302,7 +302,7 @@ void _SolveLU(int NN, __global int * iRow, __global double * LU, __global double
 			_global(max_groups*n) double * B,
 			_global(max_groups*n) double * GRAD,
 			_global(max_groups*n) double * D,
-			_global(3) int * buf,
+			_global(max_groups*3) int * buf,
 			_global((MaxIters+1)*33) int * barriers,
 			_global(1) double * FF) {
 		int work_size = n*n > nProbes ? n*n : nProbes;
@@ -514,10 +514,10 @@ void _SolveLU(int NN, __global int * iRow, __global double * LU, __global double
 					atomic_xchg(buf+2, 0);
 					#else
 					buf[2] = 0;
-				#endif
+					#endif
 				BARRIER((volatile __global int *) barriers); barriers++;
 				Fp = Fk1;
-				if (_GetLU(n, iRow+gid*n, A+gid*n*n, LU+gid*n*n, buf+1, buf+2, D+gid*n)) {
+				if (_GetLU(n, iRow+gid*n, A+gid*n*n, LU+gid*n*n, buf+3*gid+1, buf+2, D+gid*n)) {
 					_SolveLU(n, iRow+gid*n, LU+gid*n*n, GRAD+gid*n, D+gid*n);
 					#ifdef __GPU__
 					double omega = 0.1 + 1.9*gid/(ng-1);
@@ -666,7 +666,7 @@ int main() {
 		double B[max_groups*n];
 		double GRAD[max_groups*n];
 		double D[max_groups*n];
-		int buf[3] = { 0 };
+		int buf[max_groups*3] = { 0 };
 		int barriers[(max_iters+1)*33] = { 0 };
 		double FF;
 
