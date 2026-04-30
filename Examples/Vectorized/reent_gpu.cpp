@@ -7,7 +7,7 @@ using namespace std;
 #pragma plan common begin
 
 #define N 5
-#define threads 100
+#define threads 1500
 
 #pragma plan common end
 
@@ -35,6 +35,16 @@ reenterable void proc(bool init, int k, _global(1) float * mul, _global(threads)
 #endif
          out++;
      }
+#ifdef __GPU__
+     if (plan_vector_id() == 0) sizes[0] = 0;
+     barrier(CLK_GLOBAL_MEM_FENCE);
+     if (atomic_inc(sizes) == threads-1) atomic_xchg(sizes, 0);
+     else
+        do {
+            mem_fence(CLK_GLOBAL_MEM_FENCE);
+        } while (atomic_add(sizes, 0) != 0);
+     barrier(CLK_GLOBAL_MEM_FENCE);
+#endif
 }
 
 int main() {

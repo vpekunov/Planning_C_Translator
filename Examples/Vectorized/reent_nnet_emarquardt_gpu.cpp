@@ -577,8 +577,14 @@ int main() {
 
   int exN = 0;
   char * exIDs[256] = {NULL};
-  while ((exIDs[exN] = (char *) get_device_id(exN)) != NULL)
-    exN++;
+  int exCounter = 0;
+  while ((exIDs[exN] = (char *) get_device_id(exCounter)) != NULL) {
+    if (!strstr(exIDs[exN], "Render")) {
+       cout << "Working Device: " << exIDs[exN] << endl;
+       exN++;
+    }
+    exCounter++;
+  }
 
   for (int i = 0; i < nPairs; i++) {
   	XP[i][0] = 2.0f*(XP[i][0] - XPmin)/(XPmax - XPmin) - 1.0f;

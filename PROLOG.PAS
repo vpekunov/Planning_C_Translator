@@ -380,6 +380,9 @@ Begin
   _Out.Add('  ');
   _Out.Add('  size_t _group_size = work_size/work_groups;');
   _Out.Add('  size_t * group_size = _group_size > __max_group_threads || _group_size > max_group_size ? NULL : &_group_size;');
+  _Out.Add('  if (!group_size && GRP) {');
+  _Out.Add('     cout<<"Error : can''t typize with group size (" << GRP << ")"<<endl; exit(-1);');
+  _Out.Add('  }');
   _Out.Add('  cl_event event;');
   _Out.Add('  ret = clEnqueueNDRangeKernel(d.command_queue, kernel, 1, NULL, &work_size, group_size, 0, NULL, &event);');
   _Out.Add('  if (ret != CL_SUCCESS) {');

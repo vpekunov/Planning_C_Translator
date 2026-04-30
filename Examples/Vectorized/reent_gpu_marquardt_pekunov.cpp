@@ -38,7 +38,7 @@ double genrandom(__global unsigned int * RandSeed) {
 }
 
 #ifdef __GPU__
-double atomic_load(volatile __global double* addr) {
+double __attribute__((overloadable)) atomic_load(volatile __global double* addr) {
 	return as_double(atom_cmpxchg((volatile __global unsigned long*)addr, 0, 0));
 }
 double atomic_xchg_double(volatile global double* addr, double val) {
