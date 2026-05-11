@@ -8,6 +8,7 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <cmath>
 
 #include <math.h>
 #include <stdlib.h>
@@ -361,9 +362,7 @@ public:
 #define min(A,B) ((A) < (B) ? (A) : (B))
 #endif
 
-#if _POSIX_C_SOURCE >= 200112L
-#define _isnan isnan
-#endif
+#define _isnan std::isnan
 
 namespace solve {
    /* LU - разложение  с выбором максимального элемента по диагонали */

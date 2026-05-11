@@ -1429,6 +1429,9 @@ Const Tunnels_Vars_Sems: PChar =
 '         funneled_in<Type>::get(Buf, SizeInBytes);'+CRLF+
 '      }'+CRLF+
 '    }'+CRLF+
+'    virtual void _get(void * Buf, int SizeInBytes) {'+CRLF+
+'      funneled_in<Type>::get(Buf, SizeInBytes);'+CRLF+
+'    }'+CRLF+
 '    virtual void get_and_correct(void * Buf) {'+CRLF+
 '      _funnel_with_history<Type> * Ref = reinterpret_cast< _funnel_with_history<Type> *>(this->getRef());'+CRLF+
 '      if (Ref) {'+CRLF+
@@ -3208,7 +3211,6 @@ Const Transact: PChar =
 '    bool predicted;'+CRLF+
 '    Type * __buf__;'+CRLF+
 '  public:'+CRLF+
-'    using funneled_in<Type>::get;'+CRLF+
 '    TIn(const char * Name, int N = 1, int P = 2, double rel_eps = 0.001, int _owner = -1, const char * __id__ = ""):'+CRLF+
 '		TChannel(true, Name, _owner, __id__), funneled_predictor_in<Type>(Name, N, P, rel_eps) {'+CRLF+
 '       __buf__ = new Type[N];'+CRLF+
@@ -3236,7 +3238,7 @@ Const Transact: PChar =
 '         }'+CRLF+
 '         if (predicted) {'+CRLF+
 '            int SizeInBytes = Ref->getN()*sizeof(Type);'+CRLF+
-'            funneled_in<Type>::get(__buf__, SizeInBytes);'+CRLF+
+'            _get(__buf__, SizeInBytes);'+CRLF+
 '            Ref->correct();'+CRLF+
 '         }'+CRLF+
 '         omp_set_lock(&Ref->Lock);'+CRLF+
@@ -3255,7 +3257,7 @@ Const Transact: PChar =
 '      if (!this->empty()) {'+CRLF+
 '         _funnel_with_history<Type> * Ref = reinterpret_cast<_funnel_with_history<Type> *>(this->getRef());'+CRLF+
 '         int SizeInBytes = Ref->getN()*sizeof(Type);'+CRLF+
-'         funneled_in<Type>::get(buf, SizeInBytes);'+CRLF+
+'         _get(buf, SizeInBytes);'+CRLF+
 '         Ref->unset_predict_results();'+CRLF+
 '         predicted = false;'+CRLF+
 '      } else'+CRLF+
