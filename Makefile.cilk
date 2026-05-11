@@ -4,7 +4,7 @@ SRC_DIR := ./Examples/Cilk
 # Use the following line for Cilk-capable compiler
 #LDFLAGS := -lm -lpthread -ldl -lcilkrts -lOpenCL
 LDFLAGS := -lm -lpthread -ldl -lOpenCL
-CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -std=c++17 -fcilkplus 
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -std=c++17 -fcilkplus -I/opt/homebrew/include
 
 SRCS=$(wildcard $(SRC_DIR)/*.c)
 

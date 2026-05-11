@@ -5,7 +5,9 @@ unit Preproc;
 {$ENDIF}
 {$H+}
 
-{$IF DEFINED(UNIX) OR DEFINED(LINUX)}
+{$IF DEFINED(DARWIN)}
+{$linklib c++}
+{$ELSEIF DEFINED(UNIX) OR DEFINED(LINUX)}
 {$linklib c}
 {$linklib stdc++}
 {$ENDIF}
@@ -745,7 +747,7 @@ Begin
   (* *)
   If Prologer = 0 Then
      Begin
-       Prologer := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./lib' + {$ENDIF}'PrologIntrf.' + SharedSuffix);
+       Prologer := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./lib' + {$ENDIF}'PrologIntrf.' + _SharedSuffix);
        If Prologer = NilHandle Then
           Prologer := DWORD(-1)
        Else

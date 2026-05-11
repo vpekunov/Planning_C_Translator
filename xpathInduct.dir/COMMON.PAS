@@ -84,6 +84,8 @@ procedure MakeInfoCommon(Const _Msg: String);
 
 function GetMSG: PChar; cdecl;
 
+Function _SharedSuffix: String;
+
 Var LCounter: Integer;
     Files: TStringList;
     Lines: TStringList;
@@ -98,6 +100,15 @@ Implementation
 
 Uses SysUtils, Consts{$IF DEFINED(LCL) OR DEFINED(VCL)}, Dialogs{$ENDIF},
      Process {$IF NOT DEFINED(LINUX) AND NOT DEFINED(UNIX)}, ShellApi, Windows {$ENDIF};
+
+Function _SharedSuffix: String;
+Begin
+  {$IF DEFINED(DARWIN)}
+  Result := 'so'
+  {$ELSE}
+  Result := SharedSuffix
+  {$ENDIF}
+End;
 
 { TLine }
 

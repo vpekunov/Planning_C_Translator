@@ -2,7 +2,9 @@ library Grammar;
 
 {$mode delphi}{$H+}
 
-{$IF DEFINED(UNIX) OR DEFINED(LINUX)}
+{$IF DEFINED(DARWIN)}
+{$linklib c++}
+{$ELSEIF DEFINED(UNIX) OR DEFINED(LINUX)}
 {$linklib c}
 //{$linklib stdc++}
 {$ENDIF}
@@ -55,6 +57,15 @@ Var linkage_get_link_num_domains: function(const linkage: Pointer; index: Intege
 Var linkage_get_link_domain_names: function(const Linkage: Pointer; index: Integer): PPChar; cdecl;
 Var linkage_get_words: function(const Linkage: Pointer): PPChar; cdecl;
 Var linkage_get_word: function(const linkage: Pointer; word_num: Integer): PChar; cdecl;
+
+Function _SharedSuffix: String;
+Begin
+  {$IF DEFINED(DARWIN)}
+  Result = 'so'
+  {$ELSE}
+  Result = SharedSuffix
+  {$ENDIF}
+End;
 
 Function IntegerToTObject(S: Integer): TObject;
 
@@ -289,7 +300,7 @@ begin
   SetMultiByteConversionCodePage(CP_UTF8);
   SetMultiByteRTLFileSystemCodePage(CP_UTF8);
 
-  Grammer := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./liblink-grammar.'{$ELSE}'link-grammar-x64.'{$ENDIF} + SharedSuffix);
+  Grammer := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./liblink-grammar.'{$ELSE}'link-grammar-x64.'{$ENDIF} + _SharedSuffix);
   If Grammer <> NilHandle Then
      Begin
        parse_options_create := GetProcedureAddress(Grammer, 'parse_options_create');

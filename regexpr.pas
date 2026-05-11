@@ -2,7 +2,9 @@ unit RegExpr;
 
 { Modified by V.V.Pekunov, 2017-2020 }
 
-{$IF DEFINED(UNIX) OR DEFINED(LINUX)}
+{$IF DEFINED(DARWIN)}
+{$linklib c++}
+{$ELSEIF DEFINED(UNIX) OR DEFINED(LINUX)}
 {$linklib c}
 {$linklib stdc++}
 {$ENDIF}
@@ -3348,7 +3350,7 @@ begin
              L := libs.IndexOf(lib);
              If L < 0 Then
                 begin
-                  H := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./lib' + {$ENDIF}lib + '.' + SharedSuffix);
+                  H := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./lib' + {$ENDIF}lib + '.' + _SharedSuffix);
                   If H = NilHandle Then
                      begin
                        {$IF DEFINED(LCL) OR DEFINED(VCL)}
@@ -3526,7 +3528,7 @@ begin
       L := Transformers.IndexOf(lib);
       If L < 0 Then
          begin
-           H := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./lib' + {$ENDIF}lib + '.' + SharedSuffix);
+           H := LoadLibrary({$IF DEFINED(UNIX) OR DEFINED(LINUX)}'./lib' + {$ENDIF}lib + '.' + _SharedSuffix);
            If H = NilHandle Then
               begin
                 {$IF DEFINED(LCL) OR DEFINED(VCL)}

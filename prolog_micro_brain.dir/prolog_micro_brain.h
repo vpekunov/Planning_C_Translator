@@ -33,7 +33,9 @@ const int PAR_SEQ_JOIN_AFTER = 2;
 unsigned long long getTotalSystemMemory();
 unsigned int getTotalProcs();
 
-#ifdef __linux__
+#ifdef _MSC_VER
+#include <Windows.h>
+#else
 #include <sys/resource.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -41,19 +43,17 @@ unsigned int getTotalProcs();
 
 typedef void * HMODULE;
 
-HMODULE LoadLibrary(const wchar_t * _fname) {
+inline HMODULE LoadLibrary(const wchar_t * _fname) {
 	return dlopen(wstring_to_utf8(_fname).c_str(), RTLD_LAZY);
 }
 
-void * GetProcAddress(HMODULE handle, const char * fname) {
+inline void * GetProcAddress(HMODULE handle, const char * fname) {
 	return dlsym(handle, fname);
 }
 
-void FreeLibrary(HMODULE handle) {
+inline void FreeLibrary(HMODULE handle) {
 	dlclose(handle);
 }
-#else
-#include <Windows.h>
 #endif
 
 typedef unsigned long long clock_rdtsc;

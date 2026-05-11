@@ -13,12 +13,12 @@
 #include <map>
 #include <chrono>
 
-#ifdef __linux__
+#ifdef _MSC_VER
+#define EXPORT __declspec(dllexport)
+#else
 #include <unistd.h>
 #include <pthread.h>
 #define EXPORT __attribute__((visibility("default")))
-#else
-#define EXPORT __declspec(dllexport)
 #endif
 
 using namespace std;

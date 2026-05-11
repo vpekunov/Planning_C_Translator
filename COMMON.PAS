@@ -109,6 +109,8 @@ function RunExtCommand(Const App,Prm,OutFName: String):String;
 
 procedure ProcessGlue(Var _Out: TStringList);
 
+Function _SharedSuffix: String;
+
 Var LCounter: Integer;
     Files: TStringList;
     Lines: TStringList;
@@ -118,6 +120,15 @@ Var LCounter: Integer;
 Implementation
 
 Uses SysUtils, Consts;
+
+Function _SharedSuffix: String;
+Begin
+  {$IF DEFINED(DARWIN)}
+  Result := 'so'
+  {$ELSE}
+  Result := SharedSuffix
+  {$ENDIF}
+End;
 
 { TLine }
 

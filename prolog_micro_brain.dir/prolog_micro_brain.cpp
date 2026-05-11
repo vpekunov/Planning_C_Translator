@@ -2032,7 +2032,7 @@ void context::apply_transactional_db_to_parent(const std::string & _fact) {
 void context::clearDBJournals() {
 	map<unsigned long long, std::atomic<journal*>>::iterator itj = DBJournal->begin();
 	while (itj != DBJournal->end()) {
-		delete itj->second;
+		delete itj->second.load();
 		itj++;
 	}
 	DBJournal->clear();
@@ -2041,13 +2041,13 @@ void context::clearDBJournals() {
 context::~context() {
 	for (context* C : CONTEXTS)
 		delete C;
-	delete INIT;
+	delete INIT.load();
 	if (transactable_facts || parent == NULL) {
 		map< string, std::atomic<vector<term*>*>>::iterator itd = DB->begin();
 		while (itd != DB->end()) {
 			for (term* v : *itd->second)
 				v->free();
-			delete itd->second;
+			delete itd->second.load();
 			itd++;
 		}
 		delete DBLOCK;
@@ -2055,7 +2055,7 @@ context::~context() {
 
 		map<unsigned long long, std::atomic<journal*>>::iterator itj = DBJournal->begin();
 		while (itj != DBJournal->end()) {
-			delete itj->second;
+			delete itj->second.load();
 			itj++;
 		}
 		delete DBJournal;
@@ -10404,7 +10404,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 						// Delete journal, including deleted nodes
 						map<unsigned long long, std::atomic<journal*>>::iterator itj = CONTEXTS[i]->DBJournal->begin();
 						while (itj != CONTEXTS[i]->DBJournal->end()) {
-							delete itj->second;
+							delete itj->second.load();
 							itj++;
 						}
 						CONTEXTS[i]->DBJournal->clear();
@@ -10415,7 +10415,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 							if (itd->second) {
 								for (term* v : *itd->second)
 									Q.push_back(v);
-								delete itd->second;
+								delete itd->second.load();
 							}
 							itd++;
 						}
@@ -10673,7 +10673,7 @@ void clause::add_export(string& result, bool introduce_new_parallelism) {
 		result += ".\n";
 }
 
-#ifdef __linux__
+#ifndef _MSC_VER
 unsigned long long getTotalSystemMemory()
 {
 	long pages = sysconf(_SC_PHYS_PAGES);
@@ -10701,13 +10701,14 @@ unsigned int getTotalProcs()
 #endif
 
 int main(int argc, char ** argv) {
-#ifdef __linux__
+#ifndef _MSC_VER
 	struct rlimit rl = { RLIM_INFINITY, RLIM_INFINITY };
 	int result = setrlimit(RLIMIT_STACK, &rl);
 	if (result != 0) {
 		std::cout << "setrlimit returned result = " << result << endl;
 		exit(1000);
 	}
+#if defined(__unix__) || defined(__linux__)
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	size_t default_stack_size;
@@ -10715,6 +10716,7 @@ int main(int argc, char ** argv) {
 
 	pthread_attr_setstacksize(&attr, 16 * default_stack_size);
 	pthread_setattr_default_np(&attr);
+#endif
 #endif
 
 	setlocale(LC_ALL, "en_US.UTF-8");

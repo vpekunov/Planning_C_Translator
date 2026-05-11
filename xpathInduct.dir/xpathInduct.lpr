@@ -2,7 +2,9 @@ library xpathInduct;
 
 {$mode delphi}{$H+}
 
-{$IF DEFINED(UNIX) OR DEFINED(LINUX)}
+{$IF DEFINED(DARWIN)}
+{$linklib c++}
+{$ELSEIF DEFINED(UNIX) OR DEFINED(LINUX)}
 {$linklib c}
 //{$linklib stdc++}
 {$ENDIF}
