@@ -1396,7 +1396,7 @@ Begin
                       started[F] := NumThrSemaphore.AttemptWait;
                       if started[F] Then
                          begin
-                           threads[F] := TDeducer.Create(OFFS + ' ' + IntToStr(GetCurrentThreadId), OnlyInduceModel, ENV, vars[F], true, nums[F], tr, _in_stage+1, _in_tr);
+                           threads[F] := TDeducer.Create(OFFS + ' ' + IntToStr(QWord(GetCurrentThreadId)), OnlyInduceModel, ENV, vars[F], true, nums[F], tr, _in_stage+1, _in_tr);
                            threads[F].Resume;
                            // NumThrSemaphore.Post;
                          end
@@ -1405,7 +1405,7 @@ Begin
                            SetLength(ttrs, Length(tr));
                            If Length(ttrs) > 0 Then
                               System.Move(tr[0], ttrs[0], Length(tr)*SizeOf(Integer));
-                           Result := Deduce(OFFS + ' ' + IntToStr(GetCurrentThreadId), OnlyInduceModel, ENV, vars[F], false, T, nums[F], ttrs, outtr, _in_stage+1, _in_tr);
+                           Result := Deduce(OFFS + ' ' + IntToStr(QWord(GetCurrentThreadId)), OnlyInduceModel, ENV, vars[F], false, T, nums[F], ttrs, outtr, _in_stage+1, _in_tr);
                            FreeAndNil(vars[F]);
 
                            If Assigned(T) Then {T.Synchronize(}T.Process{)};

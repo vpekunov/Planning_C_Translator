@@ -2380,7 +2380,7 @@ Const Transact: PChar =
 ''+CRLF+
 '  #define clock_val(T) (T)'+CRLF+
 ''+CRLF+
-'  #define get_thread_id pthread_self'+CRLF+
+'  #define get_thread_id (long long int)pthread_self'+CRLF+
 ''+CRLF+
 '  int QueryPerformanceCounter(LARGE_INTEGER * v) {'+CRLF+
 '     clock_gettime(CLOCK_MONOTONIC, v);'+CRLF+

@@ -61,9 +61,9 @@ Var linkage_get_word: function(const linkage: Pointer; word_num: Integer): PChar
 Function _SharedSuffix: String;
 Begin
   {$IF DEFINED(DARWIN)}
-  Result = 'so'
+  Result := 'so'
   {$ELSE}
-  Result = SharedSuffix
+  Result := SharedSuffix
   {$ENDIF}
 End;
 
