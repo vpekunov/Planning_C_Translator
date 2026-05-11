@@ -1395,10 +1395,14 @@ Const Tunnels_Vars_Sems: PChar =
 ' template<class Type>'+CRLF+
 '  class funneled_predictor_out;'+CRLF+
 ' template<class Type>'+CRLF+
-'  class funneled_predictor_in: public funneled_in<Type> {'+CRLF+
+'  class funneled_predictor_in: private funneled_in<Type> {'+CRLF+
 '    friend class funneled_predictor_out<Type>;'+CRLF+
 '  protected:'+CRLF+
 '  public:'+CRLF+
+'    using funneled_in<Type>::getRef;'+CRLF+
+'    using funneled_in<Type>::empty;'+CRLF+
+'    using funneled_in<Type>::wait;'+CRLF+
+'    using funneled_in<Type>::get;'+CRLF+
 '    funneled_predictor_in() { };'+CRLF+
 '    funneled_predictor_in(int P, void * _Ref) {'+CRLF+
 '       this->init_data(_Ref ? ((funneled_predictor_out<Type> *) _Ref)->getRef() : new _funnel_predictor<Type>(P));'+CRLF+
@@ -1600,10 +1604,12 @@ Const Tunnels_Vars_Sems: PChar =
 '    };'+CRLF+
 ' };'+CRLF+
 ' template<class Type>'+CRLF+
-'  class funneled_predictor_out: public funneled_out<Type> {'+CRLF+
+'  class funneled_predictor_out: private funneled_out<Type> {'+CRLF+
 '    friend class funneled_predictor_in<Type>;'+CRLF+
 '  protected:'+CRLF+
 '  public:'+CRLF+
+'    using funneled_out<Type>::getRef;'+CRLF+
+'    using funneled_out<Type>::wait;'+CRLF+
 '    funneled_predictor_out() { };'+CRLF+
 '    funneled_predictor_out(int P, void * _Ref) {'+CRLF+
 '       this->init_data(_Ref ? ((funneled_predictor_in<Type> *) _Ref)->getRef() : new _funnel_predictor<Type>(P));'+CRLF+
@@ -3202,6 +3208,7 @@ Const Transact: PChar =
 '    bool predicted;'+CRLF+
 '    Type * __buf__;'+CRLF+
 '  public:'+CRLF+
+'    using funneled_in<Type>::get;'+CRLF+
 '    TIn(const char * Name, int N = 1, int P = 2, double rel_eps = 0.001, int _owner = -1, const char * __id__ = ""):'+CRLF+
 '		TChannel(true, Name, _owner, __id__), funneled_predictor_in<Type>(Name, N, P, rel_eps) {'+CRLF+
 '       __buf__ = new Type[N];'+CRLF+
