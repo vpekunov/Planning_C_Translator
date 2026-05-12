@@ -15,6 +15,8 @@
 
 #if defined(_MSC_VER) || defined(__APPLE__)
 
+#include <wchar.h>
+
 wchar_t * walloc(short int * Arg) {
 	return reinterpret_cast<wchar_t *>(Arg);
 }
