@@ -6,10 +6,10 @@ set(UTFCPP_DIR ${THIRDPARTY_DIR}/utfcpp)
 ExternalProject_Add(
   utfcpp
   GIT_REPOSITORY        "https://github.com/nemtrif/utfcpp"
-#  GIT_TAG               "v3.1.1"
+  GIT_TAG               "v3.1.1"
   SOURCE_DIR            ${UTFCPP_DIR}
   UPDATE_DISCONNECTED   1
-  CMAKE_ARGS            -DCMAKE_CXX_FLAGS:STRING="-Wno-error=maybe-uninitialized" -DCMAKE_INSTALL_PREFIX=${UTFCPP_DIR}/install -Dgtest_force_shared_crt=ON
+  CMAKE_ARGS            -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DCMAKE_CXX_FLAGS:STRING="-Wno-error=maybe-uninitialized" -DCMAKE_INSTALL_PREFIX=${UTFCPP_DIR}/install -Dgtest_force_shared_crt=ON
   TEST_AFTER_INSTALL    0
   STEP_TARGETS          build)
 

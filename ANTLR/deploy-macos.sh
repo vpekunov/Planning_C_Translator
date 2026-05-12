@@ -10,9 +10,9 @@ pushd runtime/thirdparty
 if [ ! -d utfcpp ]
 then
     git clone https://github.com/nemtrif/utfcpp.git utfcpp
-#    pushd utfcpp
-#    git checkout tags/v3.1.1
-#    popd
+    pushd utfcpp
+    git checkout tags/v3.1.1
+    popd
 fi
 popd
 
