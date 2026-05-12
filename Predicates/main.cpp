@@ -7,6 +7,22 @@
 //  GCC
 #define EXPORT __attribute__((visibility("default")))
 #define IMPORT
+#else
+//  Microsoft 
+#define EXPORT __declspec(dllexport)
+#define IMPORT __declspec(dllimport)
+#endif
+
+#if defined(_MSC_VER) || defined(__APPLE__)
+
+wchar_t * walloc(short int * Arg) {
+	return reinterpret_cast<wchar_t *>(Arg);
+}
+
+void wfree(wchar_t * _Arg, short int * Arg) {
+}
+
+#else
 
 #include <wchar.h>
 
@@ -26,19 +42,8 @@ void wfree(wchar_t * _Arg, short int * Arg) {
 	while (*Arg++ = *ptr++);
 	delete[] _Arg;
 }
-#else
-//  Microsoft 
-#define EXPORT __declspec(dllexport)
-#define IMPORT __declspec(dllimport)
 
-wchar_t * walloc(short int * Arg) {
-	return reinterpret_cast<wchar_t *>(Arg);
-}
-
-void wfree(wchar_t * _Arg, short int * Arg) {
-}
 #endif
-
 
 long _wcslen(wchar_t * Arg) {
     wchar_t * End = Arg;

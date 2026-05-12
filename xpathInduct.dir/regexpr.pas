@@ -500,6 +500,8 @@ type
    Negate: Boolean;
    Descriptor: TFastPositions;
    References: Array Of Integer; // Номера переменных из дескриптора. -1 для _ или константы
+   Constructor Create(L: TList);
+   Destructor  Destroy; override;
  end;
 
  RealArray = Array Of Real;
@@ -527,7 +529,7 @@ type
 
  TFastCalls = class(TList)
  public // Если в списке встречается TFastCalls -- вложенная цепочка
-   Constructor Create;
+   Constructor Create(L: TList);
    Destructor Destroy; override;
 
    procedure ClearAnalyzers;
@@ -558,6 +560,9 @@ type
     valsp : array [0 .. NSUBEXP - 1] of TVarValue; // Var Values
 
     fcalls : array [0 .. NSUBEXP - 1] of TFastCalls; // Predicate Calls
+
+    created_fcall: TList;
+    created_fcalls: TList;
 
     valext: TStringList;
 
@@ -2233,6 +2238,18 @@ end;
 
 {$OPTIMIZATION OFF}
 
+constructor TFastCall.Create(L: TList);
+begin
+   Inherited Create;
+   If L.IndexOf(Self) < 0 Then L.Add(Self)
+end;
+
+destructor  TFastCall.Destroy;
+begin
+   SetLength(References, 0);
+   Inherited Destroy
+end;
+
 constructor TParallelizer.Create;
 begin
    Inherited Create;
@@ -2873,26 +2890,25 @@ end;
 
 { TFastCalls }
 
-constructor TFastCalls.Create;
+constructor TFastCalls.Create(L : TList);
 begin
-  Inherited Create;
-  Analyzers := TList.Create;
-  Alternation := Nil
+   Inherited Create;
+   Analyzers := TList.Create;
+   Alternation := Nil;
+   If L.IndexOf(Self) < 0 Then L.Add(Self)
 end;
 
 destructor TFastCalls.Destroy;
 
 Var F: Integer;
 begin
-  For F := 0 To Count - 1 Do
-      TObject(Items[F]).Free;
   With Analyzers Do
     Begin
       For F := 0 To Count - 1 Do
           TParallelizer(Items[F]).Free;
       Free
     end;
-  Alternation.Free;
+  { Alternation.Free; }
   inherited Destroy;
 end;
 
@@ -3948,6 +3964,9 @@ constructor TRegExpr.Create;
   FillChar(valsp, SizeOf(valsp), 0);
   FillChar(fcalls, SizeOf(fcalls), 0);
 
+  created_fcalls := TList.Create;
+  created_fcall := TList.Create;
+
   valext := TStringList.Create;
 
   storedWords := TStringList.Create;
@@ -3991,7 +4010,7 @@ destructor TRegExpr.Destroy;
  begin
   for i := 0 to NSUBEXP - 1 do begin
       FreeAndNil(valsp[i]);
-      FreeAndNil(fcalls[i]);
+      fcalls[i] := Nil;
       FreeMem(varsp[i])
   end;
   if programm <> nil then
@@ -4025,6 +4044,18 @@ destructor TRegExpr.Destroy;
       for i := 0 to Count - 1 do
           if Assigned(Items[i]) then
              TObject(Items[i]).Free;
+      Free
+    end;
+  With created_fcalls Do
+    begin
+      For i := 0 To Count - 1 Do
+          TObject(Items[i]).Free;
+      Free
+    end;
+  With created_fcall Do
+    begin
+      For i := 0 To Count - 1 Do
+          TObject(Items[i]).Free;
       Free
     end;
   DoneCriticalSection(Trasher)
@@ -4805,7 +4836,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                   if pred <> #0 Then
                      begin
                        pcalls := TList.Create;
-                       pmaincalls := TFastCalls.Create;
+                       pmaincalls := TFastCalls.Create(created_fcalls);
                        pcalls.Add(pmaincalls);
 
                        L := TAnalyser.Create(IdentSet + [Lexique.Point], [Space, Tabulation]);
@@ -4824,7 +4855,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                      L.MakeError('Only ?=> predicates can contain groups (p1,p2,p3...) : ' + RegExprString(VarNames[parno]));
                                      Break
                                    End;
-                                V := TFastCalls.Create;
+                                V := TFastCalls.Create(created_fcalls);
                                 TFastCalls(pcalls[pcalls.Count - 1]).Add(V);
                                 pcalls.Add(V);
                                 Continue
@@ -4848,7 +4879,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                       L.MakeError('Predicate expected : ' + RegExprString(VarNames[parno]));
                                 Continue
                               end;
-                           pcall := TFastCall.Create;
+                           pcall := TFastCall.Create(created_fcall);
                            pcall.Negate := L.IsNext(Exclamation) And L.Check(Exclamation);
                            If pcall.Negate And (pred <> '?') Then
                               Begin
@@ -4970,7 +5001,7 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                                         L.MakeError('Predicate expected : ' + RegExprString(VarNames[parno]))
                                      Else
                                         Begin
-                                          TFastCalls(pcalls[pcalls.Count - 1]).Alternation := TFastCalls.Create;
+                                          TFastCalls(pcalls[pcalls.Count - 1]).Alternation := TFastCalls.Create(created_fcalls);
                                           pcalls[pcalls.Count - 1] := TFastCalls(pcalls[pcalls.Count - 1]).Alternation
                                         End
                                    End
@@ -4988,8 +5019,10 @@ function TRegExpr.ParseReg (paren : integer; var flagp : integer) : PRegExprChar
                        L.Free;
                        pcalls.Free;
 
-                       if Assigned(fcalls[parno]) then
-                          FreeAndNil(fcalls[parno]);
+                       {
+                        if Assigned(fcalls[parno]) then
+                           FreeAndNil(fcalls[parno]);
+                       }
                        fcalls[parno] := pmaincalls;
                        ST := hexStr(pmaincalls);
                        FreeMem(varsp[parno]);

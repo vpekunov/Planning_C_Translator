@@ -1403,22 +1403,24 @@ Const Tunnels_Vars_Sems: PChar =
 '    using funneled_in<Type>::empty;'+CRLF+
 '    using funneled_in<Type>::wait;'+CRLF+
 '    using funneled_in<Type>::get;'+CRLF+
+'    using funneled_in<Type>::init_data;'+CRLF+
+'    using funneled_in<Type>::ready;'+CRLF+
 '    funneled_predictor_in() { };'+CRLF+
 '    funneled_predictor_in(int P, void * _Ref) {'+CRLF+
-'       this->init_data(_Ref ? ((funneled_predictor_out<Type> *) _Ref)->getRef() : new _funnel_predictor<Type>(P));'+CRLF+
+'       funneled_in<Type>::init_data(_Ref ? ((funneled_predictor_out<Type> *) _Ref)->getRef() : new _funnel_predictor<Type>(P));'+CRLF+
 '    };'+CRLF+
 '    funneled_predictor_in(int N, int P = 5, double rel_eps = 0.001) {'+CRLF+
-'       this->init_data(new _funnel_predictor<Type>(P, N, rel_eps));'+CRLF+
+'       funneled_in<Type>::init_data(new _funnel_predictor<Type>(P, N, rel_eps));'+CRLF+
 '    }'+CRLF+
 '    funneled_predictor_in(const char * Name, int N = 1, int P = 5, double rel_eps = 0.001) {'+CRLF+
 '       omp_set_lock(&__funnel_lock__);'+CRLF+
 '       map<string,__funnel *>::iterator itFunnels = __Funnels.find(Name);'+CRLF+
 '       if (itFunnels == __Funnels.end()) {'+CRLF+
 '          __funnel * funnel = new _funnel_predictor<Type>(P, N, rel_eps, Name);'+CRLF+
-'          this->init_data(funnel);'+CRLF+
+'          funneled_in<Type>::init_data(funnel);'+CRLF+
 '          __Funnels[Name] = funnel;'+CRLF+
 '       } else {'+CRLF+
-'          this->init_data(itFunnels->second);'+CRLF+
+'          funneled_in<Type>::init_data(itFunnels->second);'+CRLF+
 '       }'+CRLF+
 '       omp_unset_lock(&__funnel_lock__);'+CRLF+
 '    }'+CRLF+
@@ -1499,23 +1501,25 @@ Const Tunnels_Vars_Sems: PChar =
 '    friend class funneled_perceptron_out<Type>;'+CRLF+
 '  protected:'+CRLF+
 '  public:'+CRLF+
+'    using funneled_predictor_in<Type>::init_data;'+CRLF+
+'    using funneled_predictor_in<Type>::ready;'+CRLF+
 '    funneled_perceptron_in() { throw Exception("Empty constructor of funnel-perceptron-in called"); };'+CRLF+
 '    funneled_perceptron_in(bool _explicit, bool hasB, const vector<_funnel<Type> *> &refs, int N, void * _Ref, int PATTERN = -1) {'+CRLF+
 '       if (_explicit)'+CRLF+
-'          this->init_data(_Ref ? ((funneled_predictor_out<Type> *) _Ref)->getRef(&refs) : new _funnel_explicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
+'          funneled_predictor_in<Type>::init_data(_Ref ? ((funneled_predictor_out<Type> *) _Ref)->getRef(&refs) : new _funnel_explicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
 '       else'+CRLF+
-'          this->init_data(_Ref ? ((funneled_predictor_out<Type> *) _Ref)->getRef(&refs) : new _funnel_implicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
+'          funneled_prdictor_in<Type>::init_data(_Ref ? ((funneled_predictor_out<Type> *) _Ref)->getRef(&refs) : new _funnel_implicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
 '    };'+CRLF+
 '    funneled_perceptron_in(bool _explicit, bool hasB, const vector<_funnel<Type> *> &refs, const char * Name, int N = 1, double rel_eps = 0.001, int PATTERN = -1) {'+CRLF+
 '       omp_set_lock(&__funnel_lock__);'+CRLF+
 '       map<string,__funnel *>::iterator itFunnels = __Funnels.find(Name);'+CRLF+
 '       if (itFunnels == __Funnels.end()) {'+CRLF+
 '          __funnel * funnel = _explicit ? (__funnel *) new _funnel_explicit_perceptron<Type>(hasB, refs, N, rel_eps, Name, PATTERN) : (__funnel *) new _funnel_implicit_perceptron<Type>(hasB, refs, N, rel_eps, Name, PATTERN);'+CRLF+
-'          this->init_data(funnel);'+CRLF+
+'          funneled_predictor_in<Type>::init_data(funnel);'+CRLF+
 '          __Funnels[Name] = funnel;'+CRLF+
 '       } else {'+CRLF+
 '          reinterpret_cast< _funnel_perceptron<Type> * >(itFunnels->second)->add_refs(&refs);'+CRLF+
-'          this->init_data(itFunnels->second);'+CRLF+
+'          funneled_predictor_in<Type>::init_data(itFunnels->second);'+CRLF+
 '       }'+CRLF+
 '       omp_unset_lock(&__funnel_lock__);'+CRLF+
 '    }'+CRLF+
@@ -1535,6 +1539,7 @@ Const Tunnels_Vars_Sems: PChar =
 '       omp_unset_lock(&_Ref->Lock);'+CRLF+
 '    };'+CRLF+
 '  public:'+CRLF+
+'    using funneled_base<Type>::ready;'+CRLF+
 '    funneled_out(): funneled_out((void *)NULL) { };'+CRLF+
 '    funneled_out(void * _Ref) {'+CRLF+
 '       this->init_data(_Ref ? ((funneled_in<Type> *) _Ref)->getRef() : new _funnel<Type>(1));'+CRLF+
@@ -1613,22 +1618,24 @@ Const Tunnels_Vars_Sems: PChar =
 '  public:'+CRLF+
 '    using funneled_out<Type>::getRef;'+CRLF+
 '    using funneled_out<Type>::wait;'+CRLF+
+'    using funneled_out<Type>::init_data;'+CRLF+
+'    using funneled_out<Type>::ready;'+CRLF+
 '    funneled_predictor_out() { };'+CRLF+
 '    funneled_predictor_out(int P, void * _Ref) {'+CRLF+
-'       this->init_data(_Ref ? ((funneled_predictor_in<Type> *) _Ref)->getRef() : new _funnel_predictor<Type>(P));'+CRLF+
+'       funneled_out<Type>::init_data(_Ref ? ((funneled_predictor_in<Type> *) _Ref)->getRef() : new _funnel_predictor<Type>(P));'+CRLF+
 '    };'+CRLF+
 '    funneled_predictor_out(int N, int P = 5, double rel_eps = 0.001) {'+CRLF+
-'       this->init_data(new _funnel_predictor<Type>(P, N, rel_eps));'+CRLF+
+'       funneled_out<Type>::init_data(new _funnel_predictor<Type>(P, N, rel_eps));'+CRLF+
 '    }'+CRLF+
 '    funneled_predictor_out(const char * Name, int N = 1, int P = 5, double rel_eps = 0.001) {'+CRLF+
 '       omp_set_lock(&__funnel_lock__);'+CRLF+
 '       map<string,__funnel *>::iterator itFunnels = __Funnels.find(Name);'+CRLF+
 '       if (itFunnels == __Funnels.end()) {'+CRLF+
 '          __funnel * funnel = new _funnel_predictor<Type>(P, N, rel_eps, Name);'+CRLF+
-'          this->init_data(funnel);'+CRLF+
+'          funneled_out<Type>::init_data(funnel);'+CRLF+
 '          __Funnels[Name] = funnel;'+CRLF+
 '       } else {'+CRLF+
-'          this->init_data(itFunnels->second);'+CRLF+
+'          funneled_out<Type>::init_data(itFunnels->second);'+CRLF+
 '       }'+CRLF+
 '       omp_unset_lock(&__funnel_lock__);'+CRLF+
 '    }'+CRLF+
@@ -1658,23 +1665,25 @@ Const Tunnels_Vars_Sems: PChar =
 '    friend class funneled_perceptron_in<Type>;'+CRLF+
 '  protected:'+CRLF+
 '  public:'+CRLF+
+'    using funneled_predictor_out<Type>::init_data;'+CRLF+
+'    using funneled_predictor_out<Type>::ready;'+CRLF+
 '    funneled_perceptron_out() { throw Exception("Empty constructor of funnel-perceptron-out called"); };'+CRLF+
 '    funneled_perceptron_out(bool _explicit, bool hasB, const vector<_funnel<Type> *> &refs, int N, void * _Ref, int PATTERN = -1) {'+CRLF+
 '       if (_explicit)'+CRLF+
-'          this->init_data(_Ref ? ((funneled_predictor_in<Type> *) _Ref)->getRef(&refs) : new _funnel_explicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
+'          funneled_predictor_out<Type>::init_data(_Ref ? ((funneled_predictor_in<Type> *) _Ref)->getRef(&refs) : new _funnel_explicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
 '       else'+CRLF+
-'          this->init_data(_Ref ? ((funneled_predictor_in<Type> *) _Ref)->getRef(&refs) : new _funnel_implicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
+'          funneled_predictor_out<Type>::init_data(_Ref ? ((funneled_predictor_in<Type> *) _Ref)->getRef(&refs) : new _funnel_implicit_perceptron<Type>(hasB, refs, N, 0.001, NULL, PATTERN));'+CRLF+
 '    };'+CRLF+
 '    funneled_perceptron_out(bool _explicit, bool hasB, const vector<_funnel<Type> *> &refs, const char * Name, int N = 1, double rel_eps = 0.001, int PATTERN = -1) {'+CRLF+
 '       omp_set_lock(&__funnel_lock__);'+CRLF+
 '       map<string,__funnel *>::iterator itFunnels = __Funnels.find(Name);'+CRLF+
 '       if (itFunnels == __Funnels.end()) {'+CRLF+
 '          __funnel * funnel = _explicit ? (__funnel *) new _funnel_explicit_perceptron<Type>(hasB, refs, N, rel_eps, Name, PATTERN) : (__funnel *) new _funnel_implicit_perceptron<Type>(hasB, refs, N, rel_eps, Name, PATTERN);'+CRLF+
-'          this->init_data(funnel);'+CRLF+
+'          funneled_predictor_out<Type>::init_data(funnel);'+CRLF+
 '          __Funnels[Name] = funnel;'+CRLF+
 '       } else {'+CRLF+
 '          reinterpret_cast< _funnel_perceptron<Type> * >(itFunnels->second)->add_refs(&refs);'+CRLF+
-'          this->init_data(itFunnels->second);'+CRLF+
+'          funneled_predictor_out<Type>::init_data(itFunnels->second);'+CRLF+
 '       }'+CRLF+
 '       omp_unset_lock(&__funnel_lock__);'+CRLF+
 '    }'+CRLF+
@@ -3211,6 +3220,7 @@ Const Transact: PChar =
 '    bool predicted;'+CRLF+
 '    Type * __buf__;'+CRLF+
 '  public:'+CRLF+
+'    using funneled_predictor_in<Type>::ready;'+CRLF+
 '    TIn(const char * Name, int N = 1, int P = 2, double rel_eps = 0.001, int _owner = -1, const char * __id__ = ""):'+CRLF+
 '		TChannel(true, Name, _owner, __id__), funneled_predictor_in<Type>(Name, N, P, rel_eps) {'+CRLF+
 '       __buf__ = new Type[N];'+CRLF+

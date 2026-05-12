@@ -362,7 +362,9 @@ public:
 #define min(A,B) ((A) < (B) ? (A) : (B))
 #endif
 
-#define _isnan std::isnan
+bool _isnan(double x) {
+	return std::isnan(x);
+}
 
 namespace solve {
    /* LU - разложение  с выбором максимального элемента по диагонали */
@@ -1365,7 +1367,7 @@ public:
    !,
    (
     =(MODE, 'lin_extrapolator')->
-     (write('mutable bool __used;'), nl);
+     (write('mutable bool _used;'), nl);
      true
    ),
    !,
@@ -1408,7 +1410,7 @@ public:
          write('     for (const history_memo_'), write(UID), write(' & h : *itt->second) '),
          (
           =(MODE, 'lin_extrapolator')->
-            write('if (!h.__used) { h.__used = true;');
+            write('if (!h._used) { h._used = true;');
             write(' {')
          ),
          !,
