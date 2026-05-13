@@ -511,7 +511,7 @@ public:
 		bool result = false;
 		if (!xpathInductLib) {
 			xpathInductLib = LoadLibrary(
-#ifdef __linux__
+#ifndef _MSC_VER
 				L"./libxpathInduct.so"
 #else
 				L"xpathInduct.dll"

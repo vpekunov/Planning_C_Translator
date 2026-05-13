@@ -2190,7 +2190,7 @@ begin
   For F := Low(Descriptor) To High(Descriptor) Do
       begin
         GetMem(Vals[F], Max(Length(Descriptor[F].Value)+2,65536)*SizeOf(WideChar));
-        System.Move(Descriptor[F].Value[1], Vals[F]^, Length(Descriptor[F].Value)*SizeOf(WideChar));
+        StringToWideChar(Descriptor[F].Value, Vals[F], Length(Descriptor[F].Value)+1);
         (Vals[F]+Length(Descriptor[F].Value))^ := #0;
         If Descriptor[F].Kind = fpBound Then
            p^ := #0

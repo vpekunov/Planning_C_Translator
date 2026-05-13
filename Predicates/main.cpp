@@ -39,7 +39,7 @@ wchar_t * walloc(short int * Arg) {
 	return result;
 }
 
-void wfree(wchar_t * _Arg, short int * Arg) {
+void wfree(wchar_t * _Arg, volatile short int * Arg) {
 	wchar_t * ptr = _Arg;
 	while (*Arg++ = *ptr++);
 	delete[] _Arg;
@@ -47,8 +47,8 @@ void wfree(wchar_t * _Arg, short int * Arg) {
 
 #endif
 
-long _wcslen(wchar_t * Arg) {
-    wchar_t * End = Arg;
+long _wcslen(volatile wchar_t * Arg) {
+    volatile wchar_t * End = Arg;
     while (*End++);
     return End - Arg - 1;
 }
@@ -59,7 +59,7 @@ wchar_t * _wcschr(wchar_t * Str, wchar_t C) {
     return *Str == C ? Str : NULL;
 }
 
-void _swprintf(wchar_t * Dest, char * fmt, int val) {
+void _swprintf(volatile wchar_t * Dest, char * fmt, int val) {
     char buf[30];
     char * ptr = (char *)buf;
     sprintf(ptr, fmt, val);

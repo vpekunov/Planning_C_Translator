@@ -49,7 +49,7 @@ using namespace boost::filesystem;
 #define idlibXPath L"XPath.class.php"
 #define idParamsFile L"params.cfg"
 #define idParamsOut L"params.out"
-#ifdef __linux__
+#ifndef _MSC_VER
 #define idParamsExe L"./lparams"
 #else
 #define idParamsExe L"params.exe"
