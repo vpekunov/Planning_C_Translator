@@ -14,7 +14,7 @@
 #include "ReentLexer.h"
 #include "ReentParser.h"
 
-#ifdef __linux__
+#ifndef _MSC_VER
 #include <sys/resource.h>
 #endif
 
@@ -84,7 +84,7 @@ int main(int argc, const char * argv[]) {
 	std::cout << "lexer_plc.exe <file.cpp> [output_tree]" << std::endl;
 	return 1;
   }
-#ifdef __linux__
+#ifndef _MSC_VER
   struct rlimit rl = { RLIM_INFINITY, RLIM_INFINITY };
   int result = setrlimit(RLIMIT_STACK, &rl);
   if (result != 0) {

@@ -44,7 +44,7 @@ extern "C" {
 		std::cout.rdbuf(F.rdbuf()); //redirect std::cout!
 		std::cerr.rdbuf(F.rdbuf()); //redirect std::cerr!
 
-	#ifdef __linux__
+#ifndef _MSC_VER
 		struct rlimit rl = { RLIM_INFINITY, RLIM_INFINITY };
 		int result = setrlimit(RLIMIT_STACK, &rl);
 		if (result != 0) {
