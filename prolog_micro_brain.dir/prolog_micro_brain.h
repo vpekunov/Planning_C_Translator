@@ -2,6 +2,7 @@
 #define __PROLOG_MICRO_BRAIN_H__
 
 #define _CRT_SECURE_NO_WARNINGS
+#define _HAS_STD_BYTE 0
 
 #include <vector>
 #include <string>
@@ -19,6 +20,7 @@
 using namespace std;
 
 #include "elements.h"
+#include "symbolic.h"
 
 extern const char * STD_INPUT;
 extern const char * STD_OUTPUT;
@@ -33,9 +35,7 @@ const int PAR_SEQ_JOIN_AFTER = 2;
 unsigned long long getTotalSystemMemory();
 unsigned int getTotalProcs();
 
-#ifdef _MSC_VER
-#include <Windows.h>
-#else
+#ifndef _MSC_VER
 #include <sys/resource.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -43,17 +43,19 @@ unsigned int getTotalProcs();
 
 typedef void * HMODULE;
 
-inline HMODULE LoadLibrary(const wchar_t * _fname) {
+HMODULE LoadLibrary(const wchar_t * _fname) {
 	return dlopen(wstring_to_utf8(_fname).c_str(), RTLD_LAZY);
 }
 
-inline void * GetProcAddress(HMODULE handle, const char * fname) {
+void * GetProcAddress(HMODULE handle, const char * fname) {
 	return dlsym(handle, fname);
 }
 
-inline void FreeLibrary(HMODULE handle) {
+void FreeLibrary(HMODULE handle) {
 	dlclose(handle);
 }
+#else
+#include <Windows.h>
 #endif
 
 typedef unsigned long long clock_rdtsc;
@@ -83,6 +85,7 @@ class predicate_item;
 class predicate_item_user;
 class generated_vars;
 class term;
+class list;
 class tthread;
 class context;
 class tframe_item;
@@ -325,7 +328,18 @@ public:
 		id_repeat,
 		id_random,
 		id_randomize,
+		id_regularize,
+		id_add,
+		id_mul,
+		id_div,
+		id_to_chain,
+		id_nsimplify,
+		id_nnetff,
 		id_char_code,
+		id_nload,
+		id_nsave,
+		id_train,
+		id_sim,
 		id_get_code,
 		id_at_end_of_stream,
 		id_open_url,
@@ -434,7 +448,18 @@ public:
 		{ "repeat", id_repeat },
 		{ "random", id_random },
 		{ "randomize", id_randomize },
+		{ "regularize", id_regularize },
+		{ "add", id_add },
+		{ "mul", id_mul },
+		{ "div", id_div },
+		{ "to_chain", id_to_chain },
+		{ "nsimplify", id_nsimplify },
+		{ "nnetff", id_nnetff },
 		{ "char_code", id_char_code },
+		{ "nload", id_nload },
+		{ "nsave", id_nsave },
+		{ "train", id_train },
+		{ "sim", id_sim },
 		{ "get_code", id_get_code },
 		{ "at_end_of_stream", id_at_end_of_stream },
 		{ "open_url", id_open_url },
@@ -553,6 +578,8 @@ public:
 	bool block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier, bool frontier_enough = false);
 
 	double evaluate(context* CTX, frame_item * ff, const string & expression, size_t & p);
+	SUM* deserialize_symbolic(const string& expression, size_t& p, vector<string>& Vars);
+	string serialize_symbolic(ITEM * expression, vector<string>& Vars);
 
 	bool check_consistency(set<string> & dynamic_prefixes);
 
@@ -1204,8 +1231,14 @@ public:
 	virtual frame_item * get_next_variant(context * CTX, int i) { return i < size() ? at(i) : NULL; }
 
 	virtual void undo(int _i, vector<frame_item*>* list) {
-		at(_i) = NULL;
+		if (!list || list->size())
+			at(_i) = NULL;
+		if (list)
+			for (int j = 0; j < list->size(); j++)
+				if ((size_t)(_i + j + 1) < size())
+					at((size_t)(_i + j + 1)) = list->at(j);
 	}
+
 
 	virtual void delete_from(int i) {
 		for (int j = i; j < size(); j++)
@@ -1286,6 +1319,7 @@ protected:
 	std::list<value *> _args;
 
 	int parallelizing_status;
+	bool determined;
 
 	interpreter * prolog;
 
@@ -1299,11 +1333,18 @@ public:
 	predicate_item(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : neg(_neg), once(_once), call(_call),
 		self_number(num), starred_end(-1), parent(c), critical(NULL), prolog(_prolog),
 		conditional_star_mode(false), is_starred(false), parallelizing_status(PAR_NONE),
-		star_good_tries(0), star_bad_tries(0) { }
+		star_good_tries(0), star_bad_tries(0) {
+		determined = true;
+	}
 
 	virtual ~predicate_item() {
 		for (value * v : _args)
 			v->free();
+	}
+
+	virtual bool get_determined() { return determined; }
+	virtual void check_determinancy() {
+		// Empty
 	}
 
 	virtual void add_export(std::set<int>& end_points, bool skip_brackets, string& result, string& offset, bool introduce_new_parallelism);
@@ -1509,6 +1550,10 @@ public:
 		user_p = NULL;
 		cached_is_not_pure = false;
 		cached_is_not_pure_result = 0;
+	}
+
+	virtual void check_determinancy(set<predicate_item *> & passed) {
+		// Ecrivez! Pour determiner 'determined'
 	}
 
 	virtual void bind(bool starring);

@@ -1,12 +1,14 @@
 // (C) V.V.Pekunov, Just For Fun :)
 
-// g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++11 -O4 -lm -lboost_system -lboost_filesystem -ldl
+// g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -fpermissive -fopenmp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl
 
 #define _CRT_SECURE_NO_WARNINGS
+#define _HAS_STD_BYTE 0
 
 #pragma comment(linker, "/STACK:1000000000")
 
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
 #include <map>
@@ -18,9 +20,11 @@
 #include <stack>
 #include <queue>
 #include <algorithm>
+#include <random>
 #include <functional>
 #include <chrono>
 #include <regex>
+#include <cmath>
 
 #include <math.h>
 #include <time.h>
@@ -31,6 +35,12 @@
 
 #ifdef _POSIX_PRIORITY_SCHEDULING
 #include <sched.h>
+#endif
+
+#ifndef _MSC_VER
+bool _isnan(double x) {
+	return std::isnan(x);
+}
 #endif
 
 const long long eli = 60;
@@ -995,12 +1005,12 @@ bool int_number::unify(context * CTX, frame_item * ff, value * from) {
 }
 
 class term : public value {
-private:
+protected:
 	unsigned int name;
 	vector<value *> args;
 	signed char cached_defined;
 public:
-	term(const string & _name, const int init_refs = 1) : value() {
+	term(const string& _name, const int init_refs = 1) : value() {
 		this->refs = init_refs;
 		name = atomizer.get_atom(_name);
 		cached_defined = 1;
@@ -1217,6 +1227,1192 @@ public:
 			result += ")";
 		}
 		return result;
+	}
+};
+
+class network {
+private:
+	int NInputs;
+	std::string FNAME, DAT_FILE_NAME;
+	int NRows = 0;
+	int NCols = 0;
+	int NCC[512];
+	int NL;
+	int NN[1024];
+	long double best_err;
+
+	long double YN[1024][1024] = { 0.0 };
+
+	long double MMIN[512];
+	long double MMAX[512];
+	long double mmin[512];
+	long double mmax[512];
+
+	long double NUMIN, numin;
+	long double NUMAX, numax;
+
+	long double d[512];
+	long double nud;
+
+	int NW = 0;
+	int NB = 0;
+
+	long double* W = NULL;
+	long double* B = NULL;
+
+	long double tempX[512];
+
+	long double* X[512] = { NULL };
+	long double* Y = NULL;
+	long double* YS = NULL;
+	long double* ERR = NULL;
+
+	typedef struct {
+		int kind;
+		int N;
+		long double* KF;
+	} VARIANT;
+
+	const int HOW_MANY = 5;
+
+	const int _div = 20;
+
+	const int maxN = 4;
+
+	const static int n_kinds = 5;
+
+	typedef enum { vkPoly = 0, vkPolySqr = 1, vkPolyRev = 2, vkPolySqrRev = 3, vkLinear = 4 } variant_kinds;
+
+	const char* kinds[n_kinds] = { "POLY", "POLYSQR", "POLYREV", "POLYSQRREV", "LIN" };
+
+public:
+	network(const std::string& FName, const std::string& content) {
+		FNAME = FName;
+		istringstream NET(content);
+		std::string Buf;
+		while (!NET.eof() && (Buf.size() < 3 || Buf[0] != '-' || Buf[1] != '-' || Buf[2] != '-'))
+			getline(NET, Buf);
+
+		if (NET.eof()) {
+			printf("No NET data in the NET FILE\n");
+			exit(-11);
+		}
+
+		NET >> NInputs;
+		size_t cpos1 = FNAME.rfind('\\');
+		size_t cpos2 = FNAME.rfind('/');
+		do {
+			getline(NET, DAT_FILE_NAME);
+			if (DAT_FILE_NAME.length()) {
+				if (DAT_FILE_NAME[DAT_FILE_NAME.length() - 1] == '\n')
+					DAT_FILE_NAME.resize(DAT_FILE_NAME.length() - 1);
+				if (cpos1 != string::npos || cpos2 != string::npos) {
+					size_t pos1 = DAT_FILE_NAME.rfind('\\');
+					size_t pos2 = DAT_FILE_NAME.rfind('/');
+					if (pos1 == string::npos && pos2 == string::npos) {
+						size_t pos = cpos1 == string::npos ? cpos2 : (cpos2 == string::npos ? cpos1 : max(cpos1, cpos2));
+						DAT_FILE_NAME = FNAME.substr(0, pos + 1) + DAT_FILE_NAME;
+					}
+				}
+			}
+		} while (!NET.eof() && DAT_FILE_NAME.length() == 0);
+		if (NET.eof()) {
+			printf("No DATA FILE NAME in the NET FILE\n");
+			exit(-12);
+		}
+
+		NET >> NRows;
+		NET >> NCols;
+
+		for (int i = 0; i <= NInputs; i++)
+			NET >> NCC[i];
+
+		string BUF;
+		getline(NET, BUF);
+		getline(NET, BUF);
+		getline(NET, BUF);
+		istringstream SZ(BUF);
+		int number;
+		NL = 0;
+		while (SZ >> number) {
+			NN[NL++] = number;
+		}
+
+		if (NL == 0 || NN[NL - 1] != 1) {
+			printf("In this version ONLY 1-output nets are processed\n");
+			exit(-13);
+		}
+
+		for (int i = 0; i < NL; i++) {
+			int NP = i == 0 ? NInputs : NN[i - 1];
+			NW += NP * NN[i];
+			NB += NN[i];
+		}
+
+		W = new long double[NW];
+		B = new long double[NB];
+
+		YS = new long double[NRows];
+		ERR = new long double[NRows];
+
+		NET >> best_err;
+
+		for (int i = 0; i < NInputs; i++)
+			NET >> MMIN[i];
+		for (int i = 0; i < NInputs; i++)
+			NET >> MMAX[i];
+		for (int i = 0; i < NInputs; i++)
+			NET >> mmin[i];
+		for (int i = 0; i < NInputs; i++)
+			NET >> mmax[i];
+		NET >> NUMIN;
+		NET >> NUMAX;
+		NET >> numin;
+		NET >> numax;
+
+		for (int p = 0; p < NInputs; p++) {
+			d[p] = MMAX[p] == MMIN[p] ? 1.0 : (mmax[p] - mmin[p]) / (MMAX[p] - MMIN[p]);
+		}
+
+		nud = NUMAX == NUMIN ? 1.0 : (numax - numin) / (NUMAX - NUMIN);
+
+		int ptr = 0;
+		for (int layer = 0; layer < NL; layer++) {
+			int NP = layer == 0 ? NInputs : NN[layer - 1];
+			for (int i = 0; i < NP; i++)
+				for (int j = 0; j < NN[layer]; j++, ptr++)
+					NET >> W[ptr];
+		}
+		ptr = 0;
+		for (int layer = 0; layer < NL; layer++)
+			for (int j = 0; j < NN[layer]; j++, ptr++)
+				NET >> B[ptr];
+	}
+
+	virtual const std::string & fname() { return FNAME; }
+
+	virtual void setX(unsigned int i, long double v) {
+		if (v < MMIN[i]) v = MMIN[i];
+		if (v > MMAX[i]) v = MMAX[i];
+		tempX[i] = mmin[i] + (v - MMIN[i]) * d[i];
+	}
+	
+	virtual unsigned int nX() { return NInputs; }
+
+	virtual long double sim() { return NUMIN + (NET(-1) - numin) / nud; }
+
+	virtual bool load_data() {
+		for (int i = 0; i < NInputs; i++)
+			X[i] = new long double[NRows];
+
+		Y = new long double[NRows];
+
+		ifstream DAT(DAT_FILE_NAME);
+		if (DAT) {
+			for (int i = 0; i < NRows; i++) {
+				long double VALS[1024 * 32];
+				for (int j = 0; j < NCols; j++)
+					DAT >> VALS[j];
+				for (int j = 0; j < NInputs; j++)
+					X[j][i] = mmin[j] + (VALS[NCC[j]] - MMIN[j]) * d[j];
+				Y[i] = numin + (VALS[NCC[NInputs]] - NUMIN) * nud;
+			}
+			DAT.close();
+		}
+		else {
+			printf("DAT file '%s' not found!\n", DAT_FILE_NAME.c_str());
+			exit(-17);
+		}
+
+		return NRows*NCols > 50000;
+	}
+
+	virtual void unload_data() {
+		delete[] Y;
+
+		for (int i = 0; i < NInputs; i++) {
+			delete[] X[i];
+			X[i] = NULL;
+		}
+		Y = NULL;
+	}
+
+	inline long double S(long double s) {
+		return 1.0 / (1.0 + exp(-s));
+	};
+
+	inline long double NET(int i, long double* SMIN = NULL, long double* SMAX = NULL,
+		vector<long double>* XX = NULL, vector<long double>* YY = NULL) {
+		for (int i = 0; i < NL - 1; i++)
+			memset(&YN[i], 0, NN[i] * sizeof(long double));
+		int ptr = 0;
+		if (i >= 0)
+			for (int j = 0; j < NInputs; j++)
+				for (int k = 0; k < NN[0]; k++, ptr++)
+					YN[0][k] += W[ptr] * X[j][i];
+		else
+			for (int j = 0; j < NInputs; j++)
+				for (int k = 0; k < NN[0]; k++, ptr++)
+					YN[0][k] += W[ptr] * tempX[j];
+		int ptr1 = 0;
+		for (int k = 0; k < NN[0]; k++, ptr1++) {
+			YN[0][k] += B[ptr1];
+			if (SMIN && SMAX) {
+				if (YN[0][k] < SMIN[k]) SMIN[k] = YN[0][k];
+				if (YN[0][k] > SMAX[k]) SMAX[k] = YN[0][k];
+			}
+			if (XX) XX[k].push_back(YN[0][k]);
+			YN[0][k] = S(YN[0][k]);
+			if (YY) YY[k].push_back(YN[0][k]);
+		}
+
+		for (int layer = 1; layer < NL - 1; layer++) {
+			for (int j = 0; j < NN[layer - 1]; j++)
+				for (int k = 0; k < NN[layer]; k++, ptr++)
+					YN[layer][k] += W[ptr] * YN[layer - 1][j];
+			for (int k = 0; k < NN[layer]; k++, ptr1++) {
+				YN[layer][k] += B[ptr1];
+				if (SMIN && SMAX) {
+					if (YN[layer][k] < SMIN[ptr1]) SMIN[ptr1] = YN[layer][k];
+					if (YN[layer][k] > SMAX[ptr1]) SMAX[ptr1] = YN[layer][k];
+				}
+				if (XX) XX[ptr1].push_back(YN[layer][k]);
+				YN[layer][k] = S(YN[layer][k]);
+				if (YY) YY[ptr1].push_back(YN[layer][k]);
+			}
+		}
+
+		long double res = B[ptr1];
+		for (int k = 0; k < NN[NL - 2]; k++, ptr++) {
+			res += YN[NL - 2][k] * W[ptr];
+		}
+		if (XX) XX[ptr1].push_back(res);
+		if (YY) YY[ptr1].push_back(res);
+
+		if (SMIN && SMAX) {
+			int idx = 0;
+			for (int i = 0; i < NL - 1; i++)
+				idx += NN[i];
+			if (res < SMIN[idx]) SMIN[idx] = res;
+			if (res > SMAX[idx]) SMAX[idx] = res;
+		}
+
+		return res;
+	};
+
+	virtual bool train(int MAX_EPOCHS) {
+		bool non_compact = false;
+		if (!Y) non_compact = load_data();
+
+		const double nu = 0.01;
+		const double alpha = 0.2;
+		const double tol = 1E-5;
+
+		double err = 1E300;
+
+		int epochs = 0;
+
+		long double* DW = new long double[NW];
+		memset(DW, 0, NW * sizeof(long double));
+
+		long double* DB = new long double[NB];
+		memset(DB, 0, NB * sizeof(long double));
+
+		double real_err = best_err;
+
+		vector<int> idxs(NRows);
+		for (int i = 0; i < NRows; i++)
+			idxs[i] = i;
+		auto rd = std::random_device{};
+		auto rng = std::default_random_engine{ rd() };
+		std::shuffle(idxs.begin(), idxs.end(), rng);
+
+		do {
+			err = 0.0;
+			for (int ii = 0; ii < NRows; ii++) {
+				int i = idxs[ii];
+
+				YS[i] = NET(i);
+				long double delta = YS[i] - Y[i];
+				ERR[i] = fabs(delta);
+				err += ERR[i];
+
+				DB[NB - 1] = alpha * DB[NB - 1] + (1 - alpha) * (-nu * delta);
+				B[NB - 1] += DB[NB - 1];
+
+				int ptr = NW - 1;
+				for (int k = NN[NL - 2] - 1; k >= 0; k--, ptr--) {
+					DW[ptr] = alpha * DW[ptr] + (1 - alpha) * (-nu * delta * YN[NL - 2][k]);
+					W[ptr] += DW[ptr];
+				}
+
+				long double deltas[1024] = { 0.0 };
+
+				ptr = NW - 1;
+				for (int k = NN[NL - 2] - 1; k >= 0; k--, ptr--) {
+					deltas[k] = YN[NL - 2][k] * (1.0 - YN[NL - 2][k]) * delta * W[ptr];
+				}
+
+				int ptrw = ptr;
+				int ptrb = NB - 2;
+				for (int layer = NL - 2; layer > 0; layer--) {
+					ptr = ptrw;
+					for (int j = NN[layer - 1] - 1; j >= 0; j--)
+						for (int k = NN[layer] - 1; k >= 0; k--, ptrw--) {
+							DW[ptrw] = alpha * DW[ptrw] + (1 - alpha) * (-nu * deltas[k] * YN[layer - 1][j]);
+							W[ptrw] += DW[ptrw];
+						}
+					for (int k = NN[layer] - 1; k >= 0; k--, ptrb--) {
+						DB[ptrb] = alpha * DB[ptrb] + (1 - alpha) * (-nu * deltas[k]);
+						B[ptrb] += DB[ptrb];
+					}
+
+					long double deltas1[1024] = { 0.0 };
+
+					for (int j = NN[layer - 1] - 1; j >= 0; j--)
+						for (int k = NN[layer] - 1; k >= 0; k--, ptr--) {
+							deltas1[j] += YN[layer - 1][j] * (1.0 - YN[layer - 1][j]) * deltas[k] * W[ptr];
+						}
+					for (int j = 0; j < NN[layer - 1]; j++)
+						deltas[j] = deltas1[j];
+				}
+				ptr = 0;
+				for (int j = 0; j < NInputs; j++)
+					for (int k = 0; k < NN[0]; k++, ptr++) {
+						DW[ptr] = alpha * DW[ptr] + (1 - alpha) * (-nu * deltas[k] * X[j][i]);
+						W[ptr] += DW[ptr];
+					}
+				for (int k = 0; k < NN[0]; k++) {
+					DB[k] = alpha * DB[k] + (1 - alpha) * (-nu * deltas[k]);
+					B[k] += DB[k];
+				}
+			}
+			err /= NRows;
+			if (epochs % 100 == 0) {
+				real_err = 0.0;
+				for (int i = 0; i < NRows; i++) {
+					YS[i] = NET(i);
+					long double delta = YS[i] - Y[i];
+					real_err += fabs(delta);
+				}
+				printf("%i epochs reached, err = [%lf (really = %lf) / %i] = %lf (really = %lf)\n", epochs, (double)(err * NRows), real_err, NRows, (double)err, (double)(real_err / NRows));
+				fflush(stdout);
+			}
+		} while (err > tol && epochs++ < MAX_EPOCHS);
+
+		bool result = real_err < best_err;
+
+		best_err = real_err;
+
+		delete[] DW;
+		delete[] DB;
+
+		if (non_compact) unload_data();
+
+		return result;
+	}
+
+	virtual vector<std::string> simplify(bool to_chain) {
+		bool non_compact = false;
+		if (!Y) non_compact = load_data();
+
+		long double err = 0.0;
+		for (int i = 0; i < NRows; i++) {
+			YS[i] = NET(i);
+
+			long double delta = YS[i] - Y[i];
+			ERR[i] = fabs(delta);
+			err += ERR[i];
+		}
+		err /= NRows;
+
+		long double err1 = err * NRows;
+
+		long double tol_err = err1 * 1.05;
+
+		bool enhanced = true;
+		do {
+			long double min_delta = 1E300;
+			int min_n_w = -1;
+			for (int j = 0; j < NW; j++)
+				if (fabs(W[j]) >= 1e-14) {
+					long double save = W[j];
+					W[j] = 0.0;
+					long double err2 = 0.0;
+					for (int i = 0; i < NRows; i++)
+						err2 += fabs(Y[i] - NET(i));
+					if (err2 - err1 < min_delta) {
+						min_delta = err2 - err1;
+						min_n_w = j;
+					}
+					W[j] = save;
+				}
+
+			if (min_n_w >= 0 && err1 + min_delta < tol_err) {
+				W[min_n_w] = 0.0;
+				int k = min_n_w;
+				int layer = 1;
+				while (layer <= NL) {
+					int NP = layer == 1 ? NInputs : NN[layer - 2];
+					if (k < NP * NN[layer - 1])
+						break;
+					k -= NP * NN[layer - 1];
+					layer++;
+				}
+				printf("AT ERROR(%lf to %lf) WEIGHT in %i layer (%i-%i) is excluded\n",
+					(double)err1, (double)(err1 + min_delta),
+					layer,
+					k / NN[layer - 1],
+					k % NN[layer - 1]
+				);
+				fflush(stdout);
+			}
+			else
+				enhanced = false;
+		} while (enhanced);
+
+		long double * SMIN = new long double[NB];
+		long double * SMAX = new long double[NB];
+		int* SFREQ = new int[NB * _div];
+		memset(SFREQ, 0, NB * _div * sizeof(int));
+		for (int j = 0; j < NB; j++) {
+			SMIN[j] = 1E300;
+			SMAX[j] = -1E300;
+		}
+
+		vector<long double> * XX = new vector<long double>[NB];
+		vector<long double> * YY = new vector<long double>[NB];
+		for (int i = 0; i < NRows; i++)
+			NET(i, SMIN, SMAX, XX, YY);
+
+		int NVARIANTS = HOW_MANY;
+		vector<std::string> result = ANALYZE(omp_get_num_procs(), NVARIANTS, to_chain, SMIN, SMAX, SFREQ, XX, YY);
+
+		delete[] XX;
+		delete[] YY;
+
+		delete[] SMIN;
+		delete[] SMAX;
+
+		if (non_compact) unload_data();
+
+		return result;
+	}
+
+	virtual ~network() {
+		delete[] W;
+		delete[] B;
+		delete[] Y;
+		delete[] YS;
+		delete[] ERR;
+
+		for (int i = 0; i < NInputs; i++)
+			delete[] X[i];
+	}
+
+	virtual bool equals(network* from) {
+		if (NInputs != from->NInputs) return false;
+		if (DAT_FILE_NAME != from->DAT_FILE_NAME) return false;
+		if (NRows != from->NRows) return false;
+		if (NCols != from->NCols) return false;
+		for (int i = 0; i < NCols; i++)
+			if (NCC[i] != from->NCC[i])
+				return false;
+		if (NL != from->NL) return false;
+		for (int i = 0; i < NL; i++)
+			if (NN[i] != from->NN[i])
+				return false;
+		if (best_err != from->best_err) return false;
+		for (int i = 0; i < NInputs; i++) {
+			if (MMIN[i] != from->MMIN[i]) return false;
+			if (MMAX[i] != from->MMAX[i]) return false;
+			if (mmin[i] != from->mmin[i]) return false;
+			if (mmax[i] != from->mmax[i]) return false;
+		}
+
+		if (NUMIN != from->NUMIN || numin != from->numin ||
+			NUMAX != from->NUMAX || numax != from->numax) return false;
+
+		if (NW != from->NW || NB != from->NB) return false;
+		for (int i = 0; i < NW; i++)
+			if (W[i] != from->W[i])
+				return false;
+		for (int i = 0; i < NB; i++)
+			if (B[i] != from->B[i])
+				return false;
+
+		return true;
+	}
+
+	virtual const string get() {
+		ostringstream NET;
+
+		NET << "Net file after additional training by the nnets_simplify\n";
+		NET << "-------------------------------------------------------\n";
+
+		NET << NInputs << "\n\n";
+		NET << DAT_FILE_NAME << "\n\n";
+
+		NET << NRows << " " << NCols << "\n\n";
+
+		for (int i = 0; i <= NInputs; i++)
+			NET << NCC[i] << " ";
+		NET << "\n\n";
+
+		for (int i = 0; i < NL; i++)
+			NET << NN[i] << " ";
+		NET << "\n\n";
+
+		NET << setprecision(15) << best_err << "\n\n";
+		for (int i = 0; i < NInputs; i++)
+			NET << setprecision(15) << MMIN[i] << " ";
+		NET << "\n";
+		for (int i = 0; i < NInputs; i++)
+			NET << setprecision(15) << MMAX[i] << " ";
+		NET << "\n\n";
+		for (int i = 0; i < NInputs; i++)
+			NET << setprecision(15) << mmin[i] << " ";
+		NET << "\n";
+		for (int i = 0; i < NInputs; i++)
+			NET << setprecision(15) << mmax[i] << " ";
+		NET << "\n\n";
+		NET << setprecision(15) << NUMIN << "\n";
+		NET << setprecision(15) << NUMAX << "\n\n";
+		NET << setprecision(15) << numin << "\n";
+		NET << setprecision(15) << numax << "\n\n";
+		int ptr = 0;
+		for (int layer = 0; layer < NL; layer++) {
+			int NP = layer == 0 ? NInputs : NN[layer - 1];
+			for (int i = 0; i < NP; i++) {
+				for (int j = 0; j < NN[layer]; j++, ptr++)
+					NET << setprecision(15) << W[ptr] << " ";
+				NET << "\n";
+			}
+			NET << "\n";
+		}
+		ptr = 0;
+		for (int layer = 0; layer < NL; layer++) {
+			for (int j = 0; j < NN[layer]; j++, ptr++)
+				NET << setprecision(15) << B[ptr] << " ";
+			NET << "\n\n";
+		}
+
+		return NET.str();
+	}
+
+	static std::string create(::list& nlayers, const std::string& dat_file, ::list& inps, int out);
+
+	/* LU - разложение  с выбором максимального элемента по диагонали */
+	bool _GetLU(int NN, int* iRow, long double* A, long double* LU)
+	{
+		int i, j, k;
+		try {
+			memmove(LU, A, NN * NN * sizeof(long double));
+			for (i = 0; i < NN; i++)
+				iRow[i] = i;
+			for (i = 0; i < NN - 1; i++)
+			{
+				long double Big = fabs(LU[iRow[i] * NN + i]);
+				int iBig = i;
+
+				long double Kf;
+
+				for (j = i + 1; j < NN; j++)
+				{
+					long double size = fabs(LU[iRow[j] * NN + i]);
+
+					if (size > Big)
+					{
+						Big = size;
+						iBig = j;
+					}
+				}
+				if (iBig != i)
+				{
+					int V = iRow[i];
+					iRow[i] = iRow[iBig];
+					iRow[iBig] = V;
+				}
+				Kf = 1.0 / LU[iRow[i] * NN + i];
+
+				LU[iRow[i] * NN + i] = Kf;
+				for (j = i + 1; j < NN; j++)
+				{
+					long double Fact = Kf * LU[iRow[j] * NN + i];
+
+					LU[iRow[j] * NN + i] = Fact;
+					for (k = i + 1; k < NN; k++)
+						LU[iRow[j] * NN + k] -= Fact * LU[iRow[i] * NN + k];
+				}
+			}
+			LU[(iRow[NN - 1] + 1) * NN - 1] = 1.0 / LU[(iRow[NN - 1] + 1) * NN - 1];
+		}
+		catch (...) {
+			return false;
+		}
+		return true;
+	}
+
+	/* Метод LU - разложения */
+	bool _SolveLU(int NN, int* iRow, long double* LU, long double* Y, long double* X)
+	{
+		int i, j, k;
+		try {
+			X[0] = Y[iRow[0]];
+			for (i = 1; i < NN; i++)
+			{
+				long double V = Y[iRow[i]];
+
+				for (j = 0; j < i; j++)
+					V -= LU[iRow[i] * NN + j] * X[j];
+				X[i] = V;
+			}
+
+			X[NN - 1] *= LU[(iRow[NN - 1] + 1) * NN - 1];
+
+			for (i = 1, j = NN - 2; i < NN; i++, j--)
+			{
+				long double V = X[j];
+
+				for (k = j + 1; k < NN; k++)
+					V -= LU[iRow[j] * NN + k] * X[k];
+				X[j] = V * LU[iRow[j] * NN + j];
+			}
+		}
+		catch (...) {
+			return false;
+		}
+		return true;
+	}
+
+	long double* MNK_of_X(int N,
+		const vector<long double> W,
+		const vector<long double> X,
+		const vector<long double> Y,
+		double& err) {
+		int Z = (int) X.size();
+		vector<long double> _XP(Z, 1.0);
+		long double* A = new long double[N * N];
+		long double* LU = new long double[N * N];
+		long double* B = new long double[N];
+		long double* XX = new long double[N];
+		int* iLU = new int[N];
+		int i, j, k;
+
+		for (i = 0; i < 2 * N - 1; i++) {
+			long double QX = 0.0;
+			long double QY = 0.0;
+			for (j = 0; j < Z; j++) {
+				QX += W[j] * _XP[j];
+				if (i < N) QY += W[j] * _XP[j] * Y[j];
+				_XP[j] *= X[j];
+			}
+			for (j = (i < N ? i : N - 1), k = (i < N ? 0 : i - N + 1); j >= 0 && k < N; j--, k++)
+				A[k * N + j] = QX;
+			if (i < N) B[i] = QY;
+		}
+		long double ZZ = 0.0;
+		if (!(_GetLU(N, iLU, A, LU) && _SolveLU(N, iLU, LU, B, XX))) {
+			memset(XX, 0, N * sizeof(long double));
+			err = 1E300;
+		}
+		else {
+			for (k = 0; k < N; k++)
+				if (_isnan(XX[k])) {
+					memset(XX, 0, N * sizeof(long double));
+					err = 1E300;
+					return XX;
+				}
+			err = 0.0;
+			for (j = 0; j < Z; j++) {
+				long double R = 0.0;
+				for (k = N - 1; k >= 0; k--)
+					R = R * X[j] + XX[k];
+				double cur_err = fabs(R - Y[j]);
+				err += W[j] * cur_err;
+				ZZ += W[j];
+			}
+		}
+
+		delete[] A;
+		delete[] LU;
+		delete[] B;
+		delete[] iLU;
+
+		if (ZZ > 0.0) err /= ZZ;
+
+		return XX;
+	}
+
+	typedef map<string, ITEM*> zVars;
+
+	void* BUILD_FUNC(int NPP, int& NVARIANTS, bool Simplify,
+		vector<string>& BEST,
+		char** Vars,
+		vector<vector<VARIANT>*>_VARS,
+		int layer, zVars& zvars, string* Scheme = NULL, SUM** Inputs = NULL) {
+
+		int n_input[64] = { 0 };
+		int n_output[64] = { 0 };
+		int w_base[64] = { 0 };
+		int b_base[64] = { 0 };
+
+		for (int nlayer = 0; nlayer < NL; nlayer++) {
+			n_input[nlayer] = nlayer == 0 ? NInputs : NN[nlayer - 1];
+			n_output[nlayer] = NN[nlayer];
+			if (nlayer > 0) {
+				w_base[nlayer] = w_base[nlayer - 1] + n_input[nlayer - 1] * n_output[nlayer - 1];
+				b_base[nlayer] = b_base[nlayer - 1] + n_output[nlayer - 1];
+			}
+		}
+
+		SUM* INPUTS[256] = { NULL };
+		SUM* OUTPUTS[256] = { NULL };
+
+		if (!Scheme) {
+			Scheme = new string("");
+		}
+
+		string* _Scheme = new string(*Scheme);
+
+		for (int i = 0; i < n_input[layer - 1]; i++)
+			if (layer == 1) {
+				MUL* INP = new MUL(1.0);
+				INP->Mul(i, 1.0);
+				INPUTS[i] = new SUM(INP);
+			}
+			else
+				INPUTS[i] = dynamic_cast<SUM*>(Inputs[i]->clone());
+
+		for (int i = 0; i < n_output[layer - 1]; i++) {
+			OUTPUTS[i] = new SUM(B[b_base[layer - 1] + i]);
+			for (int j = 0; j < n_input[layer - 1]; j++) {
+				SUM* KFI = new SUM(W[w_base[layer - 1] + j * n_output[layer - 1] + i]);
+				SUM* I = dynamic_cast<SUM*>(INPUTS[j]->clone());
+				KFI->Mul(I);
+				OUTPUTS[i]->Add(KFI);
+			}
+			OUTPUTS[i]->AccountSimilars();
+		}
+
+		int N = 1;
+		unsigned int variant[256] = { 0 };
+		for (int i = 0; i < n_output[layer - 1]; i++)
+			N *= (int) _VARS[b_base[layer - 1] + i]->size();
+		for (int i = 0; i < N && NVARIANTS; i++) {
+			int P = n_output[layer - 1];
+			if (layer == 1) {
+				*_Scheme = "|";
+				zVars::iterator it;
+				for (it = zvars.begin(); it != zvars.end(); it++)
+					delete it->second;
+				zvars.clear();
+			}
+			else
+				*_Scheme = *Scheme;
+
+			SUM* _OUTPUTS[256] = { NULL };
+			for (int j = 0; j < P; j++) {
+				int neuro_num = b_base[layer - 1] + j;
+				int sqrt_var = NInputs + neuro_num;
+				VARIANT& VAR = (*_VARS[b_base[layer - 1] + j])[variant[j]];
+				SUM* ARG = dynamic_cast<SUM*>(OUTPUTS[j]->clone());
+				char sqrt_name[4] = "z00";
+				sqrt_name[1] = neuro_num >= 10 ? '0' + neuro_num / 10 : '0';
+				sqrt_name[2] = '0' + neuro_num % 10;
+				string zvar(sqrt_name);
+				zvars[zvar] = ARG->clone();
+				_OUTPUTS[j] = new SUM(0.0);
+				*_Scheme += kinds[VAR.kind];
+				*_Scheme += "|";
+				switch (VAR.kind) {
+				case vkPoly:
+				case vkPolyRev:
+					_OUTPUTS[j]->SETPOLY(ARG, VAR.N, VAR.KF, VAR.kind == vkPolyRev);
+					break;
+				case vkPolySqr:
+				case vkPolySqrRev:
+					_OUTPUTS[j]->SETPOLYSQR(ARG, sqrt_var, VAR.N, VAR.KF, VAR.kind == vkPolySqrRev);
+					break;
+				case vkLinear:
+					delete _OUTPUTS[j];
+					_OUTPUTS[j] = ARG;
+					_OUTPUTS[j]->AccountSimilars();
+				}
+			}
+
+			if (layer < NL) {
+				BUILD_FUNC(NPP, NVARIANTS, Simplify, BEST, Vars, _VARS, layer + 1, zvars, _Scheme, _OUTPUTS);
+			}
+			else {
+				if (NVARIANTS > 0) {
+					NVARIANTS--;
+					ITEM* _OUT = dynamic_cast<ITEM*>(_OUTPUTS[0]->clone());
+#ifdef TASKED
+					string* SCHEME = new string("");
+					zVars* _zvars = new zVars();
+					_zvars->insert(zvars.begin(), zvars.end());
+					for (zVars::iterator z_it = _zvars->begin(); z_it != _zvars->end(); z_it++) {
+						z_it->second = z_it->second->clone();
+					}
+					*SCHEME = *_Scheme;
+#pragma omp task if((int)(NPP*TASK_PART) > 1) untied
+					{
+#else
+					string* SCHEME = new string("");
+					zVars* _zvars = &zvars;
+					*SCHEME = *_Scheme;
+#endif
+					int maxPows[256] = { 0 };
+					zVars::iterator _z_last = _zvars->end();
+					zVars::iterator z_it;
+					// The last layer is LINEAR. z[last] is not considered (= OUT)
+					_z_last--;
+					for (z_it = _zvars->begin(); z_it != _z_last; z_it++) {
+						do {
+							ITEM* z__S = SUBSTITUTE_SQRS(z_it->second, NInputs, Vars, *_zvars);
+							if (Simplify)
+								z_it->second = SIMPLIFY(z__S);
+							else
+								z_it->second = z__S;
+						} while (PRESENT_SQRS(z_it->second, NInputs));
+					}
+					printf("SIMPLIFIED\n");
+					string* Buf = new string("");
+					ITEM* _S = _OUT;
+					do {
+						ITEM* __S = SUBSTITUTE_SQRS(_S, NInputs, Vars, *_zvars);
+						if (Simplify)
+							_S = SIMPLIFY(__S);
+						else
+							_S = __S;
+						printf("Stage OK ");
+					} while (PRESENT_SQRS(_S, NInputs));
+					printf("\n");
+					string SNET;
+					SNET.reserve(128 * 1024 * 1024);
+					_S->sprint(Vars, maxPows, &SNET);
+					SNET += "\n";
+					unsigned long long used_mask = 0;
+					_S->CHECK_VARS(used_mask, NInputs, Vars, *_zvars);
+					unsigned long long k = ONE64;
+					for (int pv = 0; pv < NInputs; pv++) {
+						if (used_mask & k) {
+							string _DEF = Vars[pv];
+							for (int ppv = 2; ppv <= maxPows[pv]; ppv++) {
+								_DEF += "*";
+								_DEF += Vars[pv];
+								string CUR = Vars[pv];
+								char Num[32] = "";
+								_sprintf1(Num, 32, "%u", ppv);
+								CUR += Num;
+								*Buf += CUR;
+								*Buf += "=";
+								*Buf += _DEF;
+								_DEF = CUR;
+								*Buf += "\n";
+							}
+						}
+						k <<= 1;
+					}
+					// The last layer is LINEAR. z[last] is not considered (= OUT)
+					for (z_it = _zvars->begin(); z_it != _z_last; z_it++, k <<= 1)
+						if (used_mask & k) {
+							ITEM* z_S = z_it->second;
+							string* zBuf = new string("");
+							zBuf->reserve(32 * 1024 * 1024);
+							z_S->sprint(Vars, maxPows, zBuf);
+							*Buf += z_it->first.c_str();
+							*Buf += " = sqrt(";
+							*Buf += *zBuf;
+							*Buf += ")\n";
+							delete zBuf;
+						}
+					delete _S;
+					// printf("%s NET<%s> : %s\n", Buf->c_str(), SCHEME->c_str(), SNET.c_str());
+#pragma omp critical
+					{
+						string STR = *Buf;
+						STR += "NET<";
+						STR += *SCHEME;
+						STR += "> : ";
+						STR += SNET;
+
+						size_t L = STR.length();
+						vector<string>::iterator after = BEST.begin();
+						while (after != BEST.end() && after->length() < L) after++;
+						BEST.insert(after, STR);
+						if (BEST.size() > HOW_MANY) BEST.pop_back();
+					}
+					delete Buf;
+#ifdef TASKED
+					_z_last++;
+					for (z_it = _zvars->begin(); z_it != _z_last; z_it++) {
+						delete z_it->second;
+					}
+					delete _zvars;
+					delete SCHEME;
+					}
+#endif
+				}
+			}
+
+		variant[0]++;
+		for (int j = 0; j < P && variant[j] >= _VARS[b_base[layer - 1] + j]->size(); j++) {
+			variant[j] = 0;
+			if (j < P - 1) variant[j + 1]++;
+		}
+
+		for (int j = 0; j < P; j++)
+			delete _OUTPUTS[j];
+		}
+
+		for (int i = 0; i < n_input[layer - 1]; i++)
+			delete INPUTS[i];
+		for (int i = 0; i < n_output[layer - 1]; i++)
+			delete OUTPUTS[i];
+
+		if (layer == 1 && !Scheme)
+			delete Scheme;
+
+		delete _Scheme;
+
+		if (layer == 1) {
+			zVars::iterator it;
+			for (it = zvars.begin(); it != zvars.end(); it++)
+				delete it->second;
+			zvars.clear();
+		}
+
+		return NULL;
+	};
+
+	vector<string> ANALYZE(int NPP, int & NVARIANTS, bool Simplify,
+		long double* SMIN, long double* SMAX, int* SFREQ,
+		vector<long double> XX[], vector<long double> YY[]) {
+
+		double start_time = omp_get_wtime();
+
+		vector<vector<VARIANT>*> _VARS(NB);
+
+		const long double eps_stand = 1E-2;
+		const long double eps_min = 1E-3;
+
+		int nk[2] = { 0, 0 };
+		int ns[n_kinds - 1] = { 0, 0, 1, 1 };
+		long double tols[2] = { eps_stand, eps_stand };
+		int base = 0;
+
+		for (int layer = 0; layer < NL; base += NN[layer++]) {
+			if (layer > 0 && layer < NL - 1) {
+				int n = nk[0] + nk[1];
+				for (int i = 0; i < 2; i++)
+					tols[i] = eps_min + (4.0 - 4.0 * nk[i] / n) * (eps_stand - eps_min);
+				printf("%i LAYER TOLS: DIR(%Lf) && REV(%Lf)\n", layer + 1, tols[0], tols[1]);
+			}
+#pragma omp parallel for schedule(guided) num_threads(NPP)
+			for (int k = 0; k < NN[layer]; k++) {
+				int j = base + k;
+				int N = (int) XX[j].size();
+				vector<VARIANT>* VARS = new vector<VARIANT>();
+				double errw[n_kinds] = { 1E300, 1E300, 1E300, 1E300, 1E300 };
+				long double* bestKF[n_kinds] = { NULL, NULL, NULL, NULL, NULL };
+				int bestN[n_kinds] = { -1, -1, -1, -1, -1 };
+				long double min_errw = 1E300;
+				int kind = -1;
+
+				if (j != NB - 1) {
+					long double DIAP = SMAX[j] - SMIN[j];
+					long double d = (_div - 1) / DIAP;
+					int NP = (int) XX[j].size();
+					for (int i = 0; i < NP; i++)
+						SFREQ[j * _div + (int)((XX[j][i] - SMIN[j]) * d)]++;
+					vector<long double> W(NP);
+					for (int i = 0; i < NP; i++)
+						W[i] = SFREQ[j * _div + (int)((XX[j][i] - SMIN[j]) * d)];
+					vector<long double> XXSQR(N);
+					for (int i = 0; i < N; i++)
+						XXSQR[i] = sqrt(XX[j][i]);
+					vector<long double> XXREV(N);
+					for (int i = 0; i < N; i++)
+						XXREV[i] = 1 / XX[j][i];
+					vector<long double> XXSQRREV(N);
+					for (int i = 0; i < N; i++)
+						XXSQRREV[i] = 1 / sqrt(XX[j][i]);
+					vector<long double>* XXX[n_kinds] = { &XX[j], &XXSQR, &XXREV, &XXSQRREV, NULL };
+					for (int X = 0; X < n_kinds - 1; X++) {
+						for (int n = 2; n <= maxN; n++) {
+							double cur_err;
+							long double* KF = MNK_of_X(n, W, *XXX[X], YY[j], cur_err);
+							if (errw[X] > 0.01 && cur_err < 0.9 * errw[X]) {
+								delete[] bestKF[X];
+								bestKF[X] = KF;
+								bestN[X] = n;
+								errw[X] = cur_err;
+							}
+							else
+								delete[] KF;
+						}
+					}
+
+					for (int X = 0; X < n_kinds - 1; X++)
+						if (errw[X] < min_errw) {
+							min_errw = errw[X];
+							kind = X;
+						}
+				}
+				else {
+					kind = vkLinear;
+					bestN[kind] = 0;
+					errw[kind] = 0.0;
+					min_errw = 0.0;
+				}
+				VARIANT V = { kind, bestN[kind], bestKF[kind] };
+				VARS->push_back(V);
+				if (layer == 0)
+					nk[ns[kind]]++;
+				if (layer < NL - 1) {
+					for (int X = 0; X < n_kinds - 1; X++)
+						if (X != kind)
+							if (fabs(errw[X] - errw[kind]) < tols[ns[X]]) {
+								VARIANT V1 = { X, bestN[X], bestKF[X] };
+								VARS->push_back(V1);
+								if (layer == 0)
+									nk[ns[X]]++;
+							}
+				}
+
+#pragma omp critical
+				{
+					printf("LAYER %i : NEURON [%i] has range [%lf - %lf] described as { ",
+						layer + 1, k, (double)SMIN[j], (double)SMAX[j]
+					);
+					for (unsigned int k = 0; k < VARS->size(); k++) {
+						printf("%s%i[", kinds[(*VARS)[k].kind], (*VARS)[k].N);
+						for (int i = 0; i < (*VARS)[k].N; i++)
+							printf("%lf%s", (double)(*VARS)[k].KF[i], i < (*VARS)[k].N - 1 ? "," : "");
+						printf("]");
+						printf("%s", k < VARS->size() - 1 ? " , " : " }\n");
+					}
+					_VARS[j] = VARS;
+				}
+				fflush(stdout);
+			}
+		}
+
+		char* Vars[256];
+		for (int i = 0; i < NInputs + NB; i++) {
+			Vars[i] = new char[8];
+			Vars[i][0] = i < NInputs ? 'a' + i : 'z';
+			Vars[i][1] = i < NInputs ? 0x0 : '0' + (i - NInputs) / 10;
+			Vars[i][2] = i < NInputs ? 0x0 : '0' + (i - NInputs) % 10;
+			Vars[i][3] = 0x0;
+		}
+		zVars zvars;
+		vector<string> BEST;
+#pragma omp parallel if((int)(NPP*TASK_PART) > 1) num_threads(max(1,(int)(NPP*TASK_PART)))
+		{
+#pragma omp single
+			{
+				BUILD_FUNC(NPP, NVARIANTS, Simplify, BEST, Vars, _VARS, 1, zvars);
+#ifdef TASKED
+				if ((int)(NPP * TASK_PART) > 1) {
+#pragma omp taskwait
+				}
+#endif
+			}
+		}
+		for (int i = 0; i < NInputs + 1; i++) {
+			delete[] Vars[i];
+		}
+
+		for (unsigned int j = 0; j < _VARS.size(); j++) {
+			for (unsigned int X = 0; X < _VARS[j]->size(); X++)
+				delete[](*_VARS[j])[X].KF;
+			delete _VARS[j];
+			_VARS[j] = NULL;
+		}
+		fflush(stdout);
+
+		double time = omp_get_wtime() - start_time;
+
+		printf("ANALYZE Time = %lf sec.\n", time);
+
+		return BEST;
+	}
+};
+
+class nnet : public term {
+private:
+	network* net;
+public:
+	nnet() : term("nnet", 1) {
+		net = NULL;
+	}
+
+	nnet(const nnet& src) : term("nnet", 1) {
+		string content = src.net->get();
+		this->args.push_back(new ::term(content));
+		net = new network(src.net->fname(), content);
+	}
+
+	nnet(network* src) : term("nnet", 1) {
+		string content = src->get();
+		this->args.push_back(new ::term(content));
+		net = new network(src->fname(), content);
+	}
+
+	nnet(const std::string & fname, ifstream & in) : term("nnet") {
+		string content;
+		in.seekg(0, std::ios::end);
+		content.reserve(in.tellg());
+		in.seekg(0, std::ios::beg);
+
+		content.assign((std::istreambuf_iterator<char>(in)),
+			std::istreambuf_iterator<char>());
+		this->args.push_back(new ::term(content));
+		net = new network(fname, content);
+	}
+
+	virtual ~nnet() { delete net; }
+
+	virtual void free() {
+		refs--;
+		if (refs == 0)
+			delete this;
+	}
+
+	virtual const string get_content() { return net->get(); }
+
+	virtual bool train(int MAX_EPOCHS) { return net->train(MAX_EPOCHS); }
+
+	virtual vector<string> simplify(bool to_chain) { return net->simplify(to_chain); }
+
+	virtual long double sim() { return net->sim(); }
+	virtual unsigned int nX() { return net->nX(); }
+	virtual void setX(unsigned int i, long double v) { net->setX(i, v); }
+
+	virtual value* copy(context* CTX, frame_item* f, int unwind = 0) {
+		return new nnet(*this);;
+	}
+
+	virtual void add_arg(context* CTX, frame_item* f, value* v, int unwind = 0) {
+		term::add_arg(CTX, f, v, unwind);
+		term* arg = dynamic_cast<term*>(v);
+		if (args.size() > 1 || !v) {
+			cout << "nnet(arg) must has one term arg only!";
+			exit(1001);
+		}
+		net = new network("", arg->get_name());
+	}
+
+	virtual bool unify(context* CTX, frame_item* ff, value* from) {
+		cached_defined = -1;
+		if (dynamic_cast<nnet*>(from)) {
+			return net->equals(dynamic_cast<nnet*>(from)->net);
+		}
+		else
+			return term::unify(CTX, ff, from);
 	}
 };
 
@@ -1885,6 +3081,146 @@ public:
 	}
 };
 
+std::string network::create(::list& nlayers, const std::string& dat_file, ::list& inps, int out) {
+	ostringstream NET;
+
+	NET << "Net file after additional training by the nnets_simplify\n";
+	NET << "-------------------------------------------------------\n";
+
+	NET << inps.size() << "\n\n";
+	NET << dat_file << "\n\n";
+
+	ifstream dat(dat_file);
+
+	if (!dat) return "";
+
+	int _NCC[1024];
+
+	for (int i = 1; i <= inps.size(); i++) {
+		int_number* v = dynamic_cast<int_number*>(inps.get_nth(i, false));
+		if (!v)
+			return "";
+		_NCC[i - 1] = ((int)(0.5 + v->get_value()));
+	}
+
+	std::string line;
+	long double VALS[1024];
+	long double _MMIN[1024];
+	long double _MMAX[1024];
+	long double _NUMIN = 1E300;
+	long double _NUMAX = -1E300;
+	for (int i = 0; i < inps.size(); i++) {
+		_MMIN[i] = 1E300;
+		_MMAX[i] = -1E300;
+	}
+	size_t NR = 0;
+	size_t NC = 0;
+	while (getline(dat, line)) {
+		if (line.length()) {
+			istringstream LINE(line);
+			size_t locNC = 0;
+			while (LINE >> VALS[locNC])
+				locNC++;
+			if (locNC > NC)
+				NC = locNC;
+			for (int j = 0; j < inps.size(); j++) {
+				long double v = VALS[_NCC[j]];
+				if (v < _MMIN[j])
+					_MMIN[j] = v;
+				if (v > _MMAX[j])
+					_MMAX[j] = v;
+			}
+			long double ov = VALS[out];
+			if (ov < _NUMIN)
+				_NUMIN = ov;
+			if (ov > _NUMAX)
+				_NUMAX = ov;
+			NR++;
+		}
+	}
+
+	dat.close();
+
+	if (NC > inps.size() + 1)
+		return "";
+
+	NET << NR << " " << NC << "\n\n";
+
+	for (int i = 1; i <= inps.size(); i++) {
+		if (_NCC[i - 1] >= NC)
+			return "";
+		NET << _NCC[i - 1] << " ";
+	}
+	if (out >= NC)
+		return "";
+	NET << out << "\n\n";
+
+	for (int i = 1; i <= nlayers.size(); i++) {
+		int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(i, false));
+		if (!v)
+			return "";
+		NET << ((int)(0.5 + v->get_value())) << " ";
+	}
+	NET << "\n\n";
+
+	NET << setprecision(15) << 1E300 << "\n\n";
+	for (int i = 0; i < inps.size(); i++)
+		NET << setprecision(15) << _MMIN[i] << " ";
+	NET << "\n";
+	for (int i = 0; i < inps.size(); i++)
+		NET << setprecision(15) << _MMAX[i] << " ";
+	NET << "\n\n";
+	for (int i = 0; i < inps.size(); i++)
+		NET << setprecision(15) << -1 << " ";
+	NET << "\n";
+	for (int i = 0; i < inps.size(); i++)
+		NET << setprecision(15) << +1 << " ";
+	NET << "\n\n";
+	NET << setprecision(15) << _NUMIN << "\n";
+	NET << setprecision(15) << _NUMAX << "\n\n";
+	NET << setprecision(15) << -1 << "\n";
+	NET << setprecision(15) << +1 << "\n\n";
+
+	auto rd = std::random_device{};
+	auto rng = std::default_random_engine{ rd() };
+	std::uniform_real_distribution<double> distribution(-1.0, 1.0);
+
+	int ptr = 0;
+	for (int layer = 0; layer < nlayers.size(); layer++) {
+		int NP;
+		if (layer == 0)
+			NP = inps.size();
+		else {
+			int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(layer, false));
+			if (!v)
+				return "";
+			NP = ((int)(0.5 + v->get_value()));
+		}
+		for (int i = 0; i < NP; i++) {
+			int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(layer + 1, false));
+			if (!v)
+				return "";
+			int _NN = ((int)(0.5 + v->get_value()));
+			for (int j = 0; j < _NN; j++, ptr++)
+				NET << setprecision(15) << distribution(rng) << " ";
+			NET << "\n";
+		}
+		NET << "\n";
+	}
+	ptr = 0;
+	for (int layer = 0; layer < nlayers.size(); layer++) {
+		int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(layer + 1, false));
+		if (!v)
+			return "";
+		int _NN = ((int)(0.5 + v->get_value()));
+		for (int j = 0; j < _NN; j++, ptr++)
+			NET << setprecision(15) << distribution(rng) << " ";
+		NET << "\n\n";
+	}
+
+	return NET.str();
+}
+
 context::context(bool locals_in_forked, bool transactable_facts, predicate_item* forker, int RESERVE, context* parent, tframe_item* tframe,
 		predicate_item* starting, predicate_item* ending, interpreter* prolog) {
 	this->parent = parent;
@@ -2032,7 +3368,7 @@ void context::apply_transactional_db_to_parent(const std::string & _fact) {
 void context::clearDBJournals() {
 	map<unsigned long long, std::atomic<journal*>>::iterator itj = DBJournal->begin();
 	while (itj != DBJournal->end()) {
-		delete itj->second.load();
+		delete itj->second;
 		itj++;
 	}
 	DBJournal->clear();
@@ -2041,13 +3377,13 @@ void context::clearDBJournals() {
 context::~context() {
 	for (context* C : CONTEXTS)
 		delete C;
-	delete INIT.load();
+	delete INIT;
 	if (transactable_facts || parent == NULL) {
 		map< string, std::atomic<vector<term*>*>>::iterator itd = DB->begin();
 		while (itd != DB->end()) {
 			for (term* v : *itd->second)
 				v->free();
-			delete itd->second.load();
+			delete itd->second;
 			itd++;
 		}
 		delete DBLOCK;
@@ -2055,7 +3391,7 @@ context::~context() {
 
 		map<unsigned long long, std::atomic<journal*>>::iterator itj = DBJournal->begin();
 		while (itj != DBJournal->end()) {
-			delete itj->second.load();
+			delete itj->second;
 			itj++;
 		}
 		delete DBJournal;
@@ -2253,8 +3589,8 @@ string interpreter::export_str(bool introduce_new_parallelism, std::set<string> 
 }
 
 double interpreter::evaluate(context * CTX, frame_item * ff, const string & expression, size_t & p) {
-	string ops = "(+-*/";
-	int priors[5] = { 0, 1, 1, 2, 2 };
+	string ops = "(+-*/^";
+	int priors[6] = { 0, 1, 1, 2, 2, 3 };
 
 	stack<char> opers;
 
@@ -2285,6 +3621,7 @@ double interpreter::evaluate(context * CTX, frame_item * ff, const string & expr
 			case '-': v = v1 - v2; break;
 			case '*': v = v1 * v2; break;
 			case '/': v = v1 / v2; break;
+			case '^': v = pow(v1, v2); break;
 		}
 		vals.push(v);
 		postfix.pop();
@@ -2420,6 +3757,13 @@ double interpreter::evaluate(context * CTX, frame_item * ff, const string & expr
 				can_be_neg = false;
 			}
 			else {
+				char op = expression[p];
+				p++;
+				if (op == '*' && p < expression.length() && expression[p] == '*') {
+					op = '^';
+					p++;
+					pos = ops.find(op);
+				}
 				while (opers.size()) {
 					if (priors[pos] > priors[ops.find(opers.top())]) break;
 					pitem p = { true };
@@ -2427,8 +3771,7 @@ double interpreter::evaluate(context * CTX, frame_item * ff, const string & expr
 					postfix.push(p);
 					opers.pop();
 				}
-				opers.push(expression[p]);
-				p++;
+				opers.push(op);
 				can_be_neg = true;
 			}
 		}
@@ -2457,6 +3800,222 @@ double interpreter::evaluate(context * CTX, frame_item * ff, const string & expr
 	}
 
 	return vals.top();
+}
+
+SUM * interpreter::deserialize_symbolic(const string& expression, size_t& p, vector<string> & Vars) {
+	string ops = "(+-#*/^";
+	int priors[7] = { 0, 1, 1, 2, 3, 3, 4 };
+
+	stack<char> opers;
+
+	typedef struct {
+		bool is_op;
+		union {
+			char op;
+			char v[256];
+		};
+	} pitem;
+
+	queue<pitem> postfix;
+	stack<ITEM *> vals;
+
+	int bracket_level = 0;
+
+	bypass_spaces(expression, p);
+	while (p < expression.length()) {
+		if (expression[p] == '(') {
+			bracket_level++;
+			opers.push(expression[p]);
+			p++;
+		}
+		else if (expression[p] == ')') {
+			if (bracket_level == 0) break;
+			bracket_level--;
+			p++;
+			while (opers.size()) {
+				if (opers.top() == '(') break;
+				pitem p = { true };
+				p.op = opers.top();
+				postfix.push(p);
+				opers.pop();
+			}
+			if (opers.size() == 0) {
+				std::cout << "Evaluate(" << expression << ") : brackets disbalance!" << endl;
+				exit(105);
+			}
+			opers.pop();
+		}
+		else {
+			string::size_type pos = ops.find(expression[p]);
+			if (pos == string::npos) {
+				pitem pt = { false };
+				double v = 0;
+				size_t pp = p;
+				if (expression[p] >= '0' && expression[p] <= '9') {
+					bool flt = false;
+
+					while (p < expression.length() && expression[p] >= '0' && expression[p] <= '9')
+						v = v * 10 + (expression[p++] - '0');
+					if (expression[p] == '.') {
+						flt = true;
+						p++;
+						double q = 0.1;
+						while (p < expression.length() && expression[p] >= '0' && expression[p] <= '9') {
+							v += q * (expression[p++] - '0');
+							q /= 10.0;
+						}
+					}
+					if (expression[p] == 'E' || expression[p] == 'e') {
+						bool neg = false;
+						if (p + 1 < expression.length() && expression[p + 1] == '+')
+							p++;
+						else if (p + 1 < expression.length() && expression[p + 1] == '-') {
+							neg = true;
+							p++;
+						}
+						flt = true;
+						p++;
+						long long n = 0;
+						while (p < expression.length() && expression[p] >= '0' && expression[p] <= '9')
+							n = n * 10 + (long long)(expression[p++] - '0');
+						if (neg)
+							v *= pow(10.0, -n);
+						else
+							v *= pow(10.0, n);
+					}
+					_strcpy(pt.v, sizeof(pt.v), expression.substr(pp, p - pp).c_str());
+				}
+				else {
+					bypass_spaces(expression, p);
+					if (p < expression.length() && isalpha(expression[p])) {
+						p++;
+						while (p < expression.length() && isalnum(expression[p]))
+							p++;
+						string id = expression.substr(pp, p - pp);
+						_strcpy(pt.v, sizeof(pt.v), id.c_str());
+						vector<string>::iterator it = find(Vars.begin(), Vars.end(), id);
+						if (it == Vars.end())
+							Vars.push_back(id);
+					}
+					else {
+						std::cout << "Evaluation(" << expression << ") : Var expected!" << endl;
+						exit(105);
+					}
+				}
+				postfix.push(pt);
+			}
+			else {
+				char op = expression[p];
+				p++;
+				if (op == '*' && p < expression.length() && expression[p] == '*') {
+					op = '^';
+					p++;
+					pos = ops.find(op);
+				}
+				if (op == '-' && (p == 1 || ops.find(expression[p - 2]) != string::npos)) {
+					bool neg = true;
+					while (p < expression.length() && expression[p] == '-') {
+						neg = !neg;
+						p++;
+					}
+					if (neg) {
+						op = '#';
+						pos = ops.find(op);
+					}
+					else
+						continue;
+				}
+				while (opers.size()) {
+					if (priors[pos] > priors[ops.find(opers.top())]) break;
+					pitem p = { true };
+					p.op = opers.top();
+					postfix.push(p);
+					opers.pop();
+				}
+				opers.push(op);
+			}
+		}
+		bypass_spaces(expression, p);
+	}
+	while (opers.size()) {
+		pitem p = { true };
+		p.op = opers.top();
+		postfix.push(p);
+		opers.pop();
+	}
+
+	while (postfix.size()) {
+		pitem p = postfix.front();
+		if (p.is_op) {
+			ITEM * v2 = vals.top();
+			vals.pop();
+			ITEM* v1 = NULL;
+			if (p.op != '#') {
+				v1 = vals.top();
+				vals.pop();
+			}
+
+			ITEM * v;
+
+			switch (p.op) {
+				case '+': v = v1->Add(v2); break;
+				case '-': v = v1->Sub(v2); break;
+				case '#': v = v2->Neg(); break;
+				case '*': v = v1->Mul(v2); break;
+				case '/': v = v1->Div(v2); break;
+				case '^': v = v1->Pow(v2); break;
+			}
+			vals.push(v);
+			postfix.pop();
+		}
+		else {
+			MUL* v = NULL;
+			if (p.v[0] >= '0' && p.v[0] <= '9') {
+				long double k = 0.0;
+				sscanf(p.v, "%Lf", &k);
+				v = new MUL(k);
+			}
+			else {
+				vector<string>::iterator it = find(Vars.begin(), Vars.end(), string(p.v));
+				if (it == Vars.end()) {
+					std::cout << "Unknow var(" << p.v << ")!" << endl;
+					exit(110);
+				}
+				v = new MUL(1.0);
+				v->Mul((int)(it - Vars.begin()), 1.0);
+			}
+			vals.push(v);
+			postfix.pop();
+		}
+	}
+
+	if (vals.size() != 1) {
+		std::cout << "Strange evaluation(" << expression << ")!" << endl;
+		exit(105);
+	}
+
+	MUL* M = dynamic_cast<MUL*>(vals.top());
+	DIV* D = dynamic_cast<DIV*>(vals.top());
+	SUM* S = dynamic_cast<SUM*>(vals.top());
+
+	return S ? S : (M ? new SUM(M) : new SUM(D));
+}
+
+string interpreter::serialize_symbolic(ITEM* expression, vector<string>& Vars) {
+	string _OUT;
+	char* VARS[4096];
+	int maxPows[4096] = { 0 };
+	int i = 0;
+	for (const string& s : Vars) {
+		VARS[i] = new char[s.length() + 1];
+		_strcpy(VARS[i], s.length() + 1, s.c_str());
+		i++;
+	}
+	_OUT.reserve(128 * 1024 * 1024);
+	expression->sprint(VARS, maxPows, &_OUT, true);
+	while (i)
+		delete[] VARS[--i];
+	return _OUT;
 }
 
 class lazy_generated_vars : public generated_vars {
@@ -2502,13 +4061,6 @@ public:
 		}
 
 		return result;
-	}
-
-	virtual void undo(int _i, vector<frame_item*>* list) {
-		if (list->size())
-			generated_vars::undo(_i, list);
-		for (int j = 0; j < list->size(); j++)
-			at((size_t)(_i + j + 1)) = list->at(j);
 	}
 
 	virtual void delete_from(int k) {
@@ -2558,6 +4110,7 @@ protected:
 public:
 	predicate_or(int num, clause * c, interpreter * _prolog) : predicate_item(false, false, false, num, c, _prolog) {
 		ending = NULL;
+		determined = false;
 	}
 
 	virtual int is_not_pure(std::set<string> * work_set) {
@@ -3896,7 +5449,9 @@ public:
 class predicate_item_repeat : public predicate_item {
 	map<context*, lazy_generated_vars*> d;
 public:
-	predicate_item_repeat(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_repeat(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "repeat"; }
 
@@ -3931,7 +5486,9 @@ class predicate_item_append : public predicate_item {
 	typedef struct { bool d1, d2, d3; } params;
 	std::map<context*, params> d;
 public:
-	predicate_item_append(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_append(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "append"; }
 
@@ -4104,7 +5661,9 @@ class predicate_item_sublist : public predicate_item {
 	} params;
 	std::map<context*, params> d;
 public:
-	predicate_item_sublist(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_sublist(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "sublist"; }
 
@@ -4202,7 +5761,9 @@ class predicate_item_atom_concat : public predicate_item {
 	} params;
 	std::map<context*, params> d;
 public:
-	predicate_item_atom_concat(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_atom_concat(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "atom_concat"; }
 
@@ -5119,7 +6680,9 @@ class predicate_item_member : public predicate_item {
 	} params;
 	std::map<context*, params> d;
 public:
-	predicate_item_member(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_member(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "member"; }
 
@@ -5187,7 +6750,9 @@ class predicate_item_for : public predicate_item {
 	} params;
 	std::map<context*, params> d;
 public:
-	predicate_item_for(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_for(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "for"; }
 
@@ -5434,7 +6999,9 @@ public:
 
 class predicate_item_nth : public predicate_item {
 public:
-	predicate_item_nth(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_nth(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "nth"; }
 
@@ -5569,7 +7136,9 @@ public:
 
 class predicate_item_current_predicate : public predicate_item {
 public:
-	predicate_item_current_predicate(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_current_predicate(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "current_predicate"; }
 
@@ -5806,7 +7375,9 @@ public:
 
 class predicate_item_consult : public predicate_item {
 public:
-	predicate_item_consult(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_consult(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "consult"; }
 
@@ -5839,7 +7410,9 @@ public:
 
 class predicate_item_open : public predicate_item {
 public:
-	predicate_item_open(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_open(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "open"; }
 
@@ -5882,7 +7455,9 @@ public:
 
 class predicate_item_close : public predicate_item {
 public:
-	predicate_item_close(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_close(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "close"; }
 
@@ -5915,7 +7490,9 @@ public:
 
 class predicate_item_mars : public predicate_item {
 public:
-	predicate_item_mars(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_mars(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "mars"; }
 
@@ -6001,7 +7578,9 @@ public:
 
 class predicate_item_mars_decode : public predicate_item {
 public:
-	predicate_item_mars_decode(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_mars_decode(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "mars_decode"; }
 
@@ -6101,7 +7680,9 @@ public:
 
 class predicate_item_unset : public predicate_item {
 public:
-	predicate_item_unset(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_unset(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "unset"; }
 
@@ -6136,7 +7717,9 @@ public:
 
 class predicate_item_write : public predicate_item {
 public:
-	predicate_item_write(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_write(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "write"; }
 
@@ -6208,7 +7791,9 @@ public:
 
 class predicate_item_write_term : public predicate_item {
 public:
-	predicate_item_write_term(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_write_term(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "write_term"; }
 
@@ -6314,7 +7899,9 @@ public:
 
 class predicate_item_nl : public predicate_item {
 public:
-	predicate_item_nl(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_nl(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "nl"; }
 
@@ -6350,7 +7937,9 @@ public:
 
 class predicate_item_file_exists : public predicate_item {
 public:
-	predicate_item_file_exists(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_file_exists(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "file_exists"; }
 
@@ -6383,7 +7972,9 @@ public:
 
 class predicate_item_unlink : public predicate_item {
 public:
-	predicate_item_unlink(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_unlink(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "unlink"; }
 
@@ -6417,7 +8008,9 @@ public:
 
 class predicate_item_rename_file : public predicate_item {
 public:
-	predicate_item_rename_file(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_rename_file(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "rename_file"; }
 
@@ -6457,7 +8050,9 @@ public:
 
 class predicate_item_tell : public predicate_item {
 public:
-	predicate_item_tell(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_tell(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "tell"; }
 
@@ -6493,7 +8088,9 @@ public:
 
 class predicate_item_see : public predicate_item {
 public:
-	predicate_item_see(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_see(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "see"; }
 
@@ -6529,7 +8126,9 @@ public:
 
 class predicate_item_telling : public predicate_item {
 public:
-	predicate_item_telling(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_telling(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "telling"; }
 
@@ -6565,7 +8164,9 @@ public:
 
 class predicate_item_seeing : public predicate_item {
 public:
-	predicate_item_seeing(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_seeing(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "seeing"; }
 
@@ -6601,7 +8202,9 @@ public:
 
 class predicate_item_told : public predicate_item {
 public:
-	predicate_item_told(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_told(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "told"; }
 
@@ -6632,7 +8235,9 @@ public:
 
 class predicate_item_seen : public predicate_item {
 public:
-	predicate_item_seen(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_seen(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "seen"; }
 
@@ -6665,7 +8270,9 @@ class predicate_item_get_or_peek_char : public predicate_item {
 	bool peek;
 public:
 	predicate_item_get_or_peek_char(bool _peek, bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
-		predicate_item(_neg, _once, _call, num, c, _prolog), peek(_peek) { }
+		predicate_item(_neg, _once, _call, num, c, _prolog), peek(_peek) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return peek ? "peek_char" : "get_char"; }
 
@@ -6727,7 +8334,9 @@ public:
 class predicate_item_at_end_of_stream : public predicate_item {
 public:
 	predicate_item_at_end_of_stream(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
-		predicate_item(_neg, _once, _call, num, c, _prolog) { }
+		predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "at_end_of_stream"; }
 
@@ -6768,7 +8377,9 @@ public:
 class predicate_item_get_code : public predicate_item {
 public:
 	predicate_item_get_code(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
-		predicate_item(_neg, _once, _call, num, c, _prolog) { }
+		predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "get_code"; }
 
@@ -6876,7 +8487,9 @@ public:
 
 class predicate_item_set_iteration_star_packet : public predicate_item {
 public:
-	predicate_item_set_iteration_star_packet(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_set_iteration_star_packet(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "set_iteration_star_packet"; }
 
@@ -6905,7 +8518,9 @@ public:
 
 class predicate_item_random : public predicate_item {
 public:
-	predicate_item_random(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_random(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "random"; }
 
@@ -6959,7 +8574,9 @@ public:
 
 class predicate_item_randomize : public predicate_item {
 public:
-	predicate_item_randomize(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) { }
+	predicate_item_randomize(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "randomize"; }
 
@@ -6978,6 +8595,459 @@ public:
 		srand((unsigned int)time(NULL) ^ (unsigned int)__clock());
 		result->push_back(ff);
 
+		return result;
+	}
+};
+
+class predicate_item_regularize : public predicate_item {
+public:
+	predicate_item_regularize(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "regularize"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "regularize(IN,OUT): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+		
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "regularize(IN,OUT) indeterminated!" << endl;
+			exit(-3);
+		}
+		term* in = dynamic_cast<term*>(positional_vals->at(0));
+		if (!in) {
+			std::cout << "regularize(IN,OUT) : IN is not a term!" << endl;
+			exit(-3);
+		}
+		vector<string> Vars;
+		size_t p = 0;
+		ITEM* r = prolog->deserialize_symbolic(in->get_name(), p, Vars);
+		string _OUT;
+		if (r)
+			r = REGULARIZE(r);
+		if (r) {
+			_OUT = prolog->serialize_symbolic(r, Vars);
+			delete r;
+		}
+		if (!_OUT.size() || !positional_vals->at(1)->unify(CTX, ff, new term(_OUT))) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		return result;
+	}
+};
+
+class predicate_item_to_chain : public predicate_item {
+public:
+	predicate_item_to_chain(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "to_chain"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "to_chain(IN,OUT): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "to_chain(IN,OUT) indeterminated!" << endl;
+			exit(-3);
+		}
+		term* in = dynamic_cast<term*>(positional_vals->at(0));
+		if (!in) {
+			std::cout << "to_chain(IN,OUT) : IN is not a term!" << endl;
+			exit(-3);
+		}
+		vector<string> Vars;
+		size_t p = 0;
+		ITEM* r = prolog->deserialize_symbolic(in->get_name(), p, Vars);
+		string _OUT;
+		if (r)
+			r = SIMPLIFY(r);
+		if (r) {
+			_OUT = prolog->serialize_symbolic(r, Vars);
+			delete r;
+		}
+		if (!_OUT.size() || !positional_vals->at(1)->unify(CTX, ff, new term(_OUT))) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		return result;
+	}
+};
+
+class predicate_item_symop : public predicate_item {
+private:
+	string op;
+public:
+	predicate_item_symop(const string & _op, bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = _op != "div";
+		op = _op;
+	}
+
+	virtual const string get_id() { return op; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << op << "(OP1,OP2,OUT): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1 || !d2) {
+			std::cout << op << "(OP1,OP2,OUT) indeterminated!" << endl;
+			exit(-3);
+		}
+		term* in1 = dynamic_cast<term*>(positional_vals->at(0));
+		term* in2 = dynamic_cast<term*>(positional_vals->at(1));
+		if (!in1 || !in2) {
+			std::cout << op << "(OP1,OP2,OUT) : OP is not a term!" << endl;
+			exit(-3);
+		}
+		vector<string> Vars;
+		size_t p = 0;
+		ITEM* r1 = prolog->deserialize_symbolic(in1->get_name(), p, Vars);
+		p = 0;
+		ITEM* r2 = prolog->deserialize_symbolic(in2->get_name(), p, Vars);
+		ITEM* r = NULL;
+		string _OUT;
+		if (r1 && r2) {
+			if (op == "add") {
+				r = r1->Add(r2);
+				r2 = NULL;
+			}
+			else if (op == "mul") {
+				r = r1->Mul(r2);
+				r2 = NULL;
+			}
+			else if (op == "div") {
+				r = r1->Div(r2);
+				r2 = NULL;
+			}
+		}
+		delete r1;
+		delete r2;
+		if (r) {
+			_OUT = prolog->serialize_symbolic(r, Vars);
+			delete r;
+		}
+		if (!_OUT.size() || !positional_vals->at(2)->unify(CTX, ff, new term(_OUT))) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		return result;
+	}
+};
+
+class predicate_item_nload : public predicate_item {
+public:
+	predicate_item_nload(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "nload"; }
+
+	virtual int is_not_pure(std::set<string>* work_set) {
+		work_set->insert(get_id());
+		return 1;
+	}
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "nload(FName,NET): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "nload(FName,NET) indeterminated!" << endl;
+			exit(-3);
+		}
+		term* in = dynamic_cast<term*>(positional_vals->at(0));
+		if (!in) {
+			std::cout << "nload(FName,NET) : FName is not a term!" << endl;
+			exit(-3);
+		}
+		ifstream _IN(in->get_name());
+		nnet* v = _IN ? new nnet(in->get_name(), _IN) : NULL;
+		if (!_IN || !positional_vals->at(1)->unify(CTX, ff, v)) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		if (v) v->free();
+		if (_IN)
+			_IN.close();
+		return result;
+	}
+};
+
+class predicate_item_nsave : public predicate_item {
+public:
+	predicate_item_nsave(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "nsave"; }
+
+	virtual int is_not_pure(std::set<string>* work_set) {
+		work_set->insert(get_id());
+		return 1;
+	}
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "nsave(NET,FName): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1 || !d2) {
+			std::cout << "nsave(NET,FName) indeterminated!" << endl;
+			exit(-3);
+		}
+		term* out = dynamic_cast<term*>(positional_vals->at(1));
+		if (!out) {
+			std::cout << "nsave(NET,FName) : FName is not a term!" << endl;
+			exit(-3);
+		}
+		nnet* net = dynamic_cast<nnet*>(positional_vals->at(0));
+		if (!net) {
+			std::cout << "nsave(NET,FName) : NET is not a neural network!" << endl;
+			exit(-3);
+		}
+		ofstream _OUT(out->get_name(), std::ios_base::trunc);
+		if (!_OUT) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		else
+			_OUT << net->get_content();
+		if (_OUT)
+			_OUT.close();
+		return result;
+	}
+};
+
+class predicate_item_train : public predicate_item {
+public:
+	predicate_item_train(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "train"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << "train(NET,MAX_EPOCHS,NET): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1 || !d2) {
+			std::cout << "train(NET,MAX_EPOCHS,NET) indeterminated!" << endl;
+			exit(-3);
+		}
+		nnet* in = dynamic_cast<nnet*>(positional_vals->at(0));
+		int_number* n = dynamic_cast<int_number*>(positional_vals->at(1));
+		nnet* out = in ? new nnet(*in) : NULL;
+		if (!in || !n || !out || !out->train((int)(0.5 + n->get_value())) || !positional_vals->at(2)->unify(CTX, ff, out)) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		if (out) out->free();
+		return result;
+	}
+};
+
+class predicate_item_sim : public predicate_item {
+public:
+	predicate_item_sim(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+	}
+
+	virtual const string get_id() { return "sim"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 3) {
+			std::cout << "sim(NET,[X1,...,XN],Out): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		bool d2 = positional_vals->at(1)->defined();
+		if (!d1 || !d2) {
+			std::cout << "sim(NET,[X1,...,XN],Out) indeterminated!" << endl;
+			exit(-3);
+		}
+		nnet* in = dynamic_cast<nnet*>(positional_vals->at(0));
+		::list* x = dynamic_cast<::list*>(positional_vals->at(1));
+		if (x) {
+			if (x->size() == in->nX()) {
+				int i = 0;
+				x->iterate([&](value* v) {
+					float_number* val = dynamic_cast<float_number*>(v);
+					int_number* ival = dynamic_cast<int_number*>(v);
+					if (val) {
+						in->setX(i++, val->get_value());
+					}
+					else if (ival) {
+						in->setX(i++, ival->get_value());
+					}
+				});
+				if (x->size() != i)
+					x = NULL;
+			}
+			else
+			{
+				x = NULL;
+			}
+		}
+		float_number* out = x ? new float_number(in->sim()) : NULL;
+		if (!x || !in || !out || !positional_vals->at(2)->unify(CTX, ff, out)) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		if (out) out->free();
+		return result;
+	}
+};
+
+class predicate_item_nsimplify : public predicate_item {
+public:
+	predicate_item_nsimplify(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "nsimplify"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 2 && positional_vals->size() != 3) {
+			std::cout << "nsimplify(IN,OUT) or nsimplify(IN,to_chain,OUT): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		bool d1 = positional_vals->at(0)->defined();
+		if (!d1) {
+			std::cout << "nsimplify(IN,OUT) or nsimplify(IN,to_chain,OUT) indeterminated!" << endl;
+			exit(-3);
+		}
+		nnet* in = dynamic_cast<nnet*>(positional_vals->at(0));
+		if (!in) {
+			std::cout << "nsimplify(IN,OUT) or nsimplify(IN,to_chain,OUT) : IN is not a neural net!" << endl;
+			exit(-3);
+		}
+		term* t2 = dynamic_cast<term*>(positional_vals->at(1));
+		bool to_chain = positional_vals->size() == 3 && positional_vals->at(1)->defined() && t2 && t2->get_name() == "to_chain";
+		size_t n3 = positional_vals->size() - 1;
+		vector<string> Vars;
+		vector<string> BEST;
+		size_t p = 0;
+		ITEM* r = prolog->deserialize_symbolic(in->get_name(), p, Vars);
+		if (r)
+			BEST = in->simplify(to_chain);
+		stack_container<value*> OUT_LIST;
+		for (string V : BEST)
+			OUT_LIST.push_back(new term(V));
+		::list* _out = new ::list(OUT_LIST, NULL);
+		if (!positional_vals->at(n3)->unify(CTX, ff, _out)) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		_out->free();
+		return result;
+	}
+};
+
+class predicate_item_nnetff : public predicate_item {
+public:
+	predicate_item_nnetff(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "nnetff"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 5) {
+			std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],Ycol,OUT_FILE): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		for (int i = 0; i < 5; i++)
+			if (!positional_vals->at(i)->defined()) {
+				std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],Ycol,OUT_FILE) indeterminated!" << endl;
+				exit(-3);
+			}
+		::list* layers = dynamic_cast<::list*>(positional_vals->at(0));
+		term* dat_file = dynamic_cast<term*>(positional_vals->at(1));
+		::list* inps = dynamic_cast<::list*>(positional_vals->at(2));
+		int_number* out = dynamic_cast<int_number*>(positional_vals->at(3));
+		term* out_file = dynamic_cast<term*>(positional_vals->at(4));
+		if (!layers || !dat_file || !inps || !out || !out_file) {
+			std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],Ycol,OUT_FILE) : incorrect arguments types!" << endl;
+			exit(-3);
+		}
+		std::string content = network::create(*layers, dat_file->get_name(), *inps, ((int)(0.5 + out->get_value())));
+		ofstream _out(out_file->get_name());
+		if (!_out || content.length() == 0) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
+		_out << content;
+		_out.close();
 		return result;
 	}
 };
@@ -7076,7 +9146,9 @@ public:
 class predicate_item_read_token : public predicate_item_read_token_common {
 public:
 	predicate_item_read_token(bool _neg, bool _once, bool _call, int num, clause * c, interpreter * _prolog) :
-		predicate_item_read_token_common(_neg, _once, _call, num, c, _prolog) { }
+		predicate_item_read_token_common(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "read_token"; }
 
@@ -7322,6 +9394,7 @@ public:
 		this->locals_in_forked = locals;
 		this->transactable_facts = transactable_facts;
 		this->n_threads = new int_number(1);
+		determined = false;
 	}
 	virtual ~predicate_item_fork() {
 		if (n_threads)
@@ -7621,7 +9694,9 @@ public:
 
 class predicate_item_parallelize_level : public predicate_item {
 public:
-	predicate_item_parallelize_level(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {}
+	predicate_item_parallelize_level(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "parallelize_level"; }
 
@@ -7665,7 +9740,9 @@ public:
 
 class predicate_item_optimize_load : public predicate_item {
 public:
-	predicate_item_optimize_load(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {}
+	predicate_item_optimize_load(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
 
 	virtual const string get_id() { return "optimize_load"; }
 
@@ -7793,12 +9870,22 @@ value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex
 				}
 			}
 			if (s[p] == 'E' || s[p] == 'e') {
+				bool neg = false;
+				if (p + 1 < s.length() && s[p + 1] == '+')
+					p++;
+				else if (p + 1 < s.length() && s[p + 1] == '-') {
+					neg = true;
+					p++;
+				}
 				flt = true;
 				p++;
 				long long n = 0;
 				while (p < s.length() && s[p] >= '0' && s[p] <= '9')
 					n = n * 10 + (long long)(s[p++] - '0');
-				v *= pow(10.0, n);
+				if (neg)
+					v *= pow(10.0, -n);
+				else
+					v *= pow(10.0, n);
 			}
 			if (flt)
 				result = new float_number(sign*v);
@@ -7927,9 +10014,11 @@ value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex
 			if (n >= 0)
 				result = new indicator(st, n);
 			else {
-				result = new term(st);
-
 				if (parse_complex_terms && s[p] == '(') {
+					if (st == "nnet")
+						result = new nnet();
+					else
+						result = new term(st);
 					p++;
 					size_t oldp = p;
 					bypass_spaces(s, p);
@@ -7942,6 +10031,10 @@ value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex
 							}
 							else
 								return NULL;
+						}
+						if (dynamic_cast<nnet*>(result) && dynamic_cast<nnet*>(result)->get_args().size()) {
+							std::cout << "(" << s.substr(oldp, (size_t)(p - oldp)) << ") : nnet has more than one arg!" << endl;
+							exit(-1);
 						}
 						((term *)result)->add_arg(CTX, ff, v);
 						v->free();
@@ -7964,7 +10057,8 @@ value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex
 						}
 					}
 					p++;
-				}
+				} else
+					result = new term(st);
 			}
 		}
 
@@ -9504,6 +11598,39 @@ string interpreter::parse_clause(context * CTX, vector<string> & renew, frame_it
 							else if (_iid == id_randomize) {
 								pi = new predicate_item_randomize(neg, once, call, num, cl, this);
 							}
+							else if (_iid == id_regularize) {
+								pi = new predicate_item_regularize(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_add) {
+								pi = new predicate_item_symop("add", neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_mul) {
+								pi = new predicate_item_symop("mul", neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_div) {
+								pi = new predicate_item_symop("div", neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_to_chain) {
+								pi = new predicate_item_to_chain(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_nsimplify) {
+								pi = new predicate_item_nsimplify(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_nnetff) {
+								pi = new predicate_item_nnetff(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_nload) {
+									pi = new predicate_item_nload(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_nsave) {
+								pi = new predicate_item_nsave(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_train) {
+								pi = new predicate_item_train(neg, once, call, num, cl, this);
+							}
+							else if (_iid == id_sim) {
+								pi = new predicate_item_sim(neg, once, call, num, cl, this);
+								}
 							else if (_iid == id_char_code) {
 								pi = new predicate_item_char_code(neg, once, call, num, cl, this);
 							}
@@ -10404,7 +12531,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 						// Delete journal, including deleted nodes
 						map<unsigned long long, std::atomic<journal*>>::iterator itj = CONTEXTS[i]->DBJournal->begin();
 						while (itj != CONTEXTS[i]->DBJournal->end()) {
-							delete itj->second.load();
+							delete itj->second;
 							itj++;
 						}
 						CONTEXTS[i]->DBJournal->clear();
@@ -10415,7 +12542,7 @@ bool context::join(bool sequential_mode, int K, frame_item* f, interpreter* INTR
 							if (itd->second) {
 								for (term* v : *itd->second)
 									Q.push_back(v);
-								delete itd->second.load();
+								delete itd->second;
 							}
 							itd++;
 						}
