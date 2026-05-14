@@ -38,7 +38,7 @@ Begin
   _Out.Add('#define CLK_GLOBAL_MEM_FENCE (1<<1)');
   _Out.Add('#ifdef __REENT_GPU__');
   _Out.Add(' #ifdef __APPLE__');
-  _Out.Add('  #include <OpenCL/opencl.h>');
+  _Out.Add('  #include <OpenCL/cl.h>');
   _Out.Add(' #else');
   _Out.Add('  #include <CL/cl.h>');
   _Out.Add(' #endif');
