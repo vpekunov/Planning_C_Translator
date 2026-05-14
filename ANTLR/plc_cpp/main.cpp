@@ -87,10 +87,6 @@ int main(int argc, const char * argv[]) {
 #ifndef _MSC_VER
   struct rlimit rl = { RLIM_INFINITY, RLIM_INFINITY };
   int result = setrlimit(RLIMIT_STACK, &rl);
-  if (result != 0) {
-     std::cout << "setrlimit returned result = " << result << std::endl;
-     exit(1000);
-  }
 #endif
   std::ifstream in(argv[1]);
   if (in) {

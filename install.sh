@@ -36,18 +36,29 @@ cd ..
 cd ..
 chmod +x *.sh   
 cd ./prolog_micro_brain.dir
-g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++11 -O4 -lm -lboost_system -lboost_filesystem -ldl -I/opt/homebrew/include -L/opt/homebrew/lib
-if [ $? -ne 0 ]; then
-   g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++11 -O4 -lm -lboost_filesystem -ldl -I/opt/homebrew/include -L/opt/homebrew/lib
-fi
-g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++11 -O4 -lm -lboost_system -lboost_filesystem -ldl -fPIC -I/opt/homebrew/include -L/opt/homebrew/lib
-if [ $? -ne 0 ]; then
-   g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++11 -O4 -lm -lboost_filesystem -ldl -fPIC -I/opt/homebrew/include -L/opt/homebrew/lib
+if [[ "$OSTYPE" == "darwin"* ]]; then
+   g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
+   if [ $? -ne 0 ]; then
+      g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
+   fi
+   g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -fPIC -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
+   if [ $? -ne 0 ]; then
+      g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -fPIC -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
+   fi
+else
+   g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -fopenmp -fpermissive
+   if [ $? -ne 0 ]; then
+      g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -fopenmp -fpermissive
+   fi
+   g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -fPIC -fopenmp -fpermissive
+   if [ $? -ne 0 ]; then
+      g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -fPIC -fopenmp -fpermissive
+   fi
 fi
 cp ./prolog_micro_brain ../
 cd ..
 cd ./PrologIntrf
-g++ -o main.o -c main.cpp -fPIC -O4 -std=c++11 -I/opt/homebrew/include
+g++ -o main.o -c main.cpp -fPIC -O4 -std=c++17 -I/opt/homebrew/include -fpermissive
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Running on a Mac"
     g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -L/opt/homebrew/lib -lm -lboost_system -lboost_filesystem -ldl

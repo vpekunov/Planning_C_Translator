@@ -32,6 +32,21 @@
 
 #include "elements.h"
 #include "prolog_micro_brain.h"
+#include "symbolic.h"
+
+#ifndef _MSC_VER
+HMODULE LoadLibrary(const wchar_t* _fname) {
+	return dlopen(wstring_to_utf8(_fname).c_str(), RTLD_LAZY);
+}
+
+void* GetProcAddress(HMODULE handle, const char* fname) {
+	return dlsym(handle, fname);
+}
+
+void FreeLibrary(HMODULE handle) {
+	dlclose(handle);
+}
+#endif
 
 #ifdef _POSIX_PRIORITY_SCHEDULING
 #include <sched.h>
@@ -3802,7 +3817,7 @@ double interpreter::evaluate(context * CTX, frame_item * ff, const string & expr
 	return vals.top();
 }
 
-SUM * interpreter::deserialize_symbolic(const string& expression, size_t& p, vector<string> & Vars) {
+void * interpreter::deserialize_symbolic(const string& expression, size_t& p, vector<string> & Vars) {
 	string ops = "(+-#*/^";
 	int priors[7] = { 0, 1, 1, 2, 3, 3, 4 };
 
@@ -4001,7 +4016,7 @@ SUM * interpreter::deserialize_symbolic(const string& expression, size_t& p, vec
 	return S ? S : (M ? new SUM(M) : new SUM(D));
 }
 
-string interpreter::serialize_symbolic(ITEM* expression, vector<string>& Vars) {
+string interpreter::serialize_symbolic(void* expression, vector<string>& Vars) {
 	string _OUT;
 	char* VARS[4096];
 	int maxPows[4096] = { 0 };
@@ -4012,7 +4027,7 @@ string interpreter::serialize_symbolic(ITEM* expression, vector<string>& Vars) {
 		i++;
 	}
 	_OUT.reserve(128 * 1024 * 1024);
-	expression->sprint(VARS, maxPows, &_OUT, true);
+	static_cast<ITEM*>(expression)->sprint(VARS, maxPows, &_OUT, true);
 	while (i)
 		delete[] VARS[--i];
 	return _OUT;
@@ -8629,7 +8644,7 @@ public:
 		}
 		vector<string> Vars;
 		size_t p = 0;
-		ITEM* r = prolog->deserialize_symbolic(in->get_name(), p, Vars);
+		ITEM* r = static_cast<SUM*>(prolog->deserialize_symbolic(in->get_name(), p, Vars));
 		string _OUT;
 		if (r)
 			r = REGULARIZE(r);
@@ -8676,7 +8691,7 @@ public:
 		}
 		vector<string> Vars;
 		size_t p = 0;
-		ITEM* r = prolog->deserialize_symbolic(in->get_name(), p, Vars);
+		ITEM* r = static_cast<SUM*>(prolog->deserialize_symbolic(in->get_name(), p, Vars));
 		string _OUT;
 		if (r)
 			r = SIMPLIFY(r);
@@ -8728,9 +8743,9 @@ public:
 		}
 		vector<string> Vars;
 		size_t p = 0;
-		ITEM* r1 = prolog->deserialize_symbolic(in1->get_name(), p, Vars);
+		ITEM* r1 = static_cast<SUM*>(prolog->deserialize_symbolic(in1->get_name(), p, Vars));
 		p = 0;
-		ITEM* r2 = prolog->deserialize_symbolic(in2->get_name(), p, Vars);
+		ITEM* r2 = static_cast<SUM*>(prolog->deserialize_symbolic(in2->get_name(), p, Vars));
 		ITEM* r = NULL;
 		string _OUT;
 		if (r1 && r2) {
@@ -8990,7 +9005,7 @@ public:
 		vector<string> Vars;
 		vector<string> BEST;
 		size_t p = 0;
-		ITEM* r = prolog->deserialize_symbolic(in->get_name(), p, Vars);
+		ITEM* r = static_cast<SUM*>(prolog->deserialize_symbolic(in->get_name(), p, Vars));
 		if (r)
 			BEST = in->simplify(to_chain);
 		stack_container<value*> OUT_LIST;
@@ -12833,7 +12848,6 @@ int main(int argc, char ** argv) {
 	int result = setrlimit(RLIMIT_STACK, &rl);
 	if (result != 0) {
 		std::cout << "setrlimit returned result = " << result << endl;
-		exit(1000);
 	}
 #if defined(__unix__) || defined(__linux__)
 	pthread_attr_t attr;

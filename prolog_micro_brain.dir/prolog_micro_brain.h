@@ -20,7 +20,6 @@
 using namespace std;
 
 #include "elements.h"
-#include "symbolic.h"
 
 extern const char * STD_INPUT;
 extern const char * STD_OUTPUT;
@@ -43,17 +42,11 @@ unsigned int getTotalProcs();
 
 typedef void * HMODULE;
 
-HMODULE LoadLibrary(const wchar_t * _fname) {
-	return dlopen(wstring_to_utf8(_fname).c_str(), RTLD_LAZY);
-}
+HMODULE LoadLibrary(const wchar_t* _fname);
 
-void * GetProcAddress(HMODULE handle, const char * fname) {
-	return dlsym(handle, fname);
-}
+void* GetProcAddress(HMODULE handle, const char* fname);
 
-void FreeLibrary(HMODULE handle) {
-	dlclose(handle);
-}
+void FreeLibrary(HMODULE handle);
 #else
 #include <Windows.h>
 #endif
@@ -578,8 +571,8 @@ public:
 	bool block_process(context * CNT, bool clear_flag, bool cut_flag, predicate_item * frontier, bool frontier_enough = false);
 
 	double evaluate(context* CTX, frame_item * ff, const string & expression, size_t & p);
-	SUM* deserialize_symbolic(const string& expression, size_t& p, vector<string>& Vars);
-	string serialize_symbolic(ITEM * expression, vector<string>& Vars);
+	void* deserialize_symbolic(const string& expression, size_t& p, vector<string>& Vars);
+	string serialize_symbolic(void * expression, vector<string>& Vars);
 
 	bool check_consistency(set<string> & dynamic_prefixes);
 

@@ -298,7 +298,7 @@ void _SolveLU(int NN, __global int * iRow, __global double * LU, __global double
 
 #pragma plan common end
 
-// n -- размерность пространства
+// n -- СЂР°Р·РјРµСЂРЅРѕСЃС‚СЊ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІР°
 #def_module() marquardt_pekunov(NAME, max_groups, n, FUN, MaxIters) {
 @goal:-brackets_off.
 	reenterable @goal:-write(NAME).(bool init, double EPS, int nProbes, double mu0,

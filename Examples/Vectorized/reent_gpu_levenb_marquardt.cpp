@@ -1,5 +1,7 @@
 #pragma plan vectorized
 
+#pragma syntax nocheck
+
 #add_scan(clsSolve)
 
 #include <iostream>
@@ -276,7 +278,7 @@ void _SolveLU(int NN, __global int * iRow, __global double * LU, __global double
 
 #pragma plan common end
 
-// n -- размерность пространства
+// n -- СЂР°Р·РјРµСЂРЅРѕСЃС‚СЊ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІР°
 #def_module() levenberg_marquardt(NAME, FIRSTS, LAST) {
 @goal:-brackets_off.
 @countl([], 0):-!.
@@ -612,3 +614,5 @@ int main() {
 	cout << "Average ITERS = " << (ITERS/nPoints) << endl;
 	cout << "% GOODS = " << 1.0*nGOOD/nPoints << endl;
 }
+
+#pragma syntax check

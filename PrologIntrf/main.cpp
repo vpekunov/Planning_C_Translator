@@ -49,8 +49,8 @@ extern "C" {
 		int result = setrlimit(RLIMIT_STACK, &rl);
 		if (result != 0) {
 			std::cout << "setrlimit returned result = " << result << endl;
-			exit(1000);
 		}
+#if defined(__unix__) || defined(__linux__)
 		pthread_attr_t attr;
 		pthread_attr_init(&attr);
 		size_t default_stack_size;
@@ -58,6 +58,7 @@ extern "C" {
 
 		pthread_attr_setstacksize(&attr, 16 * default_stack_size);
 		pthread_setattr_default_np(&attr);
+#endif
 #endif
 
 		setlocale(LC_ALL, "en_US.UTF-8");
