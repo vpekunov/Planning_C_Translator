@@ -1,5 +1,7 @@
 #pragma plan vectorized
 
+#pragma syntax nocheck
+
 #include <iostream>
 #include <stdlib.h>
 #include <time.h>
@@ -702,3 +704,5 @@ int main() {
 	cout << "Average ITERS = " << (ITERS/nPoints) << endl;
 	cout << "% GOODS = " << 1.0*nGOOD/nPoints << endl;
 }
+
+#pragma syntax check

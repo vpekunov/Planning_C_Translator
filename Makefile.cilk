@@ -7,10 +7,13 @@ LDFLAGS := -lm -lpthread -ldl -lOpenCL
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
 COMPILER := $(shell ls /opt/homebrew/bin/g++*)
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -std=c++11 -fcilkplus -I/opt/homebrew/include
+LDFLAGS := -lm -lpthread -framework OpenCL
 else
 COMPILER := g++
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++11 -fcilkplus
+LDFLAGS := -lm -lpthread -lOpenCL
 endif
-CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -std=c++17 -fcilkplus -I/opt/homebrew/include
 
 SRCS=$(wildcard $(SRC_DIR)/*.c)
 

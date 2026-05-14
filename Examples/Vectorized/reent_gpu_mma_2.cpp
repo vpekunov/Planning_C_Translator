@@ -1,5 +1,7 @@
 #pragma plan vectorized
 
+#pragma syntax nocheck
+
 #include <iostream>
 #include <chrono>
 
@@ -147,3 +149,5 @@ int main() {
 
   return 0;
 }
+
+#pragma syntax check

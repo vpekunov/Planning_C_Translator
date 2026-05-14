@@ -3263,7 +3263,7 @@ begin
                                  F := Pos(LeftFBracket, S1);
                                  Insert(CRLF+'/*', S1, F + 1);
                                  If FunctionType <> 'void' Then
-                                    Insert(CRLF+' '+FunctionType+' __dummy__;', S1, F + 1)
+                                    Insert(CRLF+' '+FunctionType+' __dummy__ = {};', S1, F + 1)
                                end;
                             F := Length(S1);
                             While S1[F] <> RightFBracket Do
@@ -3335,7 +3335,7 @@ begin
                                  F := Pos(LeftFBracket, S1);
                                  Insert(CRLF+'/*', S1, F + 1);
                                  If FunctionType <> 'void' Then
-                                    Insert(CRLF+' '+FunctionType+' __dummy__;', S1, F + 1)
+                                    Insert(CRLF+' '+FunctionType+' __dummy__ = {};', S1, F + 1)
                                end;
                             F := Length(S1);
                             While S1[F] <> RightFBracket Do

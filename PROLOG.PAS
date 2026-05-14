@@ -621,7 +621,7 @@ Begin
   _Out.Add('#define plan_group_atomize _plan_group_atomize()');
   _Out.Add('#define plan_group_soft_atomize _plan_group_soft_atomize()');
   _Out.Add('#define plan_group_vectorize(S) _plan_group_vectorize(S,0)');
-  _Out.Add('#define plan_group_typize(S,...) _plan_group_typize(S,__VA_ARGS__,0)');
+  _Out.Add('#define plan_group_typize(S,...) _plan_group_typize(S , ## __VA_ARGS__,0)');
   _Out.Add('#ifdef __REENT_MPI__');
   _Out.Add('#define __throw_cluster__(ID,InputProcName,__Direction__) \');
   _Out.Add(' if (__clustered_topology(plan_topology_num())) { \');
