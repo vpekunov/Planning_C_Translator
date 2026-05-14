@@ -110,73 +110,73 @@
   ),
   !.
 
-@neg([[opSub|TI]|TL],[TI|TL1]):-
-  neg(TL, TL1),
+@nega([[opSub|TI]|TL],[TI|TL1]):-
+  nega(TL, TL1),
   !.
-@neg([[opAdd|TI]|TL],[[opSub|TI]|TL1]):-
-  neg(TL, TL1),
+@nega([[opAdd|TI]|TL],[[opSub|TI]|TL1]):-
+  nega(TL, TL1),
   !.
-@neg([[HI|TI]|TL],[[opSub,HI|TI]|TL1]):-
-  neg(TL, TL1),
+@nega([[HI|TI]|TL],[[opSub,HI|TI]|TL1]):-
+  nega(TL, TL1),
   !.
-@neg([],[]):-!.
+@nega([],[]):-!.
 
 // [... +a ...] + [... -a ...]
-@add([[opAdd|TI]|TL], L2, L):-
+@adda([[opAdd|TI]|TL], L2, L):-
   append(L1, [[opSub|TI]|TL3], L2),
   !,
   append(L1, TL3, L4),
-  add(TL, L4, L),
+  adda(TL, L4, L),
   !.
 // [... +a ...] + [...  ...]
-@add([[opAdd|TI]|TL], L2, L):-
-  add(TL, L2, L3),
+@adda([[opAdd|TI]|TL], L2, L):-
+  adda(TL, L2, L3),
   append([[opAdd|TI]], L3, L),
   !.
 // [... -a ...] + [... +a ...]
-@add([[opSub|TI]|TL], L2, L):-
+@adda([[opSub|TI]|TL], L2, L):-
   append(L1, [[opAdd|TI]|TL3], L2),
   !,
   append(L1, TL3, L4),
-  add(TL, L4, L),
+  adda(TL, L4, L),
   !.
 // [... -a ...] + [... -a ...]
-@add([[opSub|TI]|TL], L2, [[opSub|TI],[opSub|TI]|L]):-
+@adda([[opSub|TI]|TL], L2, [[opSub|TI],[opSub|TI]|L]):-
   append(L1, [[opSub|TI]|TL3], L2),
   !,
   append(L1, TL3, L4),
-  add(TL, L4, L),
+  adda(TL, L4, L),
   !.
 // [... -a ...] + [... a ...]
-@add([[opSub|TI]|TL], L2, L):-
+@adda([[opSub|TI]|TL], L2, L):-
   append(L1, [TI|TL3], L2),
   !,
   append(L1, TL3, L4),
-  add(TL, L4, L),
+  adda(TL, L4, L),
   !.
 // [... -a ...] + [...  ...]
-@add([[opSub|TI]|TL], L2, L):-
-  add(TL, L2, L3),
+@adda([[opSub|TI]|TL], L2, L):-
+  adda(TL, L2, L3),
   append([[opSub|TI]], L3, L),
   !.
 // [... a ...] + [... -a ...]
-@add([TI|TL], L2, L):-
+@adda([TI|TL], L2, L):-
   append(L1, [[opSub|TI]|TL3], L2),
   !,
   append(L1, TL3, L4),
-  add(TL, L4, L),
+  adda(TL, L4, L),
   !.
 // [... a ...] + [...  ...]
-@add([TI|TL], L2, L):-
-  add(TL, L2, L3),
+@adda([TI|TL], L2, L):-
+  adda(TL, L2, L3),
   append([TI], L3, L),
   !.
-@add([], L, L):-!.
-@add(L, [], L):-!.
+@adda([], L, L):-!.
+@adda(L, [], L):-!.
 
-@sub(L1, L2, L):-
-  neg(L2, L3),
-  add(L1, L3, L),
+@suba(L1, L2, L):-
+  nega(L2, L3),
+  adda(L1, L3, L),
   !.
 
 @mul11([opAdd|T1], [opAdd|T2], L):-
@@ -210,31 +210,31 @@
 @mul1(A, [B|T], L):-
   mul11(A, B, C),
   mul1(A, T, L1),
-  add([C], L1, L),
+  adda([C], L1, L),
   !.
 @mul1(_, [], []).
 
-@mul([H|T], L1, L):-
+@mula([H|T], L1, L):-
   mul1(H, L1, L2),
-  mul(T, L1, L3),
-  add(L2, L3, L),
+  mula(T, L1, L3),
+  adda(L2, L3, L),
   !.
-@mul([], _, []):-!.
-@mul(_, [], []):-!.
+@mula([], _, []):-!.
+@mula(_, [], []):-!.
 
 @muln(_,0,[]):-!.
 @muln(L,1,L):-!.
 @muln(L1,N,L):-
   N1 is N-1,
   muln(L1,N1,L11),
-  add(L11,L1,L),
+  adda(L11,L1,L),
   !.
 
-@pow(L, 1, L):-!.
-@pow(L, N, L1):-
+@powa(L, 1, L):-!.
+@powa(L, N, L1):-
   N1 is N-1,
-  pow(L, N1, L2),
-  mul(L2, L, L1),
+  powa(L, N1, L2),
+  mula(L2, L, L1),
   !.
  
 @var_explode([opGroup(G)], L):-
@@ -247,7 +247,7 @@
   append(VE, [opPow, num(N)], Lexs),
   var_explode(VE, Op1),
   number_atom(NN, N),
-  pow(Op1, NN, L),
+  powa(Op1, NN, L),
   !.
 @pow_explode(Lexs, L):-
   var_explode(Lexs, L),
@@ -257,7 +257,7 @@
   append(PE, [opMul|ME], Lexs),
   pow_explode(PE, Op1),
   mul_explode(ME, Op2),
-  mul(Op1, Op2, L),
+  mula(Op1, Op2, L),
   !.
 @mul_explode(Lexs, L):-
   pow_explode(Lexs, L),
@@ -277,7 +277,7 @@
   !.
 @unar_explode([opSub|ME], L):-
   cmul_explode(ME, Op),
-  neg(Op, L),
+  nega(Op, L),
   !.
 @unar_explode(Lexs, L):-
   cmul_explode(Lexs, L),
@@ -287,13 +287,13 @@
   append(SE, [opAdd|UE], Lexs),
   sum_explode(SE, Op1),
   unar_explode(UE, Op2),
-  add(Op1, Op2, L),
+  adda(Op1, Op2, L),
   !.
 @sum_explode(Lexs, L):-
   append(SE, [opSub|UE], Lexs),
   sum_explode(SE, Op1),
   unar_explode(UE, Op2),
-  sub(Op1, Op2, L),
+  suba(Op1, Op2, L),
   !.
 @sum_explode(Lexs, L):-
   unar_explode(Lexs, L),
