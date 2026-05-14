@@ -61,7 +61,7 @@ __ring_defs()
     \)
     (\s|\\t)*
     \{
-     ((.{1,8192})->{BODY}\})?=>{Predicates.BAL($,'}')}
+     ((.+?)->{BODY}\})?=>{Predicates.BAL($,'}')}
     (\s|\\t)*
   @end
 };

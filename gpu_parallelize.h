@@ -171,18 +171,18 @@ enumerations_point();
      (
       (\s|\\t|\\n)*
       (
-       ((if)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((if)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
        ((do)->{TYPE}\b(\s|\\t|\\n)*)|
        ((else)->{TYPE}\b(\s|\\t|\\n)*)|
-       ((while)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
-       ((for)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
-       ((switch)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
-       ((case)->{TYPE}\b(\s|\\t|\\n)*(([^:]{1,368})\:)?=>{Predicates.BAL($,':')}(\s|\\t|\\n)*)|
+       ((while)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((for)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((switch)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((case)->{TYPE}\b(\s|\\t|\\n)*(([^:]+?)\:)?=>{Predicates.BAL($,':')}(\s|\\t|\\n)*)|
        ((break)->{TYPE}(\s|\\t|\\n)*\;)|
        ((\{)->{TYPE}(\s|\\t|\\n)*)|
        ((\})->{TYPE}(\s|\\t|\\n)*)|
-       ((\w+)->{TYPE}(\s|\\t|\\n)*\(((.{0,512})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*\;)|
-       (()->{TYPE}(((.{0,368})\;)?=>{Predicates.BAL($,';')}))
+       ((\w+)->{TYPE}(\s|\\t|\\n)*\(((.*?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*\;)|
+       (()->{TYPE}(((.*?)\;)?=>{Predicates.BAL($,';')}))
       )
      )->{OP}*
      (\s|\\t|\\n)*
@@ -238,17 +238,17 @@ enumerations_point();
     (
      optimized(\s|\\t|\\n)*
      \(
-     ((.{0,128})->{OPT}\))?=>{Predicates.BAL($,')')}
+     ((.*?)->{OPT}\))?=>{Predicates.BAL($,')')}
      (\s|\\t|\\n)*
     )?
     vectorized(\s|\\t|\\n)*\(
-          ((.{0,128})->{DEVICE}\,)?=>{Predicates.BAL($,',')}
+          ((.*?)->{DEVICE}\,)?=>{Predicates.BAL($,',')}
           (\s|\\t|\\n)*
           (
-           ((.{0,128})->{MODE}\,)?=>{Predicates.BAL($,',')}
+           ((.*?)->{MODE}\,)?=>{Predicates.BAL($,',')}
            (\s|\\t|\\n)*
           )?
-          ((.{0,128})->{CHUNK}\))?=>{Predicates.BAL($,')')}
+          ((.*?)->{CHUNK}\))?=>{Predicates.BAL($,')')}
           (\s|\\t|\\n)*
     gpu(\s|\\t|\\n)*
          (
@@ -258,10 +258,10 @@ enumerations_point();
              (\s|\\t|\\n)*
              (_local(\s|\\t|\\n)+|_global(\s|\\t|\\n)+|_pivot(\s|\\t|\\n)+|)->{KINDS}
              (
-              (.{1,128})->{TYPES}
+              (.+?)->{TYPES}
               (\s|\\t|\\n)(\w+)->{NAMES}
               (\s|\\t|\\n)*
-              ((\[(.{1,64}\])?=>{Predicates.BAL($,']')}(\s|\\t|\\n)*)*)->{SIZES}
+              ((\[(.+?\])?=>{Predicates.BAL($,']')}(\s|\\t|\\n)*)*)->{SIZES}
               \,
              )?=>{Predicates.TBAL($,',')}
             )*
@@ -269,10 +269,10 @@ enumerations_point();
              (\s|\\t|\\n)*
              (_local(\s|\\t|\\n)+|_global(\s|\\t|\\n)+|_pivot(\s|\\t|\\n)+|)->{KINDS}
              (
-              (.{1,128})->{TYPES}
+              (.+?)->{TYPES}
               (\s|\\t|\\n)(\w+)->{NAMES}
               (\s|\\t|\\n)*
-              ((\[(.{1,64}\])?=>{Predicates.BAL($,']')}(\s|\\t|\\n)*)*)->{SIZES}
+              ((\[(.+?\])?=>{Predicates.BAL($,']')}(\s|\\t|\\n)*)*)->{SIZES}
               \>
              )?=>{Predicates.TBAL($,'>')}
             )
@@ -281,25 +281,25 @@ enumerations_point();
           )
          )(\s|\\t|\\n)*
     (
-     (for|while)(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*
+     (for|while)(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*
     )->{LOOP}
     (()->{MARGIN}\{((.*)$)?=>{Predicates.getBAL($,'}',$MARGIN), stop_fail(MARGIN)}|\{)
     (
      (
       (\s|\\t|\\n)*
       (
-       ((if)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((if)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
        ((do)->{TYPE}\b(\s|\\t|\\n)*)|
        ((else)->{TYPE}\b(\s|\\t|\\n)*)|
-       ((while)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
-       ((for)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
-       ((switch)->{TYPE}(\s|\\t|\\n)*\(((.{1,368})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
-       ((case)->{TYPE}\b(\s|\\t|\\n)*(([^:]{1,368})\:)?=>{Predicates.BAL($,':')}(\s|\\t|\\n)*)|
+       ((while)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((for)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((switch)->{TYPE}(\s|\\t|\\n)*\(((.+?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*)|
+       ((case)->{TYPE}\b(\s|\\t|\\n)*(([^:]+?)\:)?=>{Predicates.BAL($,':')}(\s|\\t|\\n)*)|
        ((break)->{TYPE}(\s|\\t|\\n)*\;)|
        ((\{)->{TYPE}(\s|\\t|\\n)*)|
        ((\})->{TYPE}(\s|\\t|\\n)*)|
-       ((\w+)->{TYPE}(\s|\\t|\\n)*\(((.{0,512})\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*\;)|
-       (()->{TYPE}(((.{0,368})\;)?=>{Predicates.BAL($,';')}))
+       ((\w+)->{TYPE}(\s|\\t|\\n)*\(((.*?)\))?=>{Predicates.BAL($,')')}(\s|\\t|\\n)*\;)|
+       (()->{TYPE}(((.*?)\;)?=>{Predicates.BAL($,';')}))
       )
      )->{OP}*
      (\s|\\t|\\n)*

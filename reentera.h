@@ -326,11 +326,11 @@ using namespace std;
     reenterable
     (\s|\\n|\\t)*
     \(
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\)))?=>{Predicates.TBAL($,')')})
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\)))?=>{Predicates.TBAL($,')')})
     (\s|\\n|\\t)*
     \{
-     ((.{1,8192})->{Body}\})?=>{Predicates.BAL($,'}')}
+     ((.+?)->{Body}\})?=>{Predicates.BAL($,'}')}
     (\s|\\t)*
     \;
     (\s|\\t)*
@@ -349,13 +349,13 @@ using namespace std;
     reenterable
     (\s|\\n|\\t)*
     \(
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\)))?=>{Predicates.TBAL($,')')})
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\)))?=>{Predicates.TBAL($,')')})
     (\s|\\n|\\t)*
     \-\>
     (\s|\\n|\\t)*
-    (([^{}]{1,256})->{RetType}\{)?=>{Predicates.BAL($,'{')}
-    ((.{1,8192})->{Body}\})?=>{Predicates.BAL($,'}')}
+    (([^{}]+?)->{RetType}\{)?=>{Predicates.BAL($,'{')}
+    ((.+?)->{Body}\})?=>{Predicates.BAL($,'}')}
     (\s|\\n|\\t)*
     \;
     (\s|\\t)*
@@ -465,20 +465,20 @@ using namespace std;
     \=
     (\s|\\n|\\t)*
     (
-     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (clustered\s*\(((.+?)\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
      (\s|\\n|\\t)*
     )?
     chain
     (\s|\\n|\\t)*
     \[
-      ((\s|\\n|\\t)*((.{1,96})->{NP}\])?=>{Predicates.BAL($,']')})
+      ((\s|\\n|\\t)*((.+?)->{NP}\])?=>{Predicates.BAL($,']')})
     (\s|\\n|\\t)*
     \<
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\>))?=>{Predicates.TBAL($,'>')})
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\>))?=>{Predicates.TBAL($,'>')})
     (\s|\\n|\\t)*
     \{
-     ((.{1,8192})->{Body}\})?=>{Predicates.BAL($,'}')}
+     ((.+?)->{Body}\})?=>{Predicates.BAL($,'}')}
     (\s|\\t)*
     \;
     (\s|\\t)*
@@ -574,7 +574,7 @@ using namespace std;
   @begin
     (
      (\s|\\n|\\t)*
-     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (clustered\s*\(((.+?)\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
      (\s|\\n|\\t)*
     )?
     (
@@ -582,13 +582,13 @@ using namespace std;
      chain
      (\s|\\n|\\t)*
      \<
-       ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+(\s|\\n|\\t)*(\,|\>))->{ParamName}))?=>{Predicates.TBAL($,',>')})+
+       ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+(\s|\\n|\\t)*(\,|\>))->{ParamName}))?=>{Predicates.TBAL($,',>')})+
      (\s|\\n|\\t)*
      \(
-       ((.{1,1024})->{InitVals}\))?=>{Predicates.BAL($,')')}
+       ((.+?)->{InitVals}\))?=>{Predicates.BAL($,')')}
      (\s|\\n|\\t)*
      \{
-      ((.{1,8192})->{Body}\})?=>{Predicates.BAL($,'}')}
+      ((.+?)->{Body}\})?=>{Predicates.BAL($,'}')}
      (\s|\\t)*
     )+
     \;
@@ -740,7 +740,7 @@ using namespace std;
     \=
     (\s|\\n|\\t)*
     (
-     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (clustered\s*\(((.+?)\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
      (\s|\\n|\\t)*
     )?
     chain
@@ -750,15 +750,15 @@ using namespace std;
     \]
     (\s|\\n|\\t)*
     \<
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\>))?=>{Predicates.TBAL($,'>')})
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\>))?=>{Predicates.TBAL($,'>')})
     (\s|\\n|\\t)*
     \{
-     ((.{1,8192})->{Body}\})?=>{Predicates.BAL($,'}')}
+     ((.+?)->{Body}\})?=>{Predicates.BAL($,'}')}
     (\s|\\t)*
     \{
-      ((\s|\\n|\\t)*(([0-9\-\>\< ]{1,96})->{DESC}(\s|\\n|\\t)*(\,))?=>{Predicates.BAL($,',')})*
-      ((\s|\\n|\\t)*(([0-9\-\>\< ]{1,96})->{DESC}(\s|\\n|\\t)*(\}))?=>{Predicates.BAL($,'}')})
+      ((\s|\\n|\\t)*(([0-9\-\>\< ]+?)->{DESC}(\s|\\n|\\t)*(\,))?=>{Predicates.BAL($,',')})*
+      ((\s|\\n|\\t)*(([0-9\-\>\< ]+?)->{DESC}(\s|\\n|\\t)*(\}))?=>{Predicates.BAL($,'}')})
     \;
     (\s|\\t)*
   @end

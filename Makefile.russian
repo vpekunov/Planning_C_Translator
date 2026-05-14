@@ -2,7 +2,13 @@
 
 SRC_DIR := ./Examples/Russian
 LDFLAGS := -lm -lpthread
-CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++17 -I/opt/homebrew/include
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+COMPILER := $(shell ls /opt/homebrew/bin/g++*)
+else
+COMPILER := g++
+endif
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++11 -I/opt/homebrew/include
 
 SRCS=$(wildcard $(SRC_DIR)/*.cpp)
 
@@ -13,7 +19,7 @@ EXES=$(SRCS:.cpp=)
 all: $(EXES)
 
 %: %.cc
-	g++ $(CPPFLAGS) -o $@ -I../../ $< $(LDFLAGS)
+	$(COMPILER) $(CPPFLAGS) -o $@ -I../../ $< $(LDFLAGS)
 
 %.cc: %.cpp
 	./Reenterable -force-use-mem -strict-pre-checks -strict-plc-checks $< $@

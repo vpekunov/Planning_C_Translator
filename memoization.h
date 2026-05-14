@@ -984,8 +984,8 @@ public:
        (\s|\\t)*
        (conditions)->{CONTROLLED}
        (\s|\\t)*
-       \((\s|\\t)*((.{1,255})->{C1}\,)?=>{Predicates.BAL($,',')}
-         (\s|\\t)*((.{1,255})->{C2}\))?=>{Predicates.BAL($,')')}(\s|\\t)*
+       \((\s|\\t)*((.+?)->{C1}\,)?=>{Predicates.BAL($,',')}
+         (\s|\\t)*((.+?)->{C2}\))?=>{Predicates.BAL($,')')}(\s|\\t)*
       )
      )?
     )?

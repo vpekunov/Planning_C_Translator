@@ -41,7 +41,7 @@
   @begin
     (\s|\\t)*
     (struct|union)->{TYPE}(\\n|\s|\\t)+
-    ((((\w+)?\s*\{.{1,2048}?)->{EXPR}\})?=>{Predicates.BAL($,'}')}\s*\w+\s*\;)
+    ((((\w+)?\s*\{.*?)->{EXPR}\})?=>{Predicates.BAL($,'}')}\s*\w+\s*\;)
     (\s|\\t)*
   @end
 };
@@ -81,15 +81,15 @@
   @begin
     (\s|\\t)*
     (for(\s|\\t)*\(
-           (\\n|\s|\\t)*((([^;]{1,300}?)->{INITF}\,)?=>{Predicates.BAL($,',')}
+           (\\n|\s|\\t)*((([^;]+?)->{INITF}\,)?=>{Predicates.BAL($,',')}
               )*
-              ((([^;]{0,300}?)->{INITN}\;)?=>{Predicates.BAL($,';')}
+              ((([^;]*?)->{INITN}\;)?=>{Predicates.BAL($,';')}
               )
-           (\\n|\s|\\t)*((([^;]{0,300}?)->{COND}\;)?=>{Predicates.BAL($,';')}
+           (\\n|\s|\\t)*((([^;]*?)->{COND}\;)?=>{Predicates.BAL($,';')}
               )
-           (\\n|\s|\\t)*((([^;]{1,300}?)->{CHNGF}\,)?=>{Predicates.BAL($,',')}
+           (\\n|\s|\\t)*((([^;]+?)->{CHNGF}\,)?=>{Predicates.BAL($,',')}
               )*
-              ((([^\)]{0,300}?)->{CHNGN}\))?=>{Predicates.BAL($,')')}
+              ((([^\)]*?)->{CHNGN}\))?=>{Predicates.BAL($,')')}
               )
         )
     (\s|\\t)*
@@ -134,7 +134,7 @@
   @begin
     (\s|\\t)*
     (if(\\n|\s|\\t)*\(
-           (\\n|\s|\\t)*((.{1,300}?)->{COND}\))?=>{Predicates.BAL($,')')}
+           (\\n|\s|\\t)*((.+?)->{COND}\))?=>{Predicates.BAL($,')')}
         )
     (\s|\\t)*
   @end
@@ -186,7 +186,7 @@
   @begin
     (\s|\\t)*
     (switch(\\n|\s|\\t)*\(
-           (\\n|\s|\\t)*((.{1,300}?)->{EXPR}\))?=>{Predicates.BAL($,')')}
+           (\\n|\s|\\t)*((.+?)->{EXPR}\))?=>{Predicates.BAL($,')')}
         )
     (\s|\\t)*
   @end
@@ -197,7 +197,7 @@
   @begin
     (\s|\\t)*
     typedef((\\n|\s|\\t)+)
-    (((.{1,2048}?)->{EXPR}\;)?=>{Predicates.BAL($,';')}
+    (((.+?)->{EXPR}\;)?=>{Predicates.BAL($,';')}
          )
     (\s|\\t)*
   @end
@@ -208,7 +208,7 @@
   @begin
     (\s|\\t)*
     (while(\\n|\s|\\t)*\(
-           (\\n|\s|\\t)*((.{1,300}?)->{COND}\))?=>{Predicates.BAL($,')')}
+           (\\n|\s|\\t)*((.+?)->{COND}\))?=>{Predicates.BAL($,')')}
         )
     (\s|\\t)*
   @end

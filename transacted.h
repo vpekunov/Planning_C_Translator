@@ -15,9 +15,9 @@
     (
       \(
       (\s|\\t|\\n)*
-      ((.{1,64})->{NPRECONDS}\,)?=>{Predicates.TBAL($,',')}
+      ((.+?)->{NPRECONDS}\,)?=>{Predicates.TBAL($,',')}
       (\s|\\t|\\n)*
-      ((.{1,64})->{PRECONDS}\))?=>{Predicates.TBAL($,')')}
+      ((.+?)->{PRECONDS}\))?=>{Predicates.TBAL($,')')}
     )?
     (\s|\\t|\\n)+
     ([^\(]+)->{FUNID}
@@ -26,7 +26,7 @@
        (
         ((\s|\\t|\\n)*(void(\s|\\t|\\n)*)?\))|
         (
-         (\s|\\t|\\n)*((\=)?(\w+))->{PRMID}((.{0,256}(\,|\)))->{PRMTAIL})?=>{Predicates.TBAL($,'),')}
+         (\s|\\t|\\n)*((\=)?(\w+))->{PRMID}((.*?(\,|\)))->{PRMTAIL})?=>{Predicates.TBAL($,'),')}
         )+
        )
     )
@@ -47,7 +47,7 @@
     (
       \(
       (\s|\\t|\\n)*
-      ((.{0,64})->{SYNC_CHILDREN}\))?=>{Predicates.TBAL($,')')}
+      ((.*?)->{SYNC_CHILDREN}\))?=>{Predicates.TBAL($,')')}
     )?
     (\s|\\t|\\n)*
     \;

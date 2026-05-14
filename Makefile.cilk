@@ -4,6 +4,12 @@ SRC_DIR := ./Examples/Cilk
 # Use the following line for Cilk-capable compiler
 #LDFLAGS := -lm -lpthread -ldl -lcilkrts -lOpenCL
 LDFLAGS := -lm -lpthread -ldl -lOpenCL
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+COMPILER := $(shell ls /opt/homebrew/bin/g++*)
+else
+COMPILER := g++
+endif
 CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -std=c++17 -fcilkplus -I/opt/homebrew/include
 
 SRCS=$(wildcard $(SRC_DIR)/*.c)
@@ -15,7 +21,7 @@ EXES=$(SRCS:.c=)
 all: $(EXES)
 
 %: %.cc
-	g++ $(CPPFLAGS) -o $@ -I../../ $< $(LDFLAGS)
+	$(COMPILER) $(CPPFLAGS) -o $@ -I../../ $< $(LDFLAGS)
 
 %.cc: %.c
 	./Reenterable -force-use-mem -strict-pre-checks -strict-plc-checks $< $@

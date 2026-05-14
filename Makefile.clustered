@@ -2,7 +2,13 @@
 
 SRC_DIR := ./Examples/Clustered
 LDFLAGS := -lm -lpthread
-CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++17 -I/opt/homebrew/include
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+export MPICH_CXX = $(shell ls /opt/homebrew/bin/g++*)
+else
+export MPICH_CXX = g++
+endif
+CPPFLAGS := -fopenmp -fgnu-tm -fpermissive -O4 -std=c++11 -I/opt/homebrew/include
 
 SRCS=$(wildcard $(SRC_DIR)/*.cpp)
 

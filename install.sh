@@ -70,8 +70,8 @@ cp ./libxpathInduct.dylib ../libxpathInduct.so
 cd ..
 sudo make
 sudo make -f Makefile.mpi
-sudo make -f Makefile.vectorized
 sudo make -f Makefile.clustered
+sudo make -f Makefile.vectorized
 sudo make -f Makefile.cilk
 sudo make -f Makefile.russian
 sudo rm -f ./induct.log

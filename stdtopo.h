@@ -21,7 +21,7 @@ using namespace std;
     \=
     (\s|\\n|\\t)*
     (
-     (clustered\s*\(((.{1,96})\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
+     (clustered\s*\(((.+?)\))?=>{Predicates.BAL($,')')})->{CLUSTERED}
      (\s|\\n|\\t)*
     )?
     topology
@@ -29,14 +29,14 @@ using namespace std;
     (\w+)->{Name}
     (\s|\\n|\\t)*
     \[
-      ((.{1,1024})->{TParams}\])?=>{Predicates.BAL($,']')}
+      ((.+?)->{TParams}\])?=>{Predicates.BAL($,']')}
     (\s|\\n|\\t)*
     \<
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
-      ((\s|\\n|\\t)*(((.{1,96})->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\>))?=>{Predicates.TBAL($,'>')})
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\,))?=>{Predicates.TBAL($,',')})*
+      ((\s|\\n|\\t)*(((.+?)->{ParamType}(\s|\\n|\\t)*\b(\w+)->{ParamName})(\s|\\n|\\t)*(\>))?=>{Predicates.TBAL($,'>')})
     (\s|\\n|\\t)*
     \{
-     ((.{1,8192})->{Body}\})?=>{Predicates.BAL($,'}')}
+     ((.+?)->{Body}\})?=>{Predicates.BAL($,'}')}
     (\s|\\t)*
     \;
     (\s|\\t)*

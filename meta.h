@@ -11,14 +11,14 @@
 
 #def_pattern metaIntroduce => meta_info(gid(), 'Header', //HEAD/@Value) {
   @begin
-    \#introduce\s*\(((.{1,255})->{HEAD}\))?=>{Predicates.BAL($,')')}\s*\\n
+    \#introduce\s*\(((.+?)->{HEAD}\))?=>{Predicates.BAL($,')')}\s*\\n
   @end
   (\#\(([^\.\#]+\.[^\)])*([^\.\#]+\.\)\\n))*?
   \#stop\s*\\n
 };
 
 #def_pattern metaStop => meta_info(gid(), 'Footer', //HEAD/@Value) {
-  \#introduce\s*\(((.{1,255})->{HEAD}\))?=>{Predicates.BAL($,')')}\s*\\n
+  \#introduce\s*\(((.+?)->{HEAD}\))?=>{Predicates.BAL($,')')}\s*\\n
   (\#\(([^\.\#]+\.[^\)])*([^\.\#]+\.\)\\n))*?
   @begin
     \#stop\s*\\n
