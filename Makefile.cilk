@@ -27,7 +27,7 @@ all: $(EXES)
 	$(COMPILER) $(CPPFLAGS) -o $@ -I../../ $< $(LDFLAGS)
 
 %.cc: %.c
-	./Reenterable -force-use-mem -strict-pre-checks -strict-plc-checks $< $@
+	./Reenterable -strict-pre-checks -strict-plc-checks $< $@
 
 clean:
 	rm -rf $(CCS)

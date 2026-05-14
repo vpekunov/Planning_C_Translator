@@ -22,7 +22,7 @@ all: $(EXES)
 	$(COMPILER) $(CPPFLAGS) -o $@ -I../ $< $(LDFLAGS)
 
 %.cc: %.cpp
-	./Reenterable -force-use-mem -strict-pre-checks -strict-plc-checks $< $@
+	./Reenterable -strict-pre-checks -strict-plc-checks $< $@
 
 clean:
 	rm -rf $(CCS)
