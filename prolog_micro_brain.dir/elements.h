@@ -18,10 +18,9 @@
 
 #include <string.h>
 
-#include <boost/filesystem.hpp>
+#include <filesystem>
 
 using namespace std;
-using namespace boost::filesystem;
 
 #define infArity 32768
 
@@ -330,8 +329,8 @@ public:
 				else
 					throw logic_error("Unknown Link Direction!");
 			else if (Nm == strRequired)
-				if (Val == "1") this->Required = true;
-				else if (Val == "0") this->Required = false;
+				if (Val == L"1") this->Required = true;
+				else if (Val == L"0") this->Required = false;
 				else
 					throw logic_error("Malformed Required of contact");
 			else if (Nm == strType)
@@ -386,7 +385,7 @@ public:
 				[this](const wstring & Nm, const wstring & Val) {
 					if (Nm == strName) this->Name = Val;
 					else if (Nm == strInheritScript)
-						if (Val == "1") this->Inherit = true;
+						if (Val == L"1") this->Inherit = true;
 			});
 			for (const wstring & Prm : NewPrms) {
 				size_t p = 0;

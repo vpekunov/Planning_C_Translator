@@ -256,10 +256,10 @@ void ClearAllRegistered() {
 }
 
 bool LoadModellingDesktop(const wstring & parent, const wstring & root_dir) {
-	if (is_directory(root_dir)) {
+	if (filesystem::is_directory(root_dir)) {
 		try {
 			// Handle ini-file
-			path p(root_dir);
+			filesystem::path p(root_dir);
 			wstring fname = root_dir;
 			wstring fsname = root_dir;
 			fname += L"/";
@@ -328,8 +328,8 @@ bool LoadModellingDesktop(const wstring & parent, const wstring & root_dir) {
 				else
 					throw logic_error("No [Definition] or [Parameters]");
 			}
-			for (directory_iterator it(root_dir), eit; it != eit; ++it) {
-				if (is_directory(it->path())) {
+			for (filesystem::directory_iterator it(root_dir), eit; it != eit; ++it) {
+				if (filesystem::is_directory(it->path())) {
 					LoadModellingDesktop(p.filename().wstring(), it->path().wstring());
 				}
 			}
@@ -815,7 +815,7 @@ bool TSystem::LoadFromXML(wstring & Lang, const wstring & inFileName) {
 }
 
 void TSystem::SaveToXML(const wstring & outFileName) {
-	std::ofstream out(wstring_to_utf8(outFileName));
+	std::wofstream out(wstring_to_utf8(outFileName));
 	if (out) {
 		out << "<?xml version=\"1.0\" encoding=\"utf-8\"?>" << endl;
 		out << "<!DOCTYPE System [" << endl;
@@ -915,7 +915,8 @@ void TSystem::SaveToXML(const wstring & outFileName) {
 					out << "<Parameter ID = " << itp->first <<
 						" Indent = \"0\">";
 					string buf = wstring_to_utf8(itp->second);
-					out.write(buf.c_str(), buf.length());
+					out << wstring(buf.begin(), buf.end());
+					// out.write(buf.c_str(), buf.length());
 					out << "</Parameter>" << endl;
 					itp++;
 				}

@@ -1,6 +1,6 @@
 // (C) V.V.Pekunov, Just For Fun :)
 
-// g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -fpermissive -fopenmp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl
+// g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -fpermissive -fopenmp -std=c++17 -O4 -lm -ldl
 
 #define _CRT_SECURE_NO_WARNINGS
 #define _HAS_STD_BYTE 0
@@ -6405,7 +6405,7 @@ public:
 
 		term * A = dynamic_cast<::term *>(positional_vals->at(0));
 		if (A) {
-			current_path(A->get_name());
+			filesystem::current_path(A->get_name());
 		} else {
 			delete r;
 			delete result;
@@ -7974,7 +7974,7 @@ public:
 			exit(-3);
 		}
 		term * t = dynamic_cast<term*>(positional_vals->at(0));
-		if (t && exists(t->get_name())) {
+		if (t && filesystem::exists(t->get_name())) {
 			generated_vars * result = new generated_vars();
 
 			result->push_back(f->copy(CTX));
@@ -8009,8 +8009,8 @@ public:
 			exit(-3);
 		}
 		term * t = dynamic_cast<term*>(positional_vals->at(0));
-		if (t && exists(t->get_name())) {
-			remove(t->get_name());
+		if (t && filesystem::exists(t->get_name())) {
+			filesystem::remove(t->get_name());
 		}
 
 		generated_vars * result = new generated_vars();
@@ -8047,9 +8047,9 @@ public:
 		}
 		term * t_old = dynamic_cast<term*>(positional_vals->at(0));
 		term * t_new = dynamic_cast<term*>(positional_vals->at(1));
-		if (t_old && exists(t_old->get_name())) {
-			remove(t_new->get_name());
-			rename(t_old->get_name(), t_new->get_name());
+		if (t_old && filesystem::exists(t_old->get_name())) {
+			filesystem::remove(t_new->get_name());
+			filesystem::rename(t_old->get_name(), t_new->get_name());
 		} else {
 			std::cout << "rename_file(Old,New) error!" << endl;
 			exit(-3);
@@ -11971,9 +11971,9 @@ void interpreter::consult(const string & fname, bool renew) {
 	}
 
 	bool optimized = false;
-	if (load_optimized && boost::filesystem::exists(fname) && boost::filesystem::exists(fname + ".optimized")) {
-		std::time_t srct = boost::filesystem::creation_time(fname);
-		std::time_t optt = boost::filesystem::creation_time(fname + ".optimized");
+	if (load_optimized && filesystem::exists(fname) && filesystem::exists(fname + ".optimized")) {
+		filesystem::file_time_type srct = filesystem::last_write_time(fname);
+		filesystem::file_time_type optt = filesystem::last_write_time(fname + ".optimized");
 		if (optt >= srct) {
 			ifstream inopt(fname + ".optimized");
 			string percent;

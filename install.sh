@@ -37,39 +37,23 @@ cd ..
 chmod +x *.sh   
 cd ./prolog_micro_brain.dir
 if [[ "$OSTYPE" == "darwin"* ]]; then
-   g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
-   if [ $? -ne 0 ]; then
-      g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
-   fi
-   g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -fPIC -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
-   if [ $? -ne 0 ]; then
-      g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -fPIC -I/opt/homebrew/include -L/opt/homebrew/lib -fpermissive
-   fi
+    echo "Running on a Mac"
+   `ls /opt/homebrew/bin/g++*` -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fopenmp -fpermissive
+   `ls /opt/homebrew/bin/g++*` -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fPIC -fopenmp -fpermissive
 else
-   g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -fopenmp -fpermissive
-   if [ $? -ne 0 ]; then
-      g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -fopenmp -fpermissive
-   fi
-   g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_system -lboost_filesystem -ldl -fPIC -fopenmp -fpermissive
-   if [ $? -ne 0 ]; then
-      g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -lboost_filesystem -ldl -fPIC -fopenmp -fpermissive
-   fi
+   g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fopenmp -fpermissive
+   g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fPIC -fopenmp -fpermissive
 fi
 cp ./prolog_micro_brain ../
 cd ..
 cd ./PrologIntrf
-g++ -o main.o -c main.cpp -fPIC -O4 -std=c++17 -I/opt/homebrew/include -fpermissive
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Running on a Mac"
-    g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -L/opt/homebrew/lib -lm -lboost_system -lboost_filesystem -ldl
-    if [ $? -ne 0 ]; then
-       g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -L/opt/homebrew/lib -lm -lboost_filesystem -ldl
-    fi
+    `ls /opt/homebrew/bin/g++*` -o main.o -c main.cpp -fPIC -O4 -std=c++17 -I/opt/homebrew/include -fpermissive -fopenmp
+    `ls /opt/homebrew/bin/g++*` -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -L/opt/homebrew/lib -lm -ldl
 else
-    g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -lboost_system -lboost_filesystem -ldl -Wl,--allow-multiple-definition
-    if [ $? -ne 0 ]; then
-       g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -lboost_filesystem -ldl -Wl,--allow-multiple-definition
-    fi
+    g++ -o main.o -c main.cpp -fPIC -O4 -std=c++17 -fpermissive -fopenmp
+    g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -ldl -Wl,--allow-multiple-definition
 fi
 cp libPrologIntrf.so ../
 cp libPrologIntrf.dylib ../libPrologIntrf.so
