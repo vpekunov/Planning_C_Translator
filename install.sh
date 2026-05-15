@@ -49,11 +49,11 @@ cd ..
 cd ./PrologIntrf
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Running on a Mac"
-    `ls /opt/homebrew/bin/g++*` -o main.o -c main.cpp -fPIC -O4 -std=c++17 -I/opt/homebrew/include -fpermissive -fopenmp
-    `ls /opt/homebrew/bin/g++*` -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -L/opt/homebrew/lib -lm -ldl
+    `ls /opt/homebrew/bin/g++*` -o main.o -c main.cpp -fPIC -O4 -std=c++17 -fpermissive -fopenmp
+    `ls /opt/homebrew/bin/g++*` -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -ldl -fopenmp
 else
     g++ -o main.o -c main.cpp -fPIC -O4 -std=c++17 -fpermissive -fopenmp
-    g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -ldl -Wl,--allow-multiple-definition
+    g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -ldl -Wl,--allow-multiple-definition -fopenmp
 fi
 cp libPrologIntrf.so ../
 cp libPrologIntrf.dylib ../libPrologIntrf.so
