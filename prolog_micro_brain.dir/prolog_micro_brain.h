@@ -7,7 +7,6 @@
 #include <vector>
 #include <string>
 #include <set>
-#include <thread>
 #include <condition_variable>
 #include <mutex>
 #include <functional>
@@ -80,6 +79,7 @@ class generated_vars;
 class term;
 class list;
 class tthread;
+class pro_thread;
 class context;
 class tframe_item;
 
@@ -897,7 +897,7 @@ class tthread {
 	std::condition_variable_any cvf;
 	fastmux cvf_m;
 
-	std::thread * runner;
+	pro_thread * runner;
 public:
 	tthread(int _id, context* CTX);
 
@@ -937,6 +937,59 @@ public:
 		result.store(v);
 	}
 };
+
+#ifdef __APPLE__
+#include <stdexcept>
+class pro_thread {
+private:
+	pthread_t thread_id;
+	bool joined;
+public:
+	pro_thread(tthread * _this) {
+		pthread_attr_t attr;
+		size_t stack_size;
+		int err;
+
+		pthread_attr_init(&attr);
+		pthread_attr_getstacksize(&attr, &stack_size);
+
+		pthread_attr_setstacksize(&attr, 16 * stack_size);
+
+		joined = false;
+
+		if ((err = pthread_create(
+				&thread_id,
+				&attr,
+				[](void* arg) -> void* {
+					((tthread *)arg)->body();
+					return nullptr;
+				},
+				_this)) != 0) {
+			throw std::runtime_error("Thread creation error: " + std::to_string(err));
+		}
+
+		pthread_attr_destroy(&attr);
+	}
+
+	virtual bool joinable() {
+		return !joined;
+	}
+
+	virtual ~pro_thread() {
+		if (joinable()) join();
+	}
+
+	virtual void join() {
+		if (joinable()) {
+			joined = true;
+			pthread_join(thread_id, NULL);
+		}
+	}
+};
+#else
+#include <thread>
+typedef std::thread pro_thread;
+#endif
 
 class thread_pool {
 private:

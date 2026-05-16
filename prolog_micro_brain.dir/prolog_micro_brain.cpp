@@ -721,7 +721,7 @@ tthread::tthread(int _id, context* CTX) : CONTEXT(NULL) {
 
 	allow_stop.store(false);
 
-	runner = new std::thread(&tthread::body, this);
+	runner = new pro_thread(this);
 }
 
 void tthread::reinit(int _id, context* CTX) {
