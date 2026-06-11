@@ -155,11 +155,11 @@ typedef enum {
 	rsOk = 0, rsNonStrict, rsStrict
 } TResultType;
 
-const int flChecked = 0x01;
-const int flClassesGenerated = 0x02;
-const int flCallsGenerated = 0x04;
-const int flPredicatesGenerated = 0x40;
-const int flAllTemporary = flChecked | flClassesGenerated | flCallsGenerated | flPredicatesGenerated;
+inline const int flChecked = 0x01;
+inline const int flClassesGenerated = 0x02;
+inline const int flCallsGenerated = 0x04;
+inline const int flPredicatesGenerated = 0x40;
+inline const int flAllTemporary = flChecked | flClassesGenerated | flCallsGenerated | flPredicatesGenerated;
 
 bool ElementIs(TElementReg * Ref, const wstring & IsClsID);
 TElementReg * FindElementRegByID(const wstring & CID);

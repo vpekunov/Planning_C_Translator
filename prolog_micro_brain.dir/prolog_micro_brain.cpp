@@ -2,10 +2,10 @@
 
 // g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -fpermissive -fopenmp -std=c++17 -O4 -lm -ldl
 
-#define _CRT_SECURE_NO_WARNINGS
-#define _HAS_STD_BYTE 0
-
 #pragma comment(linker, "/STACK:1000000000")
+
+#include "prolog_micro_brain.h"
+#include "symbolic.h"
 
 #include <iostream>
 #include <iomanip>
@@ -30,10 +30,6 @@
 #include <time.h>
 #include <string.h>
 
-#include "elements.h"
-#include "prolog_micro_brain.h"
-#include "symbolic.h"
-
 #ifndef _MSC_VER
 HMODULE LoadLibrary(const wchar_t* _fname) {
 	return dlopen(wstring_to_utf8(_fname).c_str(), RTLD_LAZY);
@@ -52,50 +48,7 @@ void FreeLibrary(HMODULE handle) {
 #include <sched.h>
 #endif
 
-#ifndef _MSC_VER
-bool _isnan(double x) {
-	return std::isnan(x);
-}
-#endif
-
 const long long eli = 60;
-
-void reverse(char s[])
-{
-	int i, j;
-	char c;
-
-	for (i = 0, j = (int)strlen(s) - 1; i<j; i++, j--) {
-		c = s[i];
-		s[i] = s[j];
-		s[j] = c;
-	}
-}
-
-char * __ltoa(long long n, char s[], long long radix)
-{
-	long long i, sign;
-
-	if ((sign = n) < 0)  /* record sign */
-		n = -n;          /* make n positive */
-	i = 0;
-	do {       /* generate digits in reverse order */
-		s[i++] = (char)(n % radix) + '0';   /* get next digit */
-	} while ((n /= radix) > 0);     /* delete it */
-	if (sign < 0)
-		s[i++] = '-';
-	s[i] = '\0';
-	reverse(s);
-
-	return s;
-}
-
-#define __itoa __ltoa
-
-clock_rdtsc __clock() {
-	auto duration = std::chrono::system_clock().now().time_since_epoch();
-	return std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
-}
 
 const char * std_lib_pro = "prolog_micro_brain.pro";
 
@@ -497,197 +450,390 @@ string unescape(const string & s) {
 	return result;
 }
 
-class string_atomizer {
-	map<string, unsigned int> hash;
-	vector<const string*> table;
-	bool forking;
-	fastmux locker;
-public:
-	string_atomizer() { forking = false; }
-	void set_forking(bool v) { forking = v; }
-	unsigned int get_atom(const string& s) {
-		if (s.length() == 1)
-			return (unsigned char)s[0];
-		else if (s.length() == 2)
-			return (((unsigned char)s[1]) << 8) + (unsigned char)s[0];
+inline void* network::BUILD_FUNC(int NPP, int& NVARIANTS, bool Simplify, vector<string>* BEST, const vector<string> * OUT_VAR, set<std::string> * defined, char** Vars, vector<vector<VARIANT>*> _VARS, int layer, zVars * zvars, string* Scheme, SUM** Inputs) {
+
+	int n_input[64] = { 0 };
+	int n_output[64] = { 0 };
+	int w_base[64] = { 0 };
+	int b_base[64] = { 0 };
+
+	for (int nlayer = 0; nlayer < NL; nlayer++) {
+		n_input[nlayer] = nlayer == 0 ? NInputs : NN[nlayer - 1];
+		n_output[nlayer] = NN[nlayer];
+		if (nlayer > 0) {
+			w_base[nlayer] = w_base[nlayer - 1] + n_input[nlayer - 1] * n_output[nlayer - 1];
+			b_base[nlayer] = b_base[nlayer - 1] + n_output[nlayer - 1];
+		}
+	}
+
+	SUM* INPUTS[256] = { NULL };
+	SUM* OUTPUTS[256] = { NULL };
+
+	if (!Scheme) {
+		Scheme = new string("");
+	}
+
+	string* _Scheme = new string(*Scheme);
+
+	for (int i = 0; i < n_input[layer - 1]; i++)
+		if (layer == 1) {
+			MUL* INP = new MUL(1.0);
+			INP->Mul(i, 1.0);
+			INPUTS[i] = new SUM(INP);
+		}
+		else
+			INPUTS[i] = dynamic_cast<SUM*>(Inputs[i]->clone());
+
+	for (int i = 0; i < n_output[layer - 1]; i++) {
+		OUTPUTS[i] = new SUM(B[b_base[layer - 1] + i]);
+		for (int j = 0; j < n_input[layer - 1]; j++) {
+			SUM* KFI = new SUM(W[w_base[layer - 1] + j * n_output[layer - 1] + i]);
+			SUM* I = dynamic_cast<SUM*>(INPUTS[j]->clone());
+			KFI->Mul(I);
+			OUTPUTS[i]->Add(KFI);
+		}
+		OUTPUTS[i]->AccountSimilars();
+	}
+
+	int N = 1;
+	unsigned int variant[256] = { 0 };
+	for (int i = 0; i < n_output[layer - 1]; i++)
+		N *= (int)_VARS[b_base[layer - 1] + i]->size();
+	for (int i = 0; i < N && NVARIANTS; i++) {
+		int P = n_output[layer - 1];
+		if (layer == 1) {
+			*_Scheme = "|";
+			zVars::iterator it;
+			for (it = zvars->begin(); it != zvars->end(); it++)
+				delete it->second;
+			zvars->clear();
+		}
+		else
+			*_Scheme = *Scheme;
+
+		SUM* _OUTPUTS[256] = { NULL };
+		for (int j = 0; j < P; j++) {
+			int neuro_num = b_base[layer - 1] + j;
+			int sqrt_var = NInputs + neuro_num;
+			VARIANT& VAR = (*_VARS[b_base[layer - 1] + j])[variant[j]];
+			SUM* ARG = dynamic_cast<SUM*>(OUTPUTS[j]->clone());
+			char sqrt_name[4] = "z00";
+			sqrt_name[1] = neuro_num >= 10 ? '0' + neuro_num / 10 : '0';
+			sqrt_name[2] = '0' + neuro_num % 10;
+			string zvar(sqrt_name);
+			(*zvars)[zvar] = ARG->clone();
+			_OUTPUTS[j] = new SUM(0.0);
+			*_Scheme += kinds[VAR.kind];
+			*_Scheme += "|";
+			switch (VAR.kind) {
+			case vkPoly:
+			case vkPolyRev:
+				_OUTPUTS[j]->SETPOLY(ARG, VAR.N, VAR.KF, VAR.kind == vkPolyRev);
+				break;
+			case vkPolySqr:
+			case vkPolySqrRev:
+				_OUTPUTS[j]->SETPOLYSQR(ARG, sqrt_var, VAR.N, VAR.KF, VAR.kind == vkPolySqrRev);
+				break;
+			case vkLinear:
+				delete _OUTPUTS[j];
+				_OUTPUTS[j] = ARG;
+				_OUTPUTS[j]->AccountSimilars();
+			}
+		}
+
+		if (layer < NL) {
+			BUILD_FUNC(NPP, NVARIANTS, Simplify, BEST, OUT_VAR, defined, Vars, _VARS, layer + 1, zvars, _Scheme, _OUTPUTS);
+		}
 		else {
-			size_t L = s.length();
-			if (L <= 6) {
-				size_t l = 0;
-				size_t u = 0;
-				size_t d = 0;
-				for (size_t i = 0; i < L; i++)
-					if (i == u && (s[i] >= 0x40 && s[i] <= 0x5E))
-						u++;
-					else if (i == l && (s[i] >= 0x60 && s[i] <= 0x7E))
-						l++;
-					else if (i == d && (s[i] >= 0x20 && s[i] <= 0x3E))
-						d++;
-					else
-						break;
-				if (l == L) {
-					unsigned int R = 0;
-					for (int i = 0; i < L; i++) {
-						unsigned int code = s[i] - 0x60 + 1;
-						R <<= 5;
-						R |= code;
+			if (NVARIANTS > 0) {
+				NVARIANTS--;
+				int signature = rand();
+				for (int nout = 0; nout < NN[NL - 1]; nout++) {
+#ifdef TASKED
+					zVars* _zvars = new zVars();
+					_zvars->insert(zvars->begin(), zvars->end());
+					for (zVars::iterator z_it = _zvars->begin(); z_it != _zvars->end(); z_it++) {
+						z_it->second = z_it->second->clone();
 					}
-					return 0x80000000U + R;
-				}
-				else if (u == L) {
-					unsigned int R = 0;
-					for (int i = 0; i < L; i++) {
-						unsigned int code = s[i] - 0x40 + 1;
-						R <<= 5;
-						R |= code;
+#else
+					zVars* _zvars = zvars;
+#endif
+					string* SCHEME = new string(*_Scheme);
+					ITEM* _OUT = dynamic_cast<ITEM*>(_OUTPUTS[nout]->clone());
+#ifdef TASKED
+#pragma omp task if((int)(NPP*TASK_PART) > 1) untied
+					{
+#endif
+						int maxPows[256] = { 0 };
+						zVars::iterator _z_last = _zvars->end();
+						zVars::iterator z_it;
+						// The last layer is LINEAR. z[last] is not considered (= OUT)
+						_z_last--;
+						for (z_it = _zvars->begin(); z_it != _z_last; z_it++) {
+							do {
+								ITEM* z__S = SUBSTITUTE_SQRS(z_it->second, NInputs, Vars, *_zvars);
+								if (Simplify)
+									z_it->second = SIMPLIFY(z__S);
+								else
+									z_it->second = z__S;
+							} while (PRESENT_SQRS(z_it->second, NInputs));
+						}
+						string* Buf = new string("");
+						ITEM* _S = _OUT;
+						do {
+							ITEM* __S = SUBSTITUTE_SQRS(_S, NInputs, Vars, *_zvars);
+							if (Simplify)
+								_S = SIMPLIFY(__S);
+							else
+								_S = __S;
+						} while (PRESENT_SQRS(_S, NInputs));
+						string* SNET = new string("");
+						SNET->reserve(8 * 1024 * 1024);
+						_S->sprint(Vars, maxPows, SNET, true);
+						*SNET += "\n";
+						unsigned long long used_mask = 0;
+						_S->CHECK_VARS(used_mask, NInputs, Vars, *_zvars);
+						unsigned long long k = ONE64 << NInputs;
+						// printf("%s NET<%s> : %s\n", Buf->c_str(), SCHEME->c_str(), SNET.c_str());
+#pragma omp critical
+						{
+							// The last layer is LINEAR. z[last] is not considered (= OUT)
+							for (z_it = _zvars->begin(); z_it != _z_last; z_it++, k <<= 1)
+								if (used_mask & k) {
+									ITEM* z_S = z_it->second;
+									string* zBuf = new string("");
+									zBuf->reserve(8 * 1024 * 1024);
+									z_S->sprint(Vars, maxPows, zBuf, true);
+									if (defined->find(z_it->first) == defined->end()) {
+										defined->insert(z_it->first);
+									}
+									*Buf += z_it->first.c_str();
+									*Buf += " = nsqrt(&err,";
+									*Buf += *zBuf;
+									*Buf += ");";
+									*Buf += "\n";
+									delete zBuf;
+								}
+							char sign_buf[65];
+							string STR = __ltoa(signature, sign_buf, 10);
+							STR += " ";
+							STR += *Buf;
+							if (OUT_VAR->at(nout).length() == 0) {
+								STR += "NET<";
+								STR += *SCHEME;
+								STR += "> : ";
+							}
+							else {
+								if (defined->find(OUT_VAR->at(nout)) == defined->end()) {
+									defined->insert(OUT_VAR->at(nout));
+								}
+								STR += OUT_VAR->at(nout);
+								STR += " = ";
+							}
+							STR += *SNET;
+							STR += ";";
+
+							size_t L = STR.length();
+							vector<string>::iterator after = BEST->begin();
+							while (after != BEST->end() && after->length() < L) after++;
+							BEST->insert(after, STR);
+						}
+						delete _S;
+						delete Buf;
+						delete SNET;
+#ifdef TASKED
+						_z_last++;
+						for (z_it = _zvars->begin(); z_it != _z_last; z_it++) {
+							delete z_it->second;
+						}
+						delete _zvars;
+						delete SCHEME;
 					}
-					return 0x40000000U + R;
-				}
-				else if (d == L) {
-					unsigned int R = 0;
-					for (int i = 0; i < L; i++) {
-						unsigned int code = s[i] - 0x20 + 1;
-						R <<= 5;
-						R |= code;
-					}
-					return 0xC0000000U + R;
+#endif
 				}
 			}
+		}
 
-			if (forking) locker.lock();
-			unsigned int result = 0;
-			map<string, unsigned int>::iterator it = hash.find(s);
-			if (it != hash.end())
-				result = it->second;
+	variant[0]++;
+	for (int j = 0; j < P && variant[j] >= _VARS[b_base[layer - 1] + j]->size(); j++) {
+		variant[j] = 0;
+		if (j < P - 1) variant[j + 1]++;
+	}
+
+	for (int j = 0; j < P; j++)
+		delete _OUTPUTS[j];
+	}
+
+for (int i = 0; i < n_input[layer - 1]; i++)
+	delete INPUTS[i];
+for (int i = 0; i < n_output[layer - 1]; i++)
+	delete OUTPUTS[i];
+
+if (layer == 1 && !Scheme)
+delete Scheme;
+
+delete _Scheme;
+
+if (layer == 1) {
+	zVars::iterator it;
+	for (it = zvars->begin(); it != zvars->end(); it++)
+		delete it->second;
+	zvars->clear();
+}
+
+return NULL;
+}
+
+vector<string> network::ANALYZE(int NPP, int maxN, int& NVARIANTS, const vector<std::string> * OUT_VAR, set<std::string> * defined, bool Simplify, long double* SMIN, long double* SMAX, int* SFREQ, vector<long double> XX[], vector<long double> YY[]) {
+
+	double start_time = omp_get_wtime();
+
+	vector<vector<VARIANT>*> _VARS(NB);
+
+	const long double eps_stand = 1E-2;
+	const long double eps_min = 1E-3;
+
+	int nk[2] = { 0, 0 };
+	int ns[n_kinds - 1] = { 0, 0, 1, 1 };
+	long double tols[2] = { eps_stand, eps_stand };
+	int base = 0;
+
+	for (int layer = 0; layer < NL; base += NN[layer++]) {
+		if (layer > 0 && layer < NL - 1) {
+			int n = nk[0] + nk[1];
+			for (int i = 0; i < 2; i++)
+				tols[i] = eps_min + (4.0 - 4.0 * nk[i] / n) * (eps_stand - eps_min);
+			printf("%i LAYER TOLS: DIR(%Lf) && REV(%Lf)\n", layer + 1, tols[0], tols[1]);
+		}
+#pragma omp parallel for schedule(guided) num_threads(NPP)
+		for (int k = 0; k < NN[layer]; k++) {
+			int j = base + k;
+			int N = (int)XX[j].size();
+			vector<VARIANT>* VARS = new vector<VARIANT>();
+			double errw[n_kinds] = { 1E300, 1E300, 1E300, 1E300, 1E300 };
+			long double* bestKF[n_kinds] = { NULL, NULL, NULL, NULL, NULL };
+			int bestN[n_kinds] = { -1, -1, -1, -1, -1 };
+			long double min_errw = 1E300;
+			int kind = -1;
+
+			if (j != NB - 1) {
+				long double DIAP = SMAX[j] - SMIN[j];
+				long double d = fabs(DIAP) < 1E-17 ? 0.0 : (_div - 1) / DIAP;
+				int NP = (int)XX[j].size();
+				for (int i = 0; i < NP; i++)
+					SFREQ[j * _div + (int)((XX[j][i] - SMIN[j]) * d)]++;
+				vector<long double> W(NP);
+				for (int i = 0; i < NP; i++)
+					W[i] = SFREQ[j * _div + (int)((XX[j][i] - SMIN[j]) * d)];
+				vector<long double> XXSQR(N);
+				for (int i = 0; i < N; i++)
+					XXSQR[i] = sqrt(XX[j][i]);
+				vector<long double> XXREV(N);
+				for (int i = 0; i < N; i++)
+					XXREV[i] = 1 / XX[j][i];
+				vector<long double> XXSQRREV(N);
+				for (int i = 0; i < N; i++)
+					XXSQRREV[i] = 1 / sqrt(XX[j][i]);
+				vector<long double>* XXX[n_kinds] = { &XX[j], &XXSQR, &XXREV, &XXSQRREV, NULL };
+				for (int X = 0; X < n_kinds - 1; X++) {
+					for (int n = 2; n <= maxN; n++) {
+						double cur_err;
+						long double* KF = MNK_of_X(n, W, *XXX[X], YY[j], cur_err);
+						if (errw[X] > 0.01 && cur_err < 0.9 * errw[X]) {
+							delete[] bestKF[X];
+							bestKF[X] = KF;
+							bestN[X] = n;
+							errw[X] = cur_err;
+						}
+						else
+							delete[] KF;
+					}
+				}
+
+				for (int X = 0; X < n_kinds - 1; X++)
+					if (errw[X] < min_errw) {
+						min_errw = errw[X];
+						kind = X;
+					}
+			}
 			else {
-				if (table.size() == table.capacity()) {
-					table.reserve(table.size() + 2000);
+				kind = vkLinear;
+				bestN[kind] = 0;
+				errw[kind] = 0.0;
+				min_errw = 0.0;
+			}
+			VARIANT V = { kind, bestN[kind], bestKF[kind] };
+			VARS->push_back(V);
+			if (layer == 0)
+				nk[ns[kind]]++;
+			if (layer < NL - 1) {
+				for (int X = 0; X < n_kinds - 1; X++)
+					if (X != kind)
+						if (fabs(errw[X] - errw[kind]) < tols[ns[X]]) {
+							VARIANT V1 = { X, bestN[X], bestKF[X] };
+							VARS->push_back(V1);
+							if (layer == 0)
+								nk[ns[X]]++;
+						}
+			}
+
+#pragma omp critical
+			{
+				printf("LAYER %i : NEURON [%i] has range [%lf - %lf] described as { ",
+					layer + 1, k, (double)SMIN[j], (double)SMAX[j]
+				);
+				for (unsigned int k = 0; k < VARS->size(); k++) {
+					printf("%s%i[", kinds[(*VARS)[k].kind], (*VARS)[k].N);
+					for (int i = 0; i < (*VARS)[k].N; i++)
+						printf("%lf%s", (double)(*VARS)[k].KF[i], i < (*VARS)[k].N - 1 ? "," : "");
+					printf("]");
+					printf("%s", k < VARS->size() - 1 ? " , " : " }\n");
 				}
-				pair<map<string, unsigned int>::iterator, bool> itt =
-					hash.insert(pair<string, unsigned int>(s, 0));
-				table.push_back(&itt.first->first);
-				itt.first->second = (unsigned int)(65536 + table.size() - 1);
-				result = itt.first->second;
+				_VARS[j] = VARS;
 			}
-			if (forking) locker.unlock();
-			return result;
+			fflush(stdout);
 		}
 	}
-	const string get_string(unsigned int atom) {
-		if (atom < 256) {
-			char buf[2] = { (char)atom, 0 };
-			return string(buf);
-		}
-		else if (atom < 65536) {
-			char buf[3] = { (char)(atom & 0xFF), (char)(atom >> 8), 0 };
-			return string(buf);
-		}
-		else if (atom >= 0x40000000U) {
-			char C[7];
-			char base = 0x20;
-			int L = 6;
-			C[L] = 0;
-			if ((atom & 0xC0000000U) == 0x80000000U)
-				base = 0x60;
-			else if ((atom & 0xC0000000U) == 0x40000000U)
-				base = 0x40;
-			atom &= 0x3FFFFFFFU;
-			while (atom) {
-				unsigned int code = atom & 0x1F;
-				C[--L] = code - 1 + base;
-				atom >>= 5;
+
+	char* Vars[256];
+	for (int i = 0; i < NInputs + NB; i++) {
+		Vars[i] = new char[8];
+		Vars[i][0] = i < NInputs ? 'a' + i : 'z';
+		Vars[i][1] = i < NInputs ? 0x0 : '0' + (i - NInputs) / 10;
+		Vars[i][2] = i < NInputs ? 0x0 : '0' + (i - NInputs) % 10;
+		Vars[i][3] = 0x0;
+	}
+	zVars zvars;
+	vector<string> BEST;
+#pragma omp parallel if((int)(NPP*TASK_PART) > 1) num_threads(max(1,(int)(NPP*TASK_PART)))
+	{
+#pragma omp single
+		{
+			BUILD_FUNC(NPP, NVARIANTS, Simplify, &BEST, OUT_VAR, defined, Vars, _VARS, 1, &zvars);
+#ifdef TASKED
+			if ((int)(NPP * TASK_PART) > 1) {
+#pragma omp taskwait
 			}
-			return string(&C[L]);
-		}
-		else {
-			if (forking) locker.lock();
-			string result = *table[atom - 65536];
-			if (forking) locker.unlock();
-			return result;
+#endif
 		}
 	}
-};
-
-string_atomizer atomizer;
-
-frame_item::~frame_item() {
-	int it = 0;
-	while (it < vars.size()) {
-		if (vars[it].ptr)
-			vars[it].ptr->free();
-		it++;
+	for (int i = 0; i < NInputs + 1; i++) {
+		delete[] Vars[i];
 	}
-	if (names)
-		free(names);
-	if (deleted)
-		free(deleted);
-}
 
-const string frame_item::atn(int i) {
-	return atomizer.get_string(get_name_code(*vars[i]._name));
-}
-
-void frame_item::register_facts(bool _locked, context* CTX, std::set<unsigned long long>& names) {
-	bool locked = !_locked && lock();
-	std::unique_lock<fastmux> lock(*CTX->DBLOCK);
-	map<unsigned long long, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
-	while (it != CTX->DBJournal->end()) {
-		unsigned long long fact = it->first;
-		register_fact_group(locked, CTX, fact, it->second);
-		names.insert(fact);
-		it++;
+	for (unsigned int j = 0; j < _VARS.size(); j++) {
+		for (unsigned int X = 0; X < _VARS[j]->size(); X++)
+			delete[](*_VARS[j])[X].KF;
+		delete _VARS[j];
+		_VARS[j] = NULL;
 	}
-	if (locked) lock.unlock();
-}
+	fflush(stdout);
 
-void frame_item::unregister_facts(bool _locked, context* CTX) {
-	bool locked = !_locked && lock();
-	std::unique_lock<fastmux> lock(*CTX->DBLOCK);
-	map<unsigned long long, std::atomic<journal*>>::iterator it = CTX->DBJournal->begin();
-	while (it != CTX->DBJournal->end()) {
-		unsigned long long fact = it->first;
-		unregister_fact_group(locked, CTX, fact);
-		it++;
-	}
-	if (locked) lock.unlock();
-}
+	double time = omp_get_wtime() - start_time;
 
-tframe_item::~tframe_item() {
-	lock();
-	if (info_vars != micro_info)
-		free(info_vars);
-	unlock();
-}
+	printf("ANALYZE Time = %lf sec.\n", time);
 
-tframe_item* frame_item::tcopy(context* CTX, interpreter* INTRP, bool import_globs) {
-	tframe_item* result = new tframe_item(names_capacity, (unsigned int)vars.size()+5);
-	result->names_length = names_length;
-	memmove(result->names, names, names_length * sizeof(char));
-	long long d = &result->names[0] - &names[0];
-	result->vars = vars;
-	for (mapper& m : result->vars) {
-		m.ptr = m.ptr ? m.ptr->const_copy(CTX, this) : NULL;
-		m._name += d;
-	}
-	memset(result->info_vars, 0, vars.size() * sizeof(tframe_item::var_info));
-	if (CTX && import_globs /* && (CTX->THR || CTX->forked()) */) {
-		bool locked = INTRP->GLOCK.try_lock();
-		std::map<std::string, value*>::iterator it = INTRP->GVars.begin();
-		while (it != INTRP->GVars.end()) {
-			if (it->first.length() && it->first[0] != '&') {
-				string new_name = it->first;
-				new_name.insert(0, 1, '*');
-				bool use_local_copy = false;
-				// find(new_name.c_str(), use_local_copy);
-				// if (!use_local_copy)
-				result->set(true, CTX, construct_var_name(0, atomizer.get_atom(new_name), '*'), it->second);
-			}
-			it++;
-		}
-		if (locked) INTRP->GLOCK.unlock();
-	}
-	memset(result->info_vars, 0, vars.size() * sizeof(tframe_item::var_info));
-	return result;
+	return BEST;
 }
 
 tthread* thread_pool::get_thread(int _id, context* CTX) {
@@ -793,2447 +939,6 @@ void tthread::body() {
 			cv.wait(lk);
 		}
 	} while (!allow_stop);
-}
-
-void frame_item::register_fact_group(bool _locked, context* CTX, unsigned long long& fact, journal* J) {
-	bool found = false;
-	string _fact = atomizer.get_string(get_name_code(fact));
-	_fact.insert(0, 1, '!');
-	fact = construct_var_name(0, atomizer.get_atom(_fact), '!');
-	int it = find(fact, found);
-	if (!found) {
-		set(_locked, CTX, fact, NULL);
-	}
-}
-
-void frame_item::unregister_fact_group(bool _locked, context* CTX, unsigned long long& fact) {
-	bool found = false;
-	string _fact = atomizer.get_string(get_name_code(fact));
-	_fact.insert(0, 1, '!');
-	fact = construct_var_name(0, atomizer.get_atom(_fact), '!');
-	int it = find(fact, found);
-	if (found)
-		unset(_locked, CTX, fact);
-}
-
-void tframe_item::register_fact_group(bool _locked, context* CTX, unsigned long long& fact, journal* J) {
-	bool locked = !_locked && mutex.try_lock();
-	bool found = false;
-	string _fact = atomizer.get_string(get_name_code(fact));
-	_fact.insert(0, 1, '!');
-	fact = construct_var_name(0, atomizer.get_atom(_fact), '!');
-	int it = find(fact, found);
-	if (!found) {
-		set(locked, CTX, fact, NULL);
-		it = find(fact, found);
-	}
-	if (!info_vars[it].first_writes || info_vars[it].first_writes > J->first_write) {
-		info_vars[it].first_writes = J->first_write;
-		if (!info_vars[it].last_writes)
-			info_vars[it].last_writes = info_vars[it].first_writes;
-	}
-	if (!info_vars[it].last_writes || info_vars[it].last_writes < J->last_write) {
-		info_vars[it].last_writes = J->last_write;
-		if (!info_vars[it].first_writes)
-			info_vars[it].first_writes = info_vars[it].last_writes;
-	}
-	if (!info_vars[it].first_reads || info_vars[it].first_reads > J->first_read) {
-		info_vars[it].first_reads = J->first_read;
-		if (!info_vars[it].last_reads)
-			info_vars[it].last_reads = info_vars[it].first_reads;
-	}
-	if (!info_vars[it].last_reads || info_vars[it].last_reads < J->last_read) {
-		info_vars[it].last_reads = J->last_read;
-		if (!info_vars[it].first_reads)
-			info_vars[it].first_reads = info_vars[it].last_reads;
-	}
-	if (locked) unlock();
-}
-
-void tframe_item::unregister_fact_group(bool _locked, context* CTX, unsigned long long& fact) {
-	bool locked = !_locked && mutex.try_lock();
-	frame_item::unregister_fact_group(locked, CTX, fact);
-	if (locked) unlock();
-}
-
-class any : public value {
-public:
-	any() : value() { }
-
-	virtual void escape_vars(context * CTX, frame_item * ff) { }
-
-	virtual value * fill(context * CTX, frame_item * vars) { return this; }
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) { return new any(); }
-	virtual bool unify(context * CTX, frame_item * ff, value * from) {
-		return true;
-	}
-	virtual bool defined() {
-		return false;
-	};
-
-	virtual string to_str(bool simple = false) { return "_"; }
-};
-
-class var : public value {
-	unsigned long long name;
-public:
-	var(unsigned int _name) : value() {
-		string content = atomizer.get_string(_name);
-		if (content.size())
-			name = construct_var_name(0, _name, content[0]);
-		else
-			name = construct_var_name(0, _name, (char)0);
-	}
-
-	var(unsigned long long _name, int) : value() {
-		name = _name;
-	}
-
-	virtual void escape_vars(context * CTX, frame_item * ff) {
-		value * v = ff->get(false, CTX, name);
-		if (v) {
-			v->escape_vars(CTX, ff);
-		}
-		ff->escape(name);
-	}
-
-	virtual value * fill(context * CTX, frame_item * vars) {
-		value * v = vars->get(false, CTX, name);
-		if (v)
-			return v->const_copy(CTX, vars);
-		else {
-			return this;
-		}
-	}
-
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
-		value * v = f->get(false, CTX, name, unwind);
-		if (v)
-			return v->const_copy(CTX, f);
-		else
-			return new var(name, 0);
-	}
-
-	virtual void write(basic_ostream<char> * outs, bool simple = false) {
-		(*outs) << atomizer.get_string(get_name_code(name));
-	}
-
-	virtual const string get_name() { return atomizer.get_string(get_name_code(name)); }
-
-	virtual const unsigned long long get_id() {
-		return name;
-	}
-
-	virtual bool unify(context * CTX, frame_item * ff, value * from) {
-		if (dynamic_cast<var *>(from) || dynamic_cast<any *>(from))
-			return true;
-		value * v = ff->get(false, CTX, name);
-		if (v)
-			return v->unify(CTX, ff, from);
-		else
-			ff->set(false, CTX, name, from);
-		return true;
-	}
-	
-	virtual bool defined() {
-		return false;
-	};
-
-	virtual string to_str(bool simple = false) { return /* "__VAR__" + */ get_name(); }
-};
-
-class int_number : public value {
-	friend class float_number;
-private:
-	long long v;
-public:
-	int_number(long long _v) : value(), v(_v) { }
-
-	virtual void escape_vars(context * CTX, frame_item * ff) {	}
-
-	virtual value * fill(context * CTX, frame_item * vars) { return this; }
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) { return new int_number(v); }
-	virtual bool unify(context * CTX, frame_item * ff, value * from);
-	virtual bool defined() {
-		return true;
-	};
-
-	virtual double get_value() { use(); return 1.0*v; }
-
-	virtual string to_str(bool simple = false) {
-		char buf[65] = { 0 };
-
-		return string(__ltoa(v, buf, 10));
-	}
-
-	void inc() { v++; }
-	void dec() { v--; }
-};
-
-class float_number : public value {
-	friend class int_number;
-private:
-	double v;
-public:
-	float_number(double _v) : value(), v(_v) { }
-
-	virtual void escape_vars(context * CTX, frame_item * ff) {	}
-
-	virtual value * fill(context * CTX, frame_item * vars) { return this; }
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) { return new float_number(v); }
-	virtual bool unify(context * CTX, frame_item * ff, value * from) {
-		if (dynamic_cast<any *>(from)) return true;
-		if (dynamic_cast<var *>(from)) { ff->set(false, CTX, ((var *)from)->get_id(), this); return true; }
-		if (dynamic_cast<float_number *>(from))
-			return v == ((float_number *)from)->v;
-		else if (dynamic_cast<int_number *>(from))
-			return v == ((int_number *)from)->v;
-		else
-			return false;
-	}
-	virtual bool defined() {
-		return true;
-	};
-
-	virtual double get_value() { use();  return v; }
-
-	virtual string to_str(bool simple = false) {
-		char buf[65];
-
-		sprintf(buf, "%lf", v);
-		return string(buf);
-	}
-
-	void inc() { v++; }
-	void dec() { v--; }
-};
-
-bool int_number::unify(context * CTX, frame_item * ff, value * from) {
-	if (dynamic_cast<any *>(from)) return true;
-	if (dynamic_cast<var *>(from)) { ff->set(false, CTX, ((var *)from)->get_id(), this); return true; }
-	if (dynamic_cast<int_number *>(from))
-		return v == ((int_number *)from)->v;
-	else if (dynamic_cast<float_number *>(from))
-		return v == ((float_number *)from)->v;
-	else
-		return false;
-}
-
-class term : public value {
-protected:
-	unsigned int name;
-	vector<value *> args;
-	signed char cached_defined;
-public:
-	term(const string& _name, const int init_refs = 1) : value() {
-		this->refs = init_refs;
-		name = atomizer.get_atom(_name);
-		cached_defined = 1;
-	}
-
-	term(const term & src) {
-		this->refs = 1;
-		this->name = src.name;
-		this->args = vector<value *>();
-		cached_defined = 1;
-	}
-
-	virtual ~term() { }
-
-	virtual void change_name(const string & _name) {
-		name = atomizer.get_atom(_name);
-	}
-
-	virtual void free() {
-		refs--;
-		for (int i = 0; i < args.size(); i++)
-			if (args[i]->get_refs() >= refs)
-				args[i]->free();
-		if (refs == 0)
-			delete this;
-	}
-
-	virtual void use() {
-		refs++;
-		for (int i = 0; i < args.size(); i++)
-			args[i]->use();
-	}
-
-	virtual void escape_vars(context * CTX, frame_item * ff) {
-		for (int i = 0; i < args.size(); i++)
-			args[i]->escape_vars(CTX, ff);
-	}
-
-	virtual const string get_name() { return atomizer.get_string(name); }
-
-	virtual const unsigned int get_id() {
-		return name;
-	}
-
-	virtual const vector<value *> & get_args() { return args; }
-
-	virtual value * fill(context * CTX, frame_item * vars) {
-		cached_defined = 1;
-		for (int i = 0; i < args.size(); i++) {
-			value * old = args[i];
-			args[i] = args[i]->fill(CTX, vars);
-			if (args[i] != old) old->free();
-			if (cached_defined && args[i] && !args[i]->defined())
-				cached_defined = 0;
-		}
-		return this;
-	}
-
-	virtual void add_arg(context * CTX, frame_item * f, value * v, int unwind = 0) {
-		args.push_back(v->const_copy(CTX, f, unwind));
-		if (cached_defined && !args[args.size() - 1]->defined())
-			cached_defined = 0;
-	}
-
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
-		term * result = new term(*this);
-		for (int i = 0; i < args.size(); i++)
-			result->add_arg(CTX, f, args[i], unwind);
-		return result;
-	}
-
-	virtual bool unify(context * CTX, frame_item * ff, value * from) {
-		cached_defined = -1;
-		if (dynamic_cast<any *>(from)) return true;
-		if (dynamic_cast<var *>(from)) { ff->set(false, CTX, ((var *)from)->get_id(), this); return true; }
-		if (dynamic_cast<term *>(from)) {
-			term * v2 = ((term *)from);
-			if (name != v2->name || args.size() != v2->args.size())
-				return false;
-			for (int i = 0; i < args.size(); i++)
-				if (!args[i]->unify(CTX, ff, v2->args[i]))
-					return false;
-			return true;
-		}
-		else
-			return false;
-	}
-	virtual bool defined() {
-		if (cached_defined >= 0)
-			return cached_defined == 1;
-		cached_defined = 1;
-		for (int i = 0; i < args.size(); i++)
-			if (!args[i]->defined()) {
-				cached_defined = 0;
-				return false;
-			}
-		return true;
-	};
-
-	virtual string to_hex(char SEP) {
-		string NAME = atomizer.get_string(name);
-		string result;
-		for (unsigned char C : NAME) {
-			if (C == (unsigned char)SEP)
-				result += SEP;
-			else {
-				int h = C >> 4;
-				int l = C & 0x0F;
-				if (h > 9) result += (char)('A' + h - 10);
-				else result += (char)('0' + h);
-				if (l > 9) result += (char)('A' + l - 10);
-				else result += (char)('0' + l);
-			}
-		}
-		return result;
-	}
-
-	virtual string from_hex(char SEP) {
-		string NAME = atomizer.get_string(name);
-		string result;
-
-		auto HexDigit = [](char H)->unsigned int {
-			if (H >= '0' && H <= '9')
-				return H - '0';
-			else if (H >= 'A' && H <= 'F')
-				return H - 'A' + 10;
-			else if (H >= 'a' && H <= 'f')
-				return H - 'a' + 10;
-			else
-				return 0;
-		};
-
-		for (size_t i = 0; i < NAME.length(); i++) {
-			if (NAME[i] == SEP)
-				result += SEP;
-			else if (i + 1 < NAME.length()) {
-				result += (char)(HexDigit(NAME[i]) * 16 + HexDigit(NAME[i + 1]));
-				i++;
-			}
-			else {
-				cout << "from_hex ERROR : '" + NAME + "' can't parse!" << endl;
-				exit(1343);
-			}
-		}
-		return result;
-	}
-
-	virtual string to_str(bool simple = false) {
-		string result = atomizer.get_string(name);
-		if (args.size() > 0) {
-			result += "(";
-			for (int i = 0; i < args.size() - 1; i++) {
-				result += args[i]->to_str(simple);
-				result += ",";
-			}
-			result += args[args.size() - 1]->to_str(simple);
-			result += ")";
-		}
-		return result;
-	}
-
-	virtual string escape_specials(const string & src, bool double_slashes = true) {
-		string result;
-
-		int i = 0;
-		if (double_slashes)
-			while (i < src.length()) {
-				switch (src[i]) {
-					case '\r': result += "\\\\r"; break;
-					case '\n': result += "\\\\n"; break;
-					case '\t': result += "\\\\t"; break;
-					case '\0': result += "\\\\0"; break;
-					default: result += src[i];
-				}
-				i++;
-			}
-		else
-			while (i < src.length()) {
-				switch (src[i]) {
-				case '\r': result += "\\r"; break;
-				case '\n': result += "\\n"; break;
-				case '\t': result += "\\t"; break;
-				case '\0': result += "\\0"; break;
-				default: result += src[i];
-				}
-				i++;
-			}
-
-		return result;
-	}
-
-	virtual string export_str(bool simple = false, bool double_slashes = true) {
-		string result = escape_specials(atomizer.get_string(name), double_slashes);
-		if (result.length() == 0)
-			result = "''";
-		else {
-			bool valid_atom = islower(result[0]);
-			for (int i = 1; valid_atom && i < result.length(); i++)
-				if (!isalnum(result[i]) && result[i] != '_')
-					valid_atom = false;
-			if (!valid_atom) {
-				char buf[16384];
-				sprintf(buf, "'%s'", result.c_str());
-				result = buf;
-			}
-		}
-		if (args.size() > 0) {
-			result += "(";
-			for (int i = 0; i < args.size() - 1; i++) {
-				result += args[i]->export_str(simple, double_slashes);
-				result += ",";
-			}
-			result += args[args.size() - 1]->export_str(simple, double_slashes);
-			result += ")";
-		}
-		return result;
-	}
-};
-
-class network {
-private:
-	int NInputs;
-	std::string FNAME, DAT_FILE_NAME;
-	int NRows = 0;
-	int NCols = 0;
-	int NCC[512];
-	int NL;
-	int NN[1024];
-	long double best_err;
-
-	long double YN[1024][1024] = { 0.0 };
-
-	long double MMIN[512];
-	long double MMAX[512];
-	long double mmin[512];
-	long double mmax[512];
-
-	long double NUMIN, numin;
-	long double NUMAX, numax;
-
-	long double d[512];
-	long double nud;
-
-	int NW = 0;
-	int NB = 0;
-
-	long double* W = NULL;
-	long double* B = NULL;
-
-	long double tempX[512];
-
-	long double* X[512] = { NULL };
-	long double* Y = NULL;
-	long double* YS = NULL;
-	long double* ERR = NULL;
-
-	typedef struct {
-		int kind;
-		int N;
-		long double* KF;
-	} VARIANT;
-
-	const int HOW_MANY = 5;
-
-	const int _div = 20;
-
-	const int maxN = 4;
-
-	const static int n_kinds = 5;
-
-	typedef enum { vkPoly = 0, vkPolySqr = 1, vkPolyRev = 2, vkPolySqrRev = 3, vkLinear = 4 } variant_kinds;
-
-	const char* kinds[n_kinds] = { "POLY", "POLYSQR", "POLYREV", "POLYSQRREV", "LIN" };
-
-public:
-	network(const std::string& FName, const std::string& content) {
-		FNAME = FName;
-		istringstream NET(content);
-		std::string Buf;
-		while (!NET.eof() && (Buf.size() < 3 || Buf[0] != '-' || Buf[1] != '-' || Buf[2] != '-'))
-			getline(NET, Buf);
-
-		if (NET.eof()) {
-			printf("No NET data in the NET FILE\n");
-			exit(-11);
-		}
-
-		NET >> NInputs;
-		size_t cpos1 = FNAME.rfind('\\');
-		size_t cpos2 = FNAME.rfind('/');
-		do {
-			getline(NET, DAT_FILE_NAME);
-			if (DAT_FILE_NAME.length()) {
-				if (DAT_FILE_NAME[DAT_FILE_NAME.length() - 1] == '\n')
-					DAT_FILE_NAME.resize(DAT_FILE_NAME.length() - 1);
-				if (cpos1 != string::npos || cpos2 != string::npos) {
-					size_t pos1 = DAT_FILE_NAME.rfind('\\');
-					size_t pos2 = DAT_FILE_NAME.rfind('/');
-					if (pos1 == string::npos && pos2 == string::npos) {
-						size_t pos = cpos1 == string::npos ? cpos2 : (cpos2 == string::npos ? cpos1 : max(cpos1, cpos2));
-						DAT_FILE_NAME = FNAME.substr(0, pos + 1) + DAT_FILE_NAME;
-					}
-				}
-			}
-		} while (!NET.eof() && DAT_FILE_NAME.length() == 0);
-		if (NET.eof()) {
-			printf("No DATA FILE NAME in the NET FILE\n");
-			exit(-12);
-		}
-
-		NET >> NRows;
-		NET >> NCols;
-
-		for (int i = 0; i <= NInputs; i++)
-			NET >> NCC[i];
-
-		string BUF;
-		getline(NET, BUF);
-		getline(NET, BUF);
-		getline(NET, BUF);
-		istringstream SZ(BUF);
-		int number;
-		NL = 0;
-		while (SZ >> number) {
-			NN[NL++] = number;
-		}
-
-		if (NL == 0 || NN[NL - 1] != 1) {
-			printf("In this version ONLY 1-output nets are processed\n");
-			exit(-13);
-		}
-
-		for (int i = 0; i < NL; i++) {
-			int NP = i == 0 ? NInputs : NN[i - 1];
-			NW += NP * NN[i];
-			NB += NN[i];
-		}
-
-		W = new long double[NW];
-		B = new long double[NB];
-
-		YS = new long double[NRows];
-		ERR = new long double[NRows];
-
-		NET >> best_err;
-
-		for (int i = 0; i < NInputs; i++)
-			NET >> MMIN[i];
-		for (int i = 0; i < NInputs; i++)
-			NET >> MMAX[i];
-		for (int i = 0; i < NInputs; i++)
-			NET >> mmin[i];
-		for (int i = 0; i < NInputs; i++)
-			NET >> mmax[i];
-		NET >> NUMIN;
-		NET >> NUMAX;
-		NET >> numin;
-		NET >> numax;
-
-		for (int p = 0; p < NInputs; p++) {
-			d[p] = MMAX[p] == MMIN[p] ? 1.0 : (mmax[p] - mmin[p]) / (MMAX[p] - MMIN[p]);
-		}
-
-		nud = NUMAX == NUMIN ? 1.0 : (numax - numin) / (NUMAX - NUMIN);
-
-		int ptr = 0;
-		for (int layer = 0; layer < NL; layer++) {
-			int NP = layer == 0 ? NInputs : NN[layer - 1];
-			for (int i = 0; i < NP; i++)
-				for (int j = 0; j < NN[layer]; j++, ptr++)
-					NET >> W[ptr];
-		}
-		ptr = 0;
-		for (int layer = 0; layer < NL; layer++)
-			for (int j = 0; j < NN[layer]; j++, ptr++)
-				NET >> B[ptr];
-	}
-
-	virtual const std::string & fname() { return FNAME; }
-
-	virtual void setX(unsigned int i, long double v) {
-		if (v < MMIN[i]) v = MMIN[i];
-		if (v > MMAX[i]) v = MMAX[i];
-		tempX[i] = mmin[i] + (v - MMIN[i]) * d[i];
-	}
-	
-	virtual unsigned int nX() { return NInputs; }
-
-	virtual long double sim() { return NUMIN + (NET(-1) - numin) / nud; }
-
-	virtual bool load_data() {
-		for (int i = 0; i < NInputs; i++)
-			X[i] = new long double[NRows];
-
-		Y = new long double[NRows];
-
-		ifstream DAT(DAT_FILE_NAME);
-		if (DAT) {
-			for (int i = 0; i < NRows; i++) {
-				long double VALS[1024 * 32];
-				for (int j = 0; j < NCols; j++)
-					DAT >> VALS[j];
-				for (int j = 0; j < NInputs; j++)
-					X[j][i] = mmin[j] + (VALS[NCC[j]] - MMIN[j]) * d[j];
-				Y[i] = numin + (VALS[NCC[NInputs]] - NUMIN) * nud;
-			}
-			DAT.close();
-		}
-		else {
-			printf("DAT file '%s' not found!\n", DAT_FILE_NAME.c_str());
-			exit(-17);
-		}
-
-		return NRows*NCols > 50000;
-	}
-
-	virtual void unload_data() {
-		delete[] Y;
-
-		for (int i = 0; i < NInputs; i++) {
-			delete[] X[i];
-			X[i] = NULL;
-		}
-		Y = NULL;
-	}
-
-	inline long double S(long double s) {
-		return 1.0 / (1.0 + exp(-s));
-	};
-
-	inline long double NET(int i, long double* SMIN = NULL, long double* SMAX = NULL,
-		vector<long double>* XX = NULL, vector<long double>* YY = NULL) {
-		for (int i = 0; i < NL - 1; i++)
-			memset(&YN[i], 0, NN[i] * sizeof(long double));
-		int ptr = 0;
-		if (i >= 0)
-			for (int j = 0; j < NInputs; j++)
-				for (int k = 0; k < NN[0]; k++, ptr++)
-					YN[0][k] += W[ptr] * X[j][i];
-		else
-			for (int j = 0; j < NInputs; j++)
-				for (int k = 0; k < NN[0]; k++, ptr++)
-					YN[0][k] += W[ptr] * tempX[j];
-		int ptr1 = 0;
-		for (int k = 0; k < NN[0]; k++, ptr1++) {
-			YN[0][k] += B[ptr1];
-			if (SMIN && SMAX) {
-				if (YN[0][k] < SMIN[k]) SMIN[k] = YN[0][k];
-				if (YN[0][k] > SMAX[k]) SMAX[k] = YN[0][k];
-			}
-			if (XX) XX[k].push_back(YN[0][k]);
-			YN[0][k] = S(YN[0][k]);
-			if (YY) YY[k].push_back(YN[0][k]);
-		}
-
-		for (int layer = 1; layer < NL - 1; layer++) {
-			for (int j = 0; j < NN[layer - 1]; j++)
-				for (int k = 0; k < NN[layer]; k++, ptr++)
-					YN[layer][k] += W[ptr] * YN[layer - 1][j];
-			for (int k = 0; k < NN[layer]; k++, ptr1++) {
-				YN[layer][k] += B[ptr1];
-				if (SMIN && SMAX) {
-					if (YN[layer][k] < SMIN[ptr1]) SMIN[ptr1] = YN[layer][k];
-					if (YN[layer][k] > SMAX[ptr1]) SMAX[ptr1] = YN[layer][k];
-				}
-				if (XX) XX[ptr1].push_back(YN[layer][k]);
-				YN[layer][k] = S(YN[layer][k]);
-				if (YY) YY[ptr1].push_back(YN[layer][k]);
-			}
-		}
-
-		long double res = B[ptr1];
-		for (int k = 0; k < NN[NL - 2]; k++, ptr++) {
-			res += YN[NL - 2][k] * W[ptr];
-		}
-		if (XX) XX[ptr1].push_back(res);
-		if (YY) YY[ptr1].push_back(res);
-
-		if (SMIN && SMAX) {
-			int idx = 0;
-			for (int i = 0; i < NL - 1; i++)
-				idx += NN[i];
-			if (res < SMIN[idx]) SMIN[idx] = res;
-			if (res > SMAX[idx]) SMAX[idx] = res;
-		}
-
-		return res;
-	};
-
-	virtual bool train(int MAX_EPOCHS) {
-		bool non_compact = false;
-		if (!Y) non_compact = load_data();
-
-		const double nu = 0.01;
-		const double alpha = 0.2;
-		const double tol = 1E-5;
-
-		double err = 1E300;
-
-		int epochs = 0;
-
-		long double* DW = new long double[NW];
-		memset(DW, 0, NW * sizeof(long double));
-
-		long double* DB = new long double[NB];
-		memset(DB, 0, NB * sizeof(long double));
-
-		double real_err = best_err;
-
-		vector<int> idxs(NRows);
-		for (int i = 0; i < NRows; i++)
-			idxs[i] = i;
-		auto rd = std::random_device{};
-		auto rng = std::default_random_engine{ rd() };
-		std::shuffle(idxs.begin(), idxs.end(), rng);
-
-		do {
-			err = 0.0;
-			for (int ii = 0; ii < NRows; ii++) {
-				int i = idxs[ii];
-
-				YS[i] = NET(i);
-				long double delta = YS[i] - Y[i];
-				ERR[i] = fabs(delta);
-				err += ERR[i];
-
-				DB[NB - 1] = alpha * DB[NB - 1] + (1 - alpha) * (-nu * delta);
-				B[NB - 1] += DB[NB - 1];
-
-				int ptr = NW - 1;
-				for (int k = NN[NL - 2] - 1; k >= 0; k--, ptr--) {
-					DW[ptr] = alpha * DW[ptr] + (1 - alpha) * (-nu * delta * YN[NL - 2][k]);
-					W[ptr] += DW[ptr];
-				}
-
-				long double deltas[1024] = { 0.0 };
-
-				ptr = NW - 1;
-				for (int k = NN[NL - 2] - 1; k >= 0; k--, ptr--) {
-					deltas[k] = YN[NL - 2][k] * (1.0 - YN[NL - 2][k]) * delta * W[ptr];
-				}
-
-				int ptrw = ptr;
-				int ptrb = NB - 2;
-				for (int layer = NL - 2; layer > 0; layer--) {
-					ptr = ptrw;
-					for (int j = NN[layer - 1] - 1; j >= 0; j--)
-						for (int k = NN[layer] - 1; k >= 0; k--, ptrw--) {
-							DW[ptrw] = alpha * DW[ptrw] + (1 - alpha) * (-nu * deltas[k] * YN[layer - 1][j]);
-							W[ptrw] += DW[ptrw];
-						}
-					for (int k = NN[layer] - 1; k >= 0; k--, ptrb--) {
-						DB[ptrb] = alpha * DB[ptrb] + (1 - alpha) * (-nu * deltas[k]);
-						B[ptrb] += DB[ptrb];
-					}
-
-					long double deltas1[1024] = { 0.0 };
-
-					for (int j = NN[layer - 1] - 1; j >= 0; j--)
-						for (int k = NN[layer] - 1; k >= 0; k--, ptr--) {
-							deltas1[j] += YN[layer - 1][j] * (1.0 - YN[layer - 1][j]) * deltas[k] * W[ptr];
-						}
-					for (int j = 0; j < NN[layer - 1]; j++)
-						deltas[j] = deltas1[j];
-				}
-				ptr = 0;
-				for (int j = 0; j < NInputs; j++)
-					for (int k = 0; k < NN[0]; k++, ptr++) {
-						DW[ptr] = alpha * DW[ptr] + (1 - alpha) * (-nu * deltas[k] * X[j][i]);
-						W[ptr] += DW[ptr];
-					}
-				for (int k = 0; k < NN[0]; k++) {
-					DB[k] = alpha * DB[k] + (1 - alpha) * (-nu * deltas[k]);
-					B[k] += DB[k];
-				}
-			}
-			err /= NRows;
-			if (epochs % 100 == 0) {
-				real_err = 0.0;
-				for (int i = 0; i < NRows; i++) {
-					YS[i] = NET(i);
-					long double delta = YS[i] - Y[i];
-					real_err += fabs(delta);
-				}
-				printf("%i epochs reached, err = [%lf (really = %lf) / %i] = %lf (really = %lf)\n", epochs, (double)(err * NRows), real_err, NRows, (double)err, (double)(real_err / NRows));
-				fflush(stdout);
-			}
-		} while (err > tol && epochs++ < MAX_EPOCHS);
-
-		bool result = real_err < best_err;
-
-		best_err = real_err;
-
-		delete[] DW;
-		delete[] DB;
-
-		if (non_compact) unload_data();
-
-		return result;
-	}
-
-	virtual vector<std::string> simplify(bool to_chain) {
-		bool non_compact = false;
-		if (!Y) non_compact = load_data();
-
-		long double err = 0.0;
-		for (int i = 0; i < NRows; i++) {
-			YS[i] = NET(i);
-
-			long double delta = YS[i] - Y[i];
-			ERR[i] = fabs(delta);
-			err += ERR[i];
-		}
-		err /= NRows;
-
-		long double err1 = err * NRows;
-
-		long double tol_err = err1 * 1.05;
-
-		bool enhanced = true;
-		do {
-			long double min_delta = 1E300;
-			int min_n_w = -1;
-			for (int j = 0; j < NW; j++)
-				if (fabs(W[j]) >= 1e-14) {
-					long double save = W[j];
-					W[j] = 0.0;
-					long double err2 = 0.0;
-					for (int i = 0; i < NRows; i++)
-						err2 += fabs(Y[i] - NET(i));
-					if (err2 - err1 < min_delta) {
-						min_delta = err2 - err1;
-						min_n_w = j;
-					}
-					W[j] = save;
-				}
-
-			if (min_n_w >= 0 && err1 + min_delta < tol_err) {
-				W[min_n_w] = 0.0;
-				int k = min_n_w;
-				int layer = 1;
-				while (layer <= NL) {
-					int NP = layer == 1 ? NInputs : NN[layer - 2];
-					if (k < NP * NN[layer - 1])
-						break;
-					k -= NP * NN[layer - 1];
-					layer++;
-				}
-				printf("AT ERROR(%lf to %lf) WEIGHT in %i layer (%i-%i) is excluded\n",
-					(double)err1, (double)(err1 + min_delta),
-					layer,
-					k / NN[layer - 1],
-					k % NN[layer - 1]
-				);
-				fflush(stdout);
-			}
-			else
-				enhanced = false;
-		} while (enhanced);
-
-		long double * SMIN = new long double[NB];
-		long double * SMAX = new long double[NB];
-		int* SFREQ = new int[NB * _div];
-		memset(SFREQ, 0, NB * _div * sizeof(int));
-		for (int j = 0; j < NB; j++) {
-			SMIN[j] = 1E300;
-			SMAX[j] = -1E300;
-		}
-
-		vector<long double> * XX = new vector<long double>[NB];
-		vector<long double> * YY = new vector<long double>[NB];
-		for (int i = 0; i < NRows; i++)
-			NET(i, SMIN, SMAX, XX, YY);
-
-		int NVARIANTS = HOW_MANY;
-		vector<std::string> result = ANALYZE(omp_get_num_procs(), NVARIANTS, to_chain, SMIN, SMAX, SFREQ, XX, YY);
-
-		delete[] XX;
-		delete[] YY;
-
-		delete[] SMIN;
-		delete[] SMAX;
-
-		if (non_compact) unload_data();
-
-		return result;
-	}
-
-	virtual ~network() {
-		delete[] W;
-		delete[] B;
-		delete[] Y;
-		delete[] YS;
-		delete[] ERR;
-
-		for (int i = 0; i < NInputs; i++)
-			delete[] X[i];
-	}
-
-	virtual bool equals(network* from) {
-		if (NInputs != from->NInputs) return false;
-		if (DAT_FILE_NAME != from->DAT_FILE_NAME) return false;
-		if (NRows != from->NRows) return false;
-		if (NCols != from->NCols) return false;
-		for (int i = 0; i < NCols; i++)
-			if (NCC[i] != from->NCC[i])
-				return false;
-		if (NL != from->NL) return false;
-		for (int i = 0; i < NL; i++)
-			if (NN[i] != from->NN[i])
-				return false;
-		if (best_err != from->best_err) return false;
-		for (int i = 0; i < NInputs; i++) {
-			if (MMIN[i] != from->MMIN[i]) return false;
-			if (MMAX[i] != from->MMAX[i]) return false;
-			if (mmin[i] != from->mmin[i]) return false;
-			if (mmax[i] != from->mmax[i]) return false;
-		}
-
-		if (NUMIN != from->NUMIN || numin != from->numin ||
-			NUMAX != from->NUMAX || numax != from->numax) return false;
-
-		if (NW != from->NW || NB != from->NB) return false;
-		for (int i = 0; i < NW; i++)
-			if (W[i] != from->W[i])
-				return false;
-		for (int i = 0; i < NB; i++)
-			if (B[i] != from->B[i])
-				return false;
-
-		return true;
-	}
-
-	virtual const string get() {
-		ostringstream NET;
-
-		NET << "Net file after additional training by the nnets_simplify\n";
-		NET << "-------------------------------------------------------\n";
-
-		NET << NInputs << "\n\n";
-		NET << DAT_FILE_NAME << "\n\n";
-
-		NET << NRows << " " << NCols << "\n\n";
-
-		for (int i = 0; i <= NInputs; i++)
-			NET << NCC[i] << " ";
-		NET << "\n\n";
-
-		for (int i = 0; i < NL; i++)
-			NET << NN[i] << " ";
-		NET << "\n\n";
-
-		NET << setprecision(15) << best_err << "\n\n";
-		for (int i = 0; i < NInputs; i++)
-			NET << setprecision(15) << MMIN[i] << " ";
-		NET << "\n";
-		for (int i = 0; i < NInputs; i++)
-			NET << setprecision(15) << MMAX[i] << " ";
-		NET << "\n\n";
-		for (int i = 0; i < NInputs; i++)
-			NET << setprecision(15) << mmin[i] << " ";
-		NET << "\n";
-		for (int i = 0; i < NInputs; i++)
-			NET << setprecision(15) << mmax[i] << " ";
-		NET << "\n\n";
-		NET << setprecision(15) << NUMIN << "\n";
-		NET << setprecision(15) << NUMAX << "\n\n";
-		NET << setprecision(15) << numin << "\n";
-		NET << setprecision(15) << numax << "\n\n";
-		int ptr = 0;
-		for (int layer = 0; layer < NL; layer++) {
-			int NP = layer == 0 ? NInputs : NN[layer - 1];
-			for (int i = 0; i < NP; i++) {
-				for (int j = 0; j < NN[layer]; j++, ptr++)
-					NET << setprecision(15) << W[ptr] << " ";
-				NET << "\n";
-			}
-			NET << "\n";
-		}
-		ptr = 0;
-		for (int layer = 0; layer < NL; layer++) {
-			for (int j = 0; j < NN[layer]; j++, ptr++)
-				NET << setprecision(15) << B[ptr] << " ";
-			NET << "\n\n";
-		}
-
-		return NET.str();
-	}
-
-	static std::string create(::list& nlayers, const std::string& dat_file, ::list& inps, int out);
-
-	/* LU - разложение  с выбором максимального элемента по диагонали */
-	bool _GetLU(int NN, int* iRow, long double* A, long double* LU)
-	{
-		int i, j, k;
-		try {
-			memmove(LU, A, NN * NN * sizeof(long double));
-			for (i = 0; i < NN; i++)
-				iRow[i] = i;
-			for (i = 0; i < NN - 1; i++)
-			{
-				long double Big = fabs(LU[iRow[i] * NN + i]);
-				int iBig = i;
-
-				long double Kf;
-
-				for (j = i + 1; j < NN; j++)
-				{
-					long double size = fabs(LU[iRow[j] * NN + i]);
-
-					if (size > Big)
-					{
-						Big = size;
-						iBig = j;
-					}
-				}
-				if (iBig != i)
-				{
-					int V = iRow[i];
-					iRow[i] = iRow[iBig];
-					iRow[iBig] = V;
-				}
-				Kf = 1.0 / LU[iRow[i] * NN + i];
-
-				LU[iRow[i] * NN + i] = Kf;
-				for (j = i + 1; j < NN; j++)
-				{
-					long double Fact = Kf * LU[iRow[j] * NN + i];
-
-					LU[iRow[j] * NN + i] = Fact;
-					for (k = i + 1; k < NN; k++)
-						LU[iRow[j] * NN + k] -= Fact * LU[iRow[i] * NN + k];
-				}
-			}
-			LU[(iRow[NN - 1] + 1) * NN - 1] = 1.0 / LU[(iRow[NN - 1] + 1) * NN - 1];
-		}
-		catch (...) {
-			return false;
-		}
-		return true;
-	}
-
-	/* Метод LU - разложения */
-	bool _SolveLU(int NN, int* iRow, long double* LU, long double* Y, long double* X)
-	{
-		int i, j, k;
-		try {
-			X[0] = Y[iRow[0]];
-			for (i = 1; i < NN; i++)
-			{
-				long double V = Y[iRow[i]];
-
-				for (j = 0; j < i; j++)
-					V -= LU[iRow[i] * NN + j] * X[j];
-				X[i] = V;
-			}
-
-			X[NN - 1] *= LU[(iRow[NN - 1] + 1) * NN - 1];
-
-			for (i = 1, j = NN - 2; i < NN; i++, j--)
-			{
-				long double V = X[j];
-
-				for (k = j + 1; k < NN; k++)
-					V -= LU[iRow[j] * NN + k] * X[k];
-				X[j] = V * LU[iRow[j] * NN + j];
-			}
-		}
-		catch (...) {
-			return false;
-		}
-		return true;
-	}
-
-	long double* MNK_of_X(int N,
-		const vector<long double> W,
-		const vector<long double> X,
-		const vector<long double> Y,
-		double& err) {
-		int Z = (int) X.size();
-		vector<long double> _XP(Z, 1.0);
-		long double* A = new long double[N * N];
-		long double* LU = new long double[N * N];
-		long double* B = new long double[N];
-		long double* XX = new long double[N];
-		int* iLU = new int[N];
-		int i, j, k;
-
-		for (i = 0; i < 2 * N - 1; i++) {
-			long double QX = 0.0;
-			long double QY = 0.0;
-			for (j = 0; j < Z; j++) {
-				QX += W[j] * _XP[j];
-				if (i < N) QY += W[j] * _XP[j] * Y[j];
-				_XP[j] *= X[j];
-			}
-			for (j = (i < N ? i : N - 1), k = (i < N ? 0 : i - N + 1); j >= 0 && k < N; j--, k++)
-				A[k * N + j] = QX;
-			if (i < N) B[i] = QY;
-		}
-		long double ZZ = 0.0;
-		if (!(_GetLU(N, iLU, A, LU) && _SolveLU(N, iLU, LU, B, XX))) {
-			memset(XX, 0, N * sizeof(long double));
-			err = 1E300;
-		}
-		else {
-			for (k = 0; k < N; k++)
-				if (_isnan(XX[k])) {
-					memset(XX, 0, N * sizeof(long double));
-					err = 1E300;
-					return XX;
-				}
-			err = 0.0;
-			for (j = 0; j < Z; j++) {
-				long double R = 0.0;
-				for (k = N - 1; k >= 0; k--)
-					R = R * X[j] + XX[k];
-				double cur_err = fabs(R - Y[j]);
-				err += W[j] * cur_err;
-				ZZ += W[j];
-			}
-		}
-
-		delete[] A;
-		delete[] LU;
-		delete[] B;
-		delete[] iLU;
-
-		if (ZZ > 0.0) err /= ZZ;
-
-		return XX;
-	}
-
-	typedef map<string, ITEM*> zVars;
-
-	void* BUILD_FUNC(int NPP, int& NVARIANTS, bool Simplify,
-		vector<string>& BEST,
-		char** Vars,
-		vector<vector<VARIANT>*>_VARS,
-		int layer, zVars& zvars, string* Scheme = NULL, SUM** Inputs = NULL) {
-
-		int n_input[64] = { 0 };
-		int n_output[64] = { 0 };
-		int w_base[64] = { 0 };
-		int b_base[64] = { 0 };
-
-		for (int nlayer = 0; nlayer < NL; nlayer++) {
-			n_input[nlayer] = nlayer == 0 ? NInputs : NN[nlayer - 1];
-			n_output[nlayer] = NN[nlayer];
-			if (nlayer > 0) {
-				w_base[nlayer] = w_base[nlayer - 1] + n_input[nlayer - 1] * n_output[nlayer - 1];
-				b_base[nlayer] = b_base[nlayer - 1] + n_output[nlayer - 1];
-			}
-		}
-
-		SUM* INPUTS[256] = { NULL };
-		SUM* OUTPUTS[256] = { NULL };
-
-		if (!Scheme) {
-			Scheme = new string("");
-		}
-
-		string* _Scheme = new string(*Scheme);
-
-		for (int i = 0; i < n_input[layer - 1]; i++)
-			if (layer == 1) {
-				MUL* INP = new MUL(1.0);
-				INP->Mul(i, 1.0);
-				INPUTS[i] = new SUM(INP);
-			}
-			else
-				INPUTS[i] = dynamic_cast<SUM*>(Inputs[i]->clone());
-
-		for (int i = 0; i < n_output[layer - 1]; i++) {
-			OUTPUTS[i] = new SUM(B[b_base[layer - 1] + i]);
-			for (int j = 0; j < n_input[layer - 1]; j++) {
-				SUM* KFI = new SUM(W[w_base[layer - 1] + j * n_output[layer - 1] + i]);
-				SUM* I = dynamic_cast<SUM*>(INPUTS[j]->clone());
-				KFI->Mul(I);
-				OUTPUTS[i]->Add(KFI);
-			}
-			OUTPUTS[i]->AccountSimilars();
-		}
-
-		int N = 1;
-		unsigned int variant[256] = { 0 };
-		for (int i = 0; i < n_output[layer - 1]; i++)
-			N *= (int) _VARS[b_base[layer - 1] + i]->size();
-		for (int i = 0; i < N && NVARIANTS; i++) {
-			int P = n_output[layer - 1];
-			if (layer == 1) {
-				*_Scheme = "|";
-				zVars::iterator it;
-				for (it = zvars.begin(); it != zvars.end(); it++)
-					delete it->second;
-				zvars.clear();
-			}
-			else
-				*_Scheme = *Scheme;
-
-			SUM* _OUTPUTS[256] = { NULL };
-			for (int j = 0; j < P; j++) {
-				int neuro_num = b_base[layer - 1] + j;
-				int sqrt_var = NInputs + neuro_num;
-				VARIANT& VAR = (*_VARS[b_base[layer - 1] + j])[variant[j]];
-				SUM* ARG = dynamic_cast<SUM*>(OUTPUTS[j]->clone());
-				char sqrt_name[4] = "z00";
-				sqrt_name[1] = neuro_num >= 10 ? '0' + neuro_num / 10 : '0';
-				sqrt_name[2] = '0' + neuro_num % 10;
-				string zvar(sqrt_name);
-				zvars[zvar] = ARG->clone();
-				_OUTPUTS[j] = new SUM(0.0);
-				*_Scheme += kinds[VAR.kind];
-				*_Scheme += "|";
-				switch (VAR.kind) {
-				case vkPoly:
-				case vkPolyRev:
-					_OUTPUTS[j]->SETPOLY(ARG, VAR.N, VAR.KF, VAR.kind == vkPolyRev);
-					break;
-				case vkPolySqr:
-				case vkPolySqrRev:
-					_OUTPUTS[j]->SETPOLYSQR(ARG, sqrt_var, VAR.N, VAR.KF, VAR.kind == vkPolySqrRev);
-					break;
-				case vkLinear:
-					delete _OUTPUTS[j];
-					_OUTPUTS[j] = ARG;
-					_OUTPUTS[j]->AccountSimilars();
-				}
-			}
-
-			if (layer < NL) {
-				BUILD_FUNC(NPP, NVARIANTS, Simplify, BEST, Vars, _VARS, layer + 1, zvars, _Scheme, _OUTPUTS);
-			}
-			else {
-				if (NVARIANTS > 0) {
-					NVARIANTS--;
-					ITEM* _OUT = dynamic_cast<ITEM*>(_OUTPUTS[0]->clone());
-#ifdef TASKED
-					string* SCHEME = new string("");
-					zVars* _zvars = new zVars();
-					_zvars->insert(zvars.begin(), zvars.end());
-					for (zVars::iterator z_it = _zvars->begin(); z_it != _zvars->end(); z_it++) {
-						z_it->second = z_it->second->clone();
-					}
-					*SCHEME = *_Scheme;
-#pragma omp task if((int)(NPP*TASK_PART) > 1) untied
-					{
-#else
-					string* SCHEME = new string("");
-					zVars* _zvars = &zvars;
-					*SCHEME = *_Scheme;
-#endif
-					int maxPows[256] = { 0 };
-					zVars::iterator _z_last = _zvars->end();
-					zVars::iterator z_it;
-					// The last layer is LINEAR. z[last] is not considered (= OUT)
-					_z_last--;
-					for (z_it = _zvars->begin(); z_it != _z_last; z_it++) {
-						do {
-							ITEM* z__S = SUBSTITUTE_SQRS(z_it->second, NInputs, Vars, *_zvars);
-							if (Simplify)
-								z_it->second = SIMPLIFY(z__S);
-							else
-								z_it->second = z__S;
-						} while (PRESENT_SQRS(z_it->second, NInputs));
-					}
-					printf("SIMPLIFIED\n");
-					string* Buf = new string("");
-					ITEM* _S = _OUT;
-					do {
-						ITEM* __S = SUBSTITUTE_SQRS(_S, NInputs, Vars, *_zvars);
-						if (Simplify)
-							_S = SIMPLIFY(__S);
-						else
-							_S = __S;
-						printf("Stage OK ");
-					} while (PRESENT_SQRS(_S, NInputs));
-					printf("\n");
-					string SNET;
-					SNET.reserve(128 * 1024 * 1024);
-					_S->sprint(Vars, maxPows, &SNET);
-					SNET += "\n";
-					unsigned long long used_mask = 0;
-					_S->CHECK_VARS(used_mask, NInputs, Vars, *_zvars);
-					unsigned long long k = ONE64;
-					for (int pv = 0; pv < NInputs; pv++) {
-						if (used_mask & k) {
-							string _DEF = Vars[pv];
-							for (int ppv = 2; ppv <= maxPows[pv]; ppv++) {
-								_DEF += "*";
-								_DEF += Vars[pv];
-								string CUR = Vars[pv];
-								char Num[32] = "";
-								_sprintf1(Num, 32, "%u", ppv);
-								CUR += Num;
-								*Buf += CUR;
-								*Buf += "=";
-								*Buf += _DEF;
-								_DEF = CUR;
-								*Buf += "\n";
-							}
-						}
-						k <<= 1;
-					}
-					// The last layer is LINEAR. z[last] is not considered (= OUT)
-					for (z_it = _zvars->begin(); z_it != _z_last; z_it++, k <<= 1)
-						if (used_mask & k) {
-							ITEM* z_S = z_it->second;
-							string* zBuf = new string("");
-							zBuf->reserve(32 * 1024 * 1024);
-							z_S->sprint(Vars, maxPows, zBuf);
-							*Buf += z_it->first.c_str();
-							*Buf += " = sqrt(";
-							*Buf += *zBuf;
-							*Buf += ")\n";
-							delete zBuf;
-						}
-					delete _S;
-					// printf("%s NET<%s> : %s\n", Buf->c_str(), SCHEME->c_str(), SNET.c_str());
-#pragma omp critical
-					{
-						string STR = *Buf;
-						STR += "NET<";
-						STR += *SCHEME;
-						STR += "> : ";
-						STR += SNET;
-
-						size_t L = STR.length();
-						vector<string>::iterator after = BEST.begin();
-						while (after != BEST.end() && after->length() < L) after++;
-						BEST.insert(after, STR);
-						if (BEST.size() > HOW_MANY) BEST.pop_back();
-					}
-					delete Buf;
-#ifdef TASKED
-					_z_last++;
-					for (z_it = _zvars->begin(); z_it != _z_last; z_it++) {
-						delete z_it->second;
-					}
-					delete _zvars;
-					delete SCHEME;
-					}
-#endif
-				}
-			}
-
-		variant[0]++;
-		for (int j = 0; j < P && variant[j] >= _VARS[b_base[layer - 1] + j]->size(); j++) {
-			variant[j] = 0;
-			if (j < P - 1) variant[j + 1]++;
-		}
-
-		for (int j = 0; j < P; j++)
-			delete _OUTPUTS[j];
-		}
-
-		for (int i = 0; i < n_input[layer - 1]; i++)
-			delete INPUTS[i];
-		for (int i = 0; i < n_output[layer - 1]; i++)
-			delete OUTPUTS[i];
-
-		if (layer == 1 && !Scheme)
-			delete Scheme;
-
-		delete _Scheme;
-
-		if (layer == 1) {
-			zVars::iterator it;
-			for (it = zvars.begin(); it != zvars.end(); it++)
-				delete it->second;
-			zvars.clear();
-		}
-
-		return NULL;
-	};
-
-	vector<string> ANALYZE(int NPP, int & NVARIANTS, bool Simplify,
-		long double* SMIN, long double* SMAX, int* SFREQ,
-		vector<long double> XX[], vector<long double> YY[]) {
-
-		double start_time = omp_get_wtime();
-
-		vector<vector<VARIANT>*> _VARS(NB);
-
-		const long double eps_stand = 1E-2;
-		const long double eps_min = 1E-3;
-
-		int nk[2] = { 0, 0 };
-		int ns[n_kinds - 1] = { 0, 0, 1, 1 };
-		long double tols[2] = { eps_stand, eps_stand };
-		int base = 0;
-
-		for (int layer = 0; layer < NL; base += NN[layer++]) {
-			if (layer > 0 && layer < NL - 1) {
-				int n = nk[0] + nk[1];
-				for (int i = 0; i < 2; i++)
-					tols[i] = eps_min + (4.0 - 4.0 * nk[i] / n) * (eps_stand - eps_min);
-				printf("%i LAYER TOLS: DIR(%Lf) && REV(%Lf)\n", layer + 1, tols[0], tols[1]);
-			}
-#pragma omp parallel for schedule(guided) num_threads(NPP)
-			for (int k = 0; k < NN[layer]; k++) {
-				int j = base + k;
-				int N = (int) XX[j].size();
-				vector<VARIANT>* VARS = new vector<VARIANT>();
-				double errw[n_kinds] = { 1E300, 1E300, 1E300, 1E300, 1E300 };
-				long double* bestKF[n_kinds] = { NULL, NULL, NULL, NULL, NULL };
-				int bestN[n_kinds] = { -1, -1, -1, -1, -1 };
-				long double min_errw = 1E300;
-				int kind = -1;
-
-				if (j != NB - 1) {
-					long double DIAP = SMAX[j] - SMIN[j];
-					long double d = (_div - 1) / DIAP;
-					int NP = (int) XX[j].size();
-					for (int i = 0; i < NP; i++)
-						SFREQ[j * _div + (int)((XX[j][i] - SMIN[j]) * d)]++;
-					vector<long double> W(NP);
-					for (int i = 0; i < NP; i++)
-						W[i] = SFREQ[j * _div + (int)((XX[j][i] - SMIN[j]) * d)];
-					vector<long double> XXSQR(N);
-					for (int i = 0; i < N; i++)
-						XXSQR[i] = sqrt(XX[j][i]);
-					vector<long double> XXREV(N);
-					for (int i = 0; i < N; i++)
-						XXREV[i] = 1 / XX[j][i];
-					vector<long double> XXSQRREV(N);
-					for (int i = 0; i < N; i++)
-						XXSQRREV[i] = 1 / sqrt(XX[j][i]);
-					vector<long double>* XXX[n_kinds] = { &XX[j], &XXSQR, &XXREV, &XXSQRREV, NULL };
-					for (int X = 0; X < n_kinds - 1; X++) {
-						for (int n = 2; n <= maxN; n++) {
-							double cur_err;
-							long double* KF = MNK_of_X(n, W, *XXX[X], YY[j], cur_err);
-							if (errw[X] > 0.01 && cur_err < 0.9 * errw[X]) {
-								delete[] bestKF[X];
-								bestKF[X] = KF;
-								bestN[X] = n;
-								errw[X] = cur_err;
-							}
-							else
-								delete[] KF;
-						}
-					}
-
-					for (int X = 0; X < n_kinds - 1; X++)
-						if (errw[X] < min_errw) {
-							min_errw = errw[X];
-							kind = X;
-						}
-				}
-				else {
-					kind = vkLinear;
-					bestN[kind] = 0;
-					errw[kind] = 0.0;
-					min_errw = 0.0;
-				}
-				VARIANT V = { kind, bestN[kind], bestKF[kind] };
-				VARS->push_back(V);
-				if (layer == 0)
-					nk[ns[kind]]++;
-				if (layer < NL - 1) {
-					for (int X = 0; X < n_kinds - 1; X++)
-						if (X != kind)
-							if (fabs(errw[X] - errw[kind]) < tols[ns[X]]) {
-								VARIANT V1 = { X, bestN[X], bestKF[X] };
-								VARS->push_back(V1);
-								if (layer == 0)
-									nk[ns[X]]++;
-							}
-				}
-
-#pragma omp critical
-				{
-					printf("LAYER %i : NEURON [%i] has range [%lf - %lf] described as { ",
-						layer + 1, k, (double)SMIN[j], (double)SMAX[j]
-					);
-					for (unsigned int k = 0; k < VARS->size(); k++) {
-						printf("%s%i[", kinds[(*VARS)[k].kind], (*VARS)[k].N);
-						for (int i = 0; i < (*VARS)[k].N; i++)
-							printf("%lf%s", (double)(*VARS)[k].KF[i], i < (*VARS)[k].N - 1 ? "," : "");
-						printf("]");
-						printf("%s", k < VARS->size() - 1 ? " , " : " }\n");
-					}
-					_VARS[j] = VARS;
-				}
-				fflush(stdout);
-			}
-		}
-
-		char* Vars[256];
-		for (int i = 0; i < NInputs + NB; i++) {
-			Vars[i] = new char[8];
-			Vars[i][0] = i < NInputs ? 'a' + i : 'z';
-			Vars[i][1] = i < NInputs ? 0x0 : '0' + (i - NInputs) / 10;
-			Vars[i][2] = i < NInputs ? 0x0 : '0' + (i - NInputs) % 10;
-			Vars[i][3] = 0x0;
-		}
-		zVars zvars;
-		vector<string> BEST;
-#pragma omp parallel if((int)(NPP*TASK_PART) > 1) num_threads(max(1,(int)(NPP*TASK_PART)))
-		{
-#pragma omp single
-			{
-				BUILD_FUNC(NPP, NVARIANTS, Simplify, BEST, Vars, _VARS, 1, zvars);
-#ifdef TASKED
-				if ((int)(NPP * TASK_PART) > 1) {
-#pragma omp taskwait
-				}
-#endif
-			}
-		}
-		for (int i = 0; i < NInputs + 1; i++) {
-			delete[] Vars[i];
-		}
-
-		for (unsigned int j = 0; j < _VARS.size(); j++) {
-			for (unsigned int X = 0; X < _VARS[j]->size(); X++)
-				delete[](*_VARS[j])[X].KF;
-			delete _VARS[j];
-			_VARS[j] = NULL;
-		}
-		fflush(stdout);
-
-		double time = omp_get_wtime() - start_time;
-
-		printf("ANALYZE Time = %lf sec.\n", time);
-
-		return BEST;
-	}
-};
-
-class nnet : public term {
-private:
-	network* net;
-public:
-	nnet() : term("nnet", 1) {
-		net = NULL;
-	}
-
-	nnet(const nnet& src) : term("nnet", 1) {
-		string content = src.net->get();
-		this->args.push_back(new ::term(content));
-		net = new network(src.net->fname(), content);
-	}
-
-	nnet(network* src) : term("nnet", 1) {
-		string content = src->get();
-		this->args.push_back(new ::term(content));
-		net = new network(src->fname(), content);
-	}
-
-	nnet(const std::string & fname, ifstream & in) : term("nnet") {
-		string content;
-		in.seekg(0, std::ios::end);
-		content.reserve(in.tellg());
-		in.seekg(0, std::ios::beg);
-
-		content.assign((std::istreambuf_iterator<char>(in)),
-			std::istreambuf_iterator<char>());
-		this->args.push_back(new ::term(content));
-		net = new network(fname, content);
-	}
-
-	virtual ~nnet() { delete net; }
-
-	virtual void free() {
-		refs--;
-		if (refs == 0)
-			delete this;
-	}
-
-	virtual const string get_content() { return net->get(); }
-
-	virtual bool train(int MAX_EPOCHS) { return net->train(MAX_EPOCHS); }
-
-	virtual vector<string> simplify(bool to_chain) { return net->simplify(to_chain); }
-
-	virtual long double sim() { return net->sim(); }
-	virtual unsigned int nX() { return net->nX(); }
-	virtual void setX(unsigned int i, long double v) { net->setX(i, v); }
-
-	virtual value* copy(context* CTX, frame_item* f, int unwind = 0) {
-		return new nnet(*this);;
-	}
-
-	virtual void add_arg(context* CTX, frame_item* f, value* v, int unwind = 0) {
-		term::add_arg(CTX, f, v, unwind);
-		term* arg = dynamic_cast<term*>(v);
-		if (args.size() > 1 || !v) {
-			cout << "nnet(arg) must has one term arg only!";
-			exit(1001);
-		}
-		net = new network("", arg->get_name());
-	}
-
-	virtual bool unify(context* CTX, frame_item* ff, value* from) {
-		cached_defined = -1;
-		if (dynamic_cast<nnet*>(from)) {
-			return net->equals(dynamic_cast<nnet*>(from)->net);
-		}
-		else
-			return term::unify(CTX, ff, from);
-	}
-};
-
-class indicator : public value {
-private:
-	string name;
-	int arity;
-public:
-	indicator(const string & _name, int _arity) : value(), name(_name), arity(_arity) { }
-
-	virtual void escape_vars(context * CTX, frame_item * ff) {	}
-
-	virtual const string & get_name() { return name; }
-
-	virtual int get_arity() { return arity; }
-
-	virtual value * fill(context * CTX, frame_item * vars) {
-		return this;
-	}
-
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
-		return new indicator(name, arity);
-	}
-	virtual bool unify(context * CTX, frame_item * ff, value * from) {
-		if (dynamic_cast<any *>(from)) return true;
-		if (dynamic_cast<var *>(from)) { ff->set(false, CTX, ((var *)from)->get_id(), this); return true; }
-		if (dynamic_cast<indicator *>(from)) {
-			indicator * v2 = ((indicator *)from);
-			return name == v2->name && arity == v2->arity;
-		}
-		else
-			return false;
-	}
-	virtual bool defined() {
-		return true;
-	};
-
-	virtual string to_str(bool simple = false) {
-		string result = name;
-
-		char buf[65];
-		result += "/";
-		result += __itoa(arity, buf, 10);
-		
-		return result;
-	}
-};
-
-class list : public value {
-	friend class predicate_item_nth;
-
-	stack_container<value *> val;
-	bool is_of_chars;
-	string chars;
-	value * tag;
-	signed char cached_defined;
-public:
-	list(const stack_container<value *> & v, value * _tag) : value(), tag(_tag) {
-		is_of_chars = true;
-		chars = "";
-		for (int i = 0; is_of_chars && i < v.size(); i++) {
-			term * t = dynamic_cast<term *>(v[i]);
-			if (t && t->get_args().size() == 0) {
-				string s = t->get_name();
-				if (s.length() != 1) {
-					is_of_chars = false;
-					chars = "";
-				} else {
-					chars += s[0];
-				}
-			} else {
-				is_of_chars = false;
-				chars = "";
-			}
-		}
-		cached_defined = (tag == NULL || tag->defined()) ? 1 : 0;
-		if (is_of_chars) {
-			for (int i = 0; i < v.size(); i++)
-				v[i]->free();
-		}
-		else {
-			val = v;
-			if (cached_defined)
-				for (value * vv : v)
-					if (!vv->defined()) {
-						cached_defined = false;
-						break;
-					}
-		}
-	}
-
-	list(const string & v, value * _tag) : value(), tag(_tag) {
-		is_of_chars = true;
-		cached_defined = (tag == NULL || tag->defined()) ? 1 : 0;
-		chars = v;
-	}
-
-	virtual ~list() { }
-
-	virtual void free() {
-		for (value * v : val)
-			v->free();
-		if (tag) tag->free();
-		refs--;
-		if (refs == 0)
-			delete this;
-	}
-
-	virtual void use() {
-		refs++;
-		for (value * v : val)
-			v->use();
-		if (tag) tag->use();
-	}
-
-	virtual bool of_chars() { return is_of_chars; }
-	virtual const string & get_chars() { return chars; }
-	virtual void convert_non_chars(context * CTX) {
-		if (is_of_chars) {
-			is_of_chars = false;
-			for (char s : chars)
-				val.push_back(new term(string(1,s), refs));
-			chars = "";
-		}
-	}
-
-	virtual void escape_vars(context * CTX, frame_item * ff) {
-		for (value * v : val)
-			v->escape_vars(CTX, ff);
-		if (tag)
-			tag->escape_vars(CTX, ff);
-	}
-
-	int size() {
-		int result = (int)(is_of_chars ? chars.size() : val.size());
-		if (tag)
-			if (dynamic_cast<list *>(tag))
-				result += ((list *)tag)->size();
-			else
-				result++;
-		return result;
-	}
-
-	value * get_last(context * CTX) {
-		if (tag)
-			if (dynamic_cast<list *>(tag))
-				return ((list *)tag)->get_last(CTX);
-			else {
-				tag->use();
-				return tag;
-			}
-		else if (is_of_chars && chars.size() == 0 || !is_of_chars && val.size() == 0)
-			return NULL;
-		else if (is_of_chars) {
-			return new term(string(1, chars[chars.length()-1]), refs);
-		} else {
-			stack_container<value *>::iterator it = val.end();
-
-			(*(--it))->use();
-
-			return *it;
-		}
-	}
-
-	value * get_nth(int n, bool inc_ref) {
-		if (n < 1) return NULL;
-
-		if (is_of_chars && n <= chars.size() || !is_of_chars && n <= val.size()) {
-			if (is_of_chars) {
-				return new term(string(1, chars[n-1]), refs);
-			} else {
-				stack_container<value *>::iterator it = val.begin() + (size_t)(n - 1);
-				if (inc_ref) (*it)->use();
-				return *it;
-			}
-		}
-		else
-			if (tag)
-				if (dynamic_cast<list *>(tag))
-					return ((list *)tag)->get_nth(
-						(int)(is_of_chars ? n - chars.size() : n - val.size()),
-						inc_ref);
-				else {
-					if (inc_ref) tag->use();
-					return tag;
-				}
-			else
-				return NULL;
-	}
-
-	bool set_nth(int n, value * v) {
-		if (n < 1) return false;
-
-		if (is_of_chars && n <= chars.size() || !is_of_chars && n <= val.size()) {
-			if (is_of_chars) {
-				term* t = dynamic_cast<term*>(v);
-				if (t && t->get_name().length() == 1) {
-					chars[(size_t)(n - 1)] = t->get_name()[0];
-					return true;
-				}
-				else
-					return false;
-			}
-			else {
-				stack_container<value*>::iterator it = val.begin() + (size_t)(n - 1);
-				(*it)->free();
-				(*it) = v;
-				v->use();
-
-				cached_defined = -1;
-				if (v && !v->defined())
-					cached_defined = 0;
-
-				return true;
-			}
-		}
-		else
-			if (tag) {
-				cached_defined = -1;
-				if (v && !v->defined())
-					cached_defined = 0;
-
-				if (dynamic_cast<list*>(tag))
-					return ((list*)tag)->set_nth((int)(is_of_chars ? n - chars.size() : n - val.size()), v);
-				else {
-					tag->free();
-					tag = v;
-					v->use();
-					return true;
-				}
-			}
-			else
-				return false;
-	}
-
-	void iterate(std::function<void(value *)> check) {
-		if (is_of_chars) {
-			term * t = new term("");
-			for (char s : chars) {
-				t->change_name(string(1,s));
-				check(t);
-			}
-			t->free();
-		} else {
-			stack_container<value *>::iterator it = val.begin();
-			while (it != val.end()) {
-			
-				check(*it);
-				it++;
-			}
-		}
-		if (tag)
-			if (dynamic_cast<list *>(tag))
-				((list *)tag)->iterate(check);
-			else
-				check(tag);
-	}
-
-	void split(context * CTX, frame_item * f, int p, value * & L1, value * & L2) {
-		if (is_of_chars && !tag) {
-			string S1 = chars.substr(0, p);
-			string S2 = chars.substr(p);
-			L1 = new list(S1, NULL);
-			L2 = new list(S2, NULL);
-		} else {
-			stack_container<value *> S, S1, S2;
-			get(CTX, f, &S);
-
-			stack_container<value *>::iterator it = S.begin();
-			S1.reserve(p);
-			for (int i = 0; i < p; i++)
-				S1.push_back((*it++)->const_copy(CTX, f));
-			S2.reserve(S.size() - p);
-			for (int i = p; i < S.size(); i++)
-				S2.push_back((*it++)->const_copy(CTX, f));
-			L1 = new list(S1, NULL);
-			L2 = new list(S2, NULL);
-		}
-	}
-
-	void const_split(context * CTX, frame_item * f, int p, value * & L1, value * & L2) {
-		if (is_of_chars && !tag) {
-			string S1 = chars.substr(0, p);
-			string S2 = chars.substr(p);
-			L1 = new list(S1, NULL);
-			L2 = new list(S2, NULL);
-		}
-		else {
-			if (!defined()) return split(CTX, f, p, L1, L2);
-			stack_container<value *> S, S1, S2;
-			get(CTX, f, &S);
-
-			stack_container<value *>::iterator it = S.begin();
-			S1.reserve(p);
-			for (int i = 0; i < p; i++)
-				S1.push_back((*it++)->const_copy(CTX, f));
-			S2.reserve(S.size() - p);
-			for (int i = p; i < S.size(); i++)
-				S2.push_back((*it++)->const_copy(CTX, f));
-			L1 = new list(S1, NULL);
-			L2 = new list(S2, NULL);
-		}
-	}
-
-	list * from(context * CTX, frame_item * f, stack_container<value *>::iterator starting) {
-		list * result = new list(stack_container<value *>(), NULL);
-		while (starting != val.end())
-		{
-			result->add(CTX, (*starting)->const_copy(CTX, f));
-			starting++;
-		}
-		if (tag) result->set_tag(tag->copy(CTX, f));
-		return result;
-	}
-
-	list * from(context * CTX, frame_item * f, string::iterator starting) {
-		list * result = new list(string(starting, chars.end()), NULL);
-		if (tag) result->set_tag(tag->copy(CTX, f));
-		return result;
-	}
-
-	list * const_from(context * CTX, frame_item * f, stack_container<value *>::iterator starting) {
-		if (!defined()) return from(CTX, f, starting);
-		list * result = new list(stack_container<value *>(), NULL);
-		while (starting != val.end())
-		{
-			(*starting)->use();
-			result->add(CTX, *starting);
-			starting++;
-		}
-		if (tag) {
-			tag->use();
-			result->set_tag(tag);
-		}
-		return result;
-	}
-
-	list * const_from(context * CTX, frame_item * f, string::iterator starting) {
-		if (!defined()) return from(CTX, f, starting);
-		list * result = new list(string(starting, chars.end()), NULL);
-		if (tag) {
-			tag->use();
-			result->set_tag(tag);
-		}
-		return result;
-	}
-
-	virtual value * fill(context * CTX, frame_item * vars) {
-		cached_defined = 1;
-		if (!is_of_chars) {
-			stack_container<value *>::iterator it = val.begin();
-			for (; it != val.end(); it++) {
-				value * old = *it;
-				*it = (*it)->fill(CTX, vars);
-				if (*it != old) old->free();
-				if (cached_defined && *it && !(*it)->defined())
-					cached_defined = 0;
-			}
-		}
-		if (tag) {
-			value * old = tag;
-			tag = tag->fill(CTX, vars);
-			if (old && old != tag) old->free();
-			if (cached_defined && tag && !tag->defined())
-				cached_defined = 0;
-		}
-		return this;
-	}
-
-	virtual list * append(context * CTX, frame_item * f, list * L2) {
-		::list * result = NULL;
-		if (is_of_chars && !tag && L2->of_chars()) {
-			result = new ::list(chars + L2->get_chars(), NULL);
-		} else {
-			result = ((list *)copy(CTX, f));
-			if (is_of_chars) convert_non_chars(CTX);
-			if (L2->of_chars()) {
-				for (char s : L2->get_chars())
-					result->add(CTX, new term(string(1, s)));
-			} else
-				for (value * v : L2->val) {
-					result->add(CTX, v->const_copy(CTX, f));
-					if (cached_defined && !v->defined())
-						cached_defined = 0;
-				}
-		}
-		if (L2->tag) {
-			if (cached_defined && !L2->tag->defined())
-				cached_defined = 0;
-			if (dynamic_cast<::list*>(L2->tag))
-				return result->append(CTX, f, ((list*)L2->tag));
-			else
-				result->add(CTX, L2->tag->copy(CTX, f));
-		}
-		return result;
-	}
-
-	virtual value * copy(context * CTX, frame_item * f, int unwind = 0) {
-		if (is_of_chars)
-			return new ::list(chars, tag ? tag->copy(CTX, f) : NULL);
-		else {
-			stack_container<value *> new_val;
-			new_val.reserve(val.size());
-			for (value * v : val)
-				new_val.push_back(v->const_copy(CTX, f));
-			return new ::list(new_val, tag ? tag->copy(CTX, f) : NULL);
-		}
-	}
-
-	virtual void add(context * CTX, value * v) {
-		if (cached_defined && v && !v->defined())
-			cached_defined = 0;
-
-		if (tag)
-			if (dynamic_cast<list *>(tag))
-				((list *)tag)->add(CTX, v);
-			else {
-				std::cout << "Adding to non-list tag?!" << endl;
-				exit(1);
-			}
-		else {
-			term * t = dynamic_cast<term *>(v);
-			if (t && t->get_args().size() == 0) {
-				if (is_of_chars) {
-					string s = t->get_name();
-					if (s.length() == 1)
-						chars += s;
-					else {
-						convert_non_chars(CTX);
-						val.push_back(v);
-					}
-				} else {
-					val.push_back(v);
-				}
-			} else {
-				convert_non_chars(CTX);
-				val.push_back(v);
-			}
-		}
-	}
-
-	virtual void set_tag(value * new_tag) {
-		if (cached_defined && new_tag && !new_tag->defined())
-			cached_defined = 0;
-
-		if (tag) tag->free();
-		if (dynamic_cast<list *>(new_tag) && ((list *)new_tag)->size() == 0)
-			new_tag = NULL;
-		tag = new_tag;
-		if (new_tag) new_tag->use();
-	}
-
-	virtual bool get(context * CTX, frame_item * f, stack_container<value *> * dest) {
-		dest->clear();
-		if (is_of_chars) {
-			for (char s : chars)
-				dest->push_back(new term(string(1,s)));
-		} else
-			for (value * v : val)
-				dest->push_back(v->const_copy(CTX, f));
-		if (tag) {
-			if (dynamic_cast<list *>(tag)) {
-				stack_container<value *> ltag;
-				if (((list *)tag)->get(CTX, f, &ltag)) {
-					for (value * v : ltag)
-						dest->push_back(v->const_copy(CTX, f));
-					return true;
-				}
-				else
-					return false;
-			}
-			dest->push_back(tag->copy(CTX, f));
-			return true;
-		}
-		else return true;
-	}
-
-	virtual bool unify(context * CTX, frame_item * ff, value * from) {
-		cached_defined = -1;
-		if (dynamic_cast<any *>(from)) return true;
-		if (dynamic_cast<var *>(from)) {
-			ff->set(false, CTX, ((var *)from)->get_id(), this);
-			return true;
-		}
-		if (dynamic_cast<list *>(from)) {
-			value * _from = (list *)from;
-			stack_container<value *>::iterator _from_it = ((list *)_from)->val.begin();
-			string::iterator _from_it_s = ((list *)_from)->chars.begin();
-			value * _to = this;
-			stack_container<value *>::iterator _to_it = ((list *)_to)->val.begin();
-			string::iterator _to_it_s = ((list *)_to)->chars.begin();
-
-			while (_from && _to) {
-				bool advanced = false;
-				if (dynamic_cast<list *>(_from))
-					while (dynamic_cast<list *>(_from) && (
-						((list *)_from)->is_of_chars && _from_it_s == ((list *)_from)->chars.end() ||
-						!((list *)_from)->is_of_chars && _from_it == ((list *)_from)->val.end()
-							)) {
-						_from = ((list *)_from)->tag;
-						if (dynamic_cast<list *>(_from)) {
-							_from_it_s = ((list *)_from)->chars.begin();
-							_from_it = ((list *)_from)->val.begin();
-						}
-						advanced = true;
-					}
-				if (dynamic_cast<list *>(_to))
-					while (dynamic_cast<list *>(_to) && (
-						((list *)_to)->is_of_chars && _to_it_s == ((list *)_to)->chars.end() ||
-						!((list *)_to)->is_of_chars && _to_it == ((list *)_to)->val.end()
-						)) {
-							_to = ((list *)_to)->tag;
-							if (dynamic_cast<list *>(_to)) {
-								_to_it_s = ((list *)_to)->chars.begin();
-								_to_it = ((list *)_to)->val.begin();
-							}
-							advanced = true;
-						}
-				if (dynamic_cast<any *>(_from) || dynamic_cast<any *>(_to))
-					return true;
-				if (dynamic_cast<var *>(_from))
-					if (dynamic_cast<list *>(_to))
-						if (((list *)_to)->of_chars())
-							return _from->unify(CTX, ff, ((list *)_to)->const_from(CTX, ff, _to_it_s));
-						else
-							return _from->unify(CTX, ff, ((list *)_to)->const_from(CTX, ff, _to_it));
-					else if (_to)
-						return _from->unify(CTX, ff, _to);
-					else
-						return _from->unify(CTX, ff, new ::list(stack_container<value *>(), NULL));
-				if (dynamic_cast<var *>(_to))
-					if (dynamic_cast<list *>(_from))
-						if (((list *)_from)->of_chars())
-							return _to->unify(CTX, ff, ((list *)_from)->const_from(CTX, ff, _from_it_s));
-						else
-							return _to->unify(CTX, ff, ((list *)_from)->const_from(CTX, ff, _from_it));
-					else if (_from)
-						return _to->unify(CTX, ff, _from);
-					else
-						return _to->unify(CTX, ff, new ::list(stack_container<value *>(), NULL));
-				if (dynamic_cast<list *>(_from) && dynamic_cast<list *>(_to)) {
-					if (((list *)_from)->of_chars() && ((list *)_to)->of_chars())
-						if ((*_to_it_s++)!=(*_from_it_s++))
-							return false;
-						else
-							advanced = true;
-					else if (((list *)_from)->of_chars() != ((list *)_to)->of_chars()) {
-						if (((list *)_from)->of_chars()) {
-							term * fr = new term(string(1, *_from_it_s++));
-							if (!(*_to_it++)->unify(CTX, ff, fr)) {
-								fr->free();
-								return false;
-							} else
-								advanced = true;
-							fr->free();
-						} else {
-							term * t = new term(string(1, *_to_it_s++));
-							if (!(*_from_it++)->unify(CTX, ff, t)) {
-								t->free();
-								return false;
-							}
-							else
-								advanced = true;
-							t->free();
-						}
-					} else
-						if (!(*_to_it++)->unify(CTX, ff, *_from_it++))
-							return false;
-						else
-							advanced = true;
-				}
-				if (!advanced)
-					return _to->unify(CTX, ff, _from);
-			}
-
-			return !_from && !_to;
-		} else
-			return false;
-	}
-	virtual bool defined() {
-		if (cached_defined >= 0)
-			return cached_defined == 1;
-		cached_defined = 1;
-		if (!is_of_chars)
-			for (value * v : val)
-				if (!v->defined()) {
-					cached_defined = 0;
-					return false;
-				}
-		if (tag) {
-			bool result = tag->defined();
-			cached_defined = result ? 1 : 0;
-			return result;
-		}
-		return true;
-	};
-
-	virtual string make_str() {
-		string result;
-		if (is_of_chars) {
-			result = chars;
-		}
-		else
-			for (value * v : val)
-				result += v->make_str();
-		if (tag)
-			result += tag->make_str();
-		return result;
-	}
-
-	virtual string to_str(bool simple = false) {
-		string result;
-
-		int k = 0;
-
-		if (!simple) result += "[";
-		if (is_of_chars) {
-			for (char s : chars) {
-				result += s;
-				k++;
-				if (k < chars.size() || tag && !(dynamic_cast<list *>(tag) && dynamic_cast<list *>(tag)->size() == 0))
-					result += ",";
-			}
-		} else
-			for (value * v : val) {
-				result += v->to_str(false);
-				k++;
-				if (k < val.size() || tag && !(dynamic_cast<list *>(tag) && dynamic_cast<list *>(tag)->size() == 0))
-					result += ",";
-			}
-		if (tag) {
-			result += tag->to_str(true);
-		}
-		if (!simple) result += "]";
-
-		return result;
-	}
-
-	virtual string export_str(bool simple = false, bool double_slashes = true) {
-		string result;
-
-		int k = 0;
-
-		if (!simple) result += "[";
-		if (is_of_chars) {
-			for (char s : chars) {
-				result += string("'") + s + string("'");
-				k++;
-				if (k < chars.size() || tag && !(dynamic_cast<list *>(tag) && dynamic_cast<list *>(tag)->size() == 0))
-					result += ",";
-			}
-		}
-		else
-			for (value * v : val) {
-				result += v->export_str(false, double_slashes);
-				k++;
-				if (k < val.size() || tag && !(dynamic_cast<list *>(tag) && dynamic_cast<list *>(tag)->size() == 0))
-					result += ",";
-			}
-		if (tag) {
-			result += tag->export_str(true, double_slashes);
-		}
-		if (!simple) result += "]";
-
-		return result;
-	}
-};
-
-std::string network::create(::list& nlayers, const std::string& dat_file, ::list& inps, int out) {
-	ostringstream NET;
-
-	NET << "Net file after additional training by the nnets_simplify\n";
-	NET << "-------------------------------------------------------\n";
-
-	NET << inps.size() << "\n\n";
-	NET << dat_file << "\n\n";
-
-	ifstream dat(dat_file);
-
-	if (!dat) return "";
-
-	int _NCC[1024];
-
-	for (int i = 1; i <= inps.size(); i++) {
-		int_number* v = dynamic_cast<int_number*>(inps.get_nth(i, false));
-		if (!v)
-			return "";
-		_NCC[i - 1] = ((int)(0.5 + v->get_value()));
-	}
-
-	std::string line;
-	long double VALS[1024];
-	long double _MMIN[1024];
-	long double _MMAX[1024];
-	long double _NUMIN = 1E300;
-	long double _NUMAX = -1E300;
-	for (int i = 0; i < inps.size(); i++) {
-		_MMIN[i] = 1E300;
-		_MMAX[i] = -1E300;
-	}
-	size_t NR = 0;
-	size_t NC = 0;
-	while (getline(dat, line)) {
-		if (line.length()) {
-			istringstream LINE(line);
-			size_t locNC = 0;
-			while (LINE >> VALS[locNC])
-				locNC++;
-			if (locNC > NC)
-				NC = locNC;
-			for (int j = 0; j < inps.size(); j++) {
-				long double v = VALS[_NCC[j]];
-				if (v < _MMIN[j])
-					_MMIN[j] = v;
-				if (v > _MMAX[j])
-					_MMAX[j] = v;
-			}
-			long double ov = VALS[out];
-			if (ov < _NUMIN)
-				_NUMIN = ov;
-			if (ov > _NUMAX)
-				_NUMAX = ov;
-			NR++;
-		}
-	}
-
-	dat.close();
-
-	if (NC > inps.size() + 1)
-		return "";
-
-	NET << NR << " " << NC << "\n\n";
-
-	for (int i = 1; i <= inps.size(); i++) {
-		if (_NCC[i - 1] >= NC)
-			return "";
-		NET << _NCC[i - 1] << " ";
-	}
-	if (out >= NC)
-		return "";
-	NET << out << "\n\n";
-
-	for (int i = 1; i <= nlayers.size(); i++) {
-		int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(i, false));
-		if (!v)
-			return "";
-		NET << ((int)(0.5 + v->get_value())) << " ";
-	}
-	NET << "\n\n";
-
-	NET << setprecision(15) << 1E300 << "\n\n";
-	for (int i = 0; i < inps.size(); i++)
-		NET << setprecision(15) << _MMIN[i] << " ";
-	NET << "\n";
-	for (int i = 0; i < inps.size(); i++)
-		NET << setprecision(15) << _MMAX[i] << " ";
-	NET << "\n\n";
-	for (int i = 0; i < inps.size(); i++)
-		NET << setprecision(15) << -1 << " ";
-	NET << "\n";
-	for (int i = 0; i < inps.size(); i++)
-		NET << setprecision(15) << +1 << " ";
-	NET << "\n\n";
-	NET << setprecision(15) << _NUMIN << "\n";
-	NET << setprecision(15) << _NUMAX << "\n\n";
-	NET << setprecision(15) << -1 << "\n";
-	NET << setprecision(15) << +1 << "\n\n";
-
-	auto rd = std::random_device{};
-	auto rng = std::default_random_engine{ rd() };
-	std::uniform_real_distribution<double> distribution(-1.0, 1.0);
-
-	int ptr = 0;
-	for (int layer = 0; layer < nlayers.size(); layer++) {
-		int NP;
-		if (layer == 0)
-			NP = inps.size();
-		else {
-			int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(layer, false));
-			if (!v)
-				return "";
-			NP = ((int)(0.5 + v->get_value()));
-		}
-		for (int i = 0; i < NP; i++) {
-			int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(layer + 1, false));
-			if (!v)
-				return "";
-			int _NN = ((int)(0.5 + v->get_value()));
-			for (int j = 0; j < _NN; j++, ptr++)
-				NET << setprecision(15) << distribution(rng) << " ";
-			NET << "\n";
-		}
-		NET << "\n";
-	}
-	ptr = 0;
-	for (int layer = 0; layer < nlayers.size(); layer++) {
-		int_number* v = dynamic_cast<int_number*>(nlayers.get_nth(layer + 1, false));
-		if (!v)
-			return "";
-		int _NN = ((int)(0.5 + v->get_value()));
-		for (int j = 0; j < _NN; j++, ptr++)
-			NET << setprecision(15) << distribution(rng) << " ";
-		NET << "\n\n";
-	}
-
-	return NET.str();
 }
 
 context::context(bool locals_in_forked, bool transactable_facts, predicate_item* forker, int RESERVE, context* parent, tframe_item* tframe,
@@ -3549,7 +1254,7 @@ bool predicate_item_user::processing(context * CONTEXT, bool line_neg, int varia
 
 	bool yes = false;
 
-	predicate* pp = parent ? parent->get_predicate() : NULL;
+	_predicate* pp = parent ? parent->get_predicate() : NULL;
 	if (pp) pp->mark_runned();
 
 	if (prolog->retrieve(CONTEXT, f, user_p->get_clause(variant), *positional_vals, true)) {
@@ -4026,7 +1731,7 @@ string interpreter::serialize_symbolic(void* expression, vector<string>& Vars) {
 		_strcpy(VARS[i], s.length() + 1, s.c_str());
 		i++;
 	}
-	_OUT.reserve(128 * 1024 * 1024);
+	_OUT.reserve(8 * 1024 * 1024);
 	static_cast<ITEM*>(expression)->sprint(VARS, maxPows, &_OUT, true);
 	while (i)
 		delete[] VARS[--i];
@@ -4106,7 +1811,7 @@ void clause::bind(bool starring) {
 	}
 }
 
-predicate::~predicate() {
+_predicate::~_predicate() {
 	for (clause * c : clauses) {
 		delete c;
 	}
@@ -4491,7 +2196,7 @@ public:
 			for (int i = 0; i < t1->get_args().size(); i++)
 				LL.push_back(t1->get_args().at(i)->const_copy(CTX, r));
 
-			::list * L2 = new ::list(LL, NULL);
+			::_list * L2 = new ::_list(LL, NULL);
 
 			if (t2->unify(CTX, r, L2)) {
 				result->push_back(r);
@@ -4505,7 +2210,7 @@ public:
 		}
 		else {
 			value * t1 = dynamic_cast<value *>(positional_vals->at(0));
-			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+			::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 
 			if (!L2 || L2->size() == 0 || !dynamic_cast<term *>(L2->get_nth(1, false))) {
 				std::cout << "=..(term,[term_id,arg1,...,argN]) has incorrect parameters!" << endl;
@@ -4892,7 +2597,7 @@ public:
 						term * t = new term(sObjFactID);
 						t->add_arg(CTX, f, new term(wstring_to_utf8(E->Ident)));
 						t->add_arg(CTX, f, new term(wstring_to_utf8(E->Ref->ClsID)));
-						::list * L = new ::list(stack_container<value *>(), NULL);
+						::_list * L = new ::_list(stack_container<value *>(), NULL);
 						map<wstring, wstring>::iterator it = E->Parameters.begin();
 						while (it != E->Parameters.end()) {
 							term * tL = new term("param");
@@ -5078,7 +2783,7 @@ public:
 				utf8_to_wstring(t1->get_name()),
 				Dir,
 				Contacts);
-			::list * received = new ::list(stack_container<value *>(), NULL);
+			::_list * received = new ::_list(stack_container<value *>(), NULL);
 			for (TContactReg * C : Contacts) {
 				term * t = new ::term("contact");
 				char Buf[128] = { 0 };
@@ -5168,7 +2873,7 @@ public:
 		string new_name = a1->get_name();
 		if (CTX->forked() && (new_name.length() == 0 || new_name[0] != '&')) {
 			new_name.insert(0, 1, '*');
-			::list* L = dynamic_cast<::list*>(r->get(false, CTX, construct_var_name(0, atomizer.get_atom(new_name), '*')));
+			::_list* L = dynamic_cast<::_list*>(r->get(false, CTX, construct_var_name(0, atomizer.get_atom(new_name), '*')));
 			if (L && L->set_nth((int)a2->get_value(), a3->const_copy(CTX, r))) {
 				r->register_write(new_name);
 				result->push_back(r);
@@ -5181,7 +2886,7 @@ public:
 		}
 		else {
 			std::unique_lock<fastmux> glock(prolog->GLOCK);
-			::list* L = dynamic_cast<::list*>(prolog->GVars[a1->get_name()]);
+			::_list* L = dynamic_cast<::_list*>(prolog->GVars[a1->get_name()]);
 			if (L && L->set_nth((int)a2->get_value(), a3->const_copy(CTX, r)))
 				result->push_back(r);
 			else {
@@ -5518,12 +3223,12 @@ public:
 		bool d3 = p.d3;
 
 		if (d1 && d2 && d3 && internal_variant == 0) {
-			::list* L1 = dynamic_cast<::list*>(positional_vals->at(0));
-			::list* L2 = dynamic_cast<::list*>(positional_vals->at(1));
-			::list* L3 = dynamic_cast<::list*>(positional_vals->at(2));
+			::_list* L1 = dynamic_cast<::_list*>(positional_vals->at(0));
+			::_list* L2 = dynamic_cast<::_list*>(positional_vals->at(1));
+			::_list* L3 = dynamic_cast<::_list*>(positional_vals->at(2));
 
 			if (L1 && L2 && L3) {
-				::list* conc = L1->append(CTX, f, L2);
+				::_list* conc = L1->append(CTX, f, L2);
 				frame_item* r = f->copy(CTX);
 				if (conc->unify(CTX, r, L3))
 					result = r;
@@ -5535,12 +3240,12 @@ public:
 			internal_variant++;
 		}
 		if (d1 && d2 && !d3 && internal_variant == 0) {
-			::list* L1 = dynamic_cast<::list*>(positional_vals->at(0));
-			::list* L2 = dynamic_cast<::list*>(positional_vals->at(1));
+			::_list* L1 = dynamic_cast<::_list*>(positional_vals->at(0));
+			::_list* L2 = dynamic_cast<::_list*>(positional_vals->at(1));
 			value* L3 = dynamic_cast<::value*>(positional_vals->at(2));
 
 			if (L1 && L2 && L3) {
-				::list* conc = L1->append(CTX, f, L2);
+				::_list* conc = L1->append(CTX, f, L2);
 				frame_item* r = f->copy(CTX);
 				if (L3->unify(CTX, r, conc))
 					result = r;
@@ -5552,9 +3257,9 @@ public:
 			internal_variant++;
 		}
 		if (d1 && !d2 && d3) {
-			::list* L1 = dynamic_cast<::list*>(positional_vals->at(0));
+			::_list* L1 = dynamic_cast<::_list*>(positional_vals->at(0));
 			value* L2 = dynamic_cast<::value*>(positional_vals->at(1));
-			::list* L3 = dynamic_cast<::list*>(positional_vals->at(2));
+			::_list* L3 = dynamic_cast<::_list*>(positional_vals->at(2));
 
 			if (L1 && L2 && L3 && !result && L1->size() <= L3->size() && internal_variant <= L1->size()) {
 				internal_variant = L1->size();
@@ -5579,8 +3284,8 @@ public:
 		}
 		if (!d1 && d2 && d3) {
 			value* L1 = dynamic_cast<::value*>(positional_vals->at(0));
-			::list* L2 = dynamic_cast<::list*>(positional_vals->at(1));
-			::list* L3 = dynamic_cast<::list*>(positional_vals->at(2));
+			::_list* L2 = dynamic_cast<::_list*>(positional_vals->at(1));
+			::_list* L3 = dynamic_cast<::_list*>(positional_vals->at(2));
 
 			if (L1 && L2 && L3 && !result && L2->size() <= L3->size() && internal_variant <= L3->size() - L2->size()) {
 				internal_variant = L3->size() - L2->size();
@@ -5606,12 +3311,12 @@ public:
 		if (!d1 && !d2 && d3 || !d1 && !d2 && !d3) {
 			value* L1 = dynamic_cast<::value*>(positional_vals->at(0));
 			value* L2 = dynamic_cast<::value*>(positional_vals->at(1));
-			::list* L3 = dynamic_cast<::list*>(positional_vals->at(2));
+			::_list* L3 = dynamic_cast<::_list*>(positional_vals->at(2));
 
 			if (L1 && L2 && L3)
 				for (; !result && internal_variant <= L3->size(); internal_variant++) {
-					value* K1 = new ::list(stack_container<value*>(), NULL);
-					value* K2 = new ::list(stack_container<value*>(), NULL);
+					value* K1 = new ::_list(stack_container<value*>(), NULL);
+					value* K2 = new ::_list(stack_container<value*>(), NULL);
 					L3->const_split(CTX, f, internal_variant, K1, K2);
 
 					frame_item* r = f->copy(CTX);
@@ -5693,8 +3398,8 @@ public:
 		bool d2 = p.d2;
 
 		if (d1 && d2 && internal_variant == 0) {
-			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
-			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+			::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
+			::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 
 			if (L1 && L2) {
 				stack_values LL1;
@@ -5718,7 +3423,7 @@ public:
 		}
 		if (!d1 && d2) {
 			value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
-			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+			::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 
 			if (V1 && L2) {
 				int N = 1 << L2->size();
@@ -5729,7 +3434,7 @@ public:
 						if (internal_variant & mask)
 							SUBSET.push_back(L2->get_nth(i+1, true));
 					}
-					::list * K = new ::list(SUBSET, NULL);
+					::_list * K = new ::_list(SUBSET, NULL);
 
 					frame_item * r = f->copy(CTX);
 
@@ -5952,9 +3657,9 @@ public:
 
 		generated_vars * result = new generated_vars();
 		if (d1 && d2 && d3) {
-			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+			::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 			value * V2 = positional_vals->at(1);
-			::list * L3 = dynamic_cast<::list *>(positional_vals->at(2));
+			::_list * L3 = dynamic_cast<::_list *>(positional_vals->at(2));
 
 			stack_values LL1;
 			frame_item * r = f->copy(CTX);
@@ -5962,7 +3667,7 @@ public:
 				if (!V2->unify(CTX, r, v))
 					LL1.push_back(v->copy(CTX, r));
 			});
-			::list * LL3 = new ::list(LL1, NULL);
+			::_list * LL3 = new ::_list(LL1, NULL);
 
 			if (L3->unify(CTX, r, LL3))
 				result->push_back(r);
@@ -5974,7 +3679,7 @@ public:
 			LL3->free();
 		}
 		if (d1 && d2 && !d3) {
-			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+			::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 			value * V2 = positional_vals->at(1);
 			value * V3 = positional_vals->at(2);
 
@@ -5984,7 +3689,7 @@ public:
 				if (!V2->unify(CTX, r, v))
 					LL1.push_back(v->copy(CTX, r));
 			});
-			::list * LL3 = new ::list(LL1, NULL);
+			::_list * LL3 = new ::_list(LL1, NULL);
 
 			if (V3->unify(CTX, r, LL3))
 				result->push_back(r);
@@ -5998,7 +3703,7 @@ public:
 		if (!d1 && d3 || d1 && !d2 && !d3) {
 			value * A1 = dynamic_cast<::value *>(positional_vals->at(0));
 			value * A2 = dynamic_cast<::value *>(positional_vals->at(1));
-			::list * L3 = dynamic_cast<::list *>(positional_vals->at(2));
+			::_list * L3 = dynamic_cast<::_list *>(positional_vals->at(2));
 
 			frame_item * r = f->copy(CTX);
 
@@ -6040,7 +3745,7 @@ public:
 		generated_vars * result = new generated_vars();
 		if (d1 && d2) {
 			::term * A1 = dynamic_cast<::term *>(positional_vals->at(0));
-			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+			::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 
 			string S2 = L2->make_str();
 
@@ -6055,19 +3760,19 @@ public:
 		}
 		if (d1 && !d2) {
 			::term * A1 = dynamic_cast<::term *>(positional_vals->at(0));
-			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+			::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 			value * L2 = dynamic_cast<::value *>(positional_vals->at(1));
 
 			frame_item * r = f->copy(CTX);
 
-			::list * L = NULL;
+			::_list * L = NULL;
 
 			if (L1 && L1->size() == 0) {
-				L = new ::list("[]", NULL);
+				L = new ::_list("[]", NULL);
 			}
 			else {
 				string S = A1->make_str();
-				L = new ::list(S, NULL);
+				L = new ::_list(S, NULL);
 			}
 
 			if (L2->unify(CTX, r, L))
@@ -6081,7 +3786,7 @@ public:
 		}
 		if (!d1 && d2) {
 			value * A1 = dynamic_cast<::value *>(positional_vals->at(0));
-			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+			::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 
 			frame_item * r = f->copy(CTX);
 
@@ -6123,7 +3828,7 @@ public:
 		generated_vars * result = new generated_vars();
 		if (d1 && d2) {
 			::term * A1 = dynamic_cast<::term *>(positional_vals->at(0));
-			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+			::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 
 			string S2;
 			L2->iterate([&] (value * v) {
@@ -6142,12 +3847,12 @@ public:
 		}
 		if (d1 && !d2) {
 			::term * A1 = dynamic_cast<::term *>(positional_vals->at(0));
-			::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+			::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 			value * L2 = dynamic_cast<::value *>(positional_vals->at(1));
 
 			frame_item * r = f->copy(CTX);
 
-			::list * L = new ::list(stack_container<value *>(), NULL);
+			::_list * L = new ::_list(stack_container<value *>(), NULL);
 
 			if (L1 && L1->size() == 0) {
 				//
@@ -6169,7 +3874,7 @@ public:
 		}
 		if (!d1 && d2) {
 			value * A1 = dynamic_cast<::value *>(positional_vals->at(0));
-			::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+			::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 
 			frame_item * r = f->copy(CTX);
 
@@ -6442,7 +4147,7 @@ public:
 		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
-		::list * L = dynamic_cast<::list *>(positional_vals->at(0));
+		::_list * L = dynamic_cast<::_list *>(positional_vals->at(0));
 		string cmd;
 		unsigned int ret = 0;
 		if (L) {
@@ -6502,7 +4207,7 @@ public:
 		frame_item * r = f->copy(CTX);
 		result->push_back(r);
 
-		::list * L = dynamic_cast<::list *>(positional_vals->at(0));
+		::_list * L = dynamic_cast<::_list *>(positional_vals->at(0));
 		unsigned int ret = 0;
 		string cmd;
 		if (L) {
@@ -6559,7 +4264,7 @@ public:
 			std::cout << "consistency(PrefixesList) indeterminated!" << endl;
 			exit(-3);
 		}
-		::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+		::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 		if (!L1) {
 			std::cout << "consistency(PrefixesList) has incorrect parameter!" << endl;
 			exit(-3);
@@ -6603,7 +4308,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+		::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 
 		if (!L1) {
 			std::cout << "last(L,A) : L is not a list!" << endl;
@@ -6611,7 +4316,7 @@ public:
 		}
 
 		::value * V2 = dynamic_cast<::value *>(positional_vals->at(1));
-		::value * LAST = ((::list *)L1)->get_last(CTX);
+		::value * LAST = ((::_list *)L1)->get_last(CTX);
 
 		if (LAST) {
 			frame_item * r = f->copy(CTX);
@@ -6652,9 +4357,9 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+		::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 		::value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
-		::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+		::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 		::value * V2 = dynamic_cast<::value *>(positional_vals->at(1));
 
 		if (d1 && !L1 || d2 && !L2) {
@@ -6673,7 +4378,7 @@ public:
 		L1->get(CTX, r, &REV1);
 		reverse(REV1.begin(), REV1.end());
 
-		::list * R1 = new ::list(REV1, NULL);
+		::_list * R1 = new ::_list(REV1, NULL);
 
 		if (V2->unify(CTX, r, R1))
 			result->push_back(r);
@@ -6691,7 +4396,7 @@ public:
 class predicate_item_member : public predicate_item {
 	typedef struct {
 		bool d1;
-		::list* L2;
+		::_list* L2;
 	} params;
 	std::map<context*, params> d;
 public:
@@ -6707,7 +4412,7 @@ public:
 		::value * V1 = dynamic_cast<::value *>(positional_vals->at(0));
 
 		lock();
-		::list* L2 = d[CTX].L2;
+		::_list* L2 = d[CTX].L2;
 		unlock();
 
 		for (; !result && internal_variant < L2->size(); internal_variant++) {
@@ -6729,13 +4434,13 @@ public:
 		}
 		params p = { 0 };
 		p.d1 = positional_vals->at(0)->defined();
-		p.L2 = dynamic_cast<::list *>(positional_vals->at(1));
+		p.L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 		if (p.L2)
 			p.L2->use();
 		lock();
 
 		if (d.find(CTX) != d.end()) {
-			::list* L2 = d[CTX].L2;
+			::_list* L2 = d[CTX].L2;
 			if (L2)
 				L2->free();
 		}
@@ -6855,7 +4560,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+		::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 
 		if (!L1) {
 			std::cout << "length(L,A) : L is not a list!" << endl;
@@ -6903,7 +4608,7 @@ public:
 		}
 
 		generated_vars * result = new generated_vars();
-		::list * L1 = dynamic_cast<::list *>(positional_vals->at(0));
+		::_list * L1 = dynamic_cast<::_list *>(positional_vals->at(0));
 
 		if (!L1) {
 			std::cout << "max_list(L,A) : L is not a list!" << endl;
@@ -7038,7 +4743,7 @@ public:
 		::any * ANY1 = dynamic_cast<::any *>(positional_vals->at(0));
 		::var * VAR1 = dynamic_cast<::var *>(positional_vals->at(0));
 		::int_number * NUM1 = dynamic_cast<::int_number *>(positional_vals->at(0));
-		::list * L2 = dynamic_cast<::list *>(positional_vals->at(1));
+		::_list * L2 = dynamic_cast<::_list *>(positional_vals->at(1));
 		::value * V3 = dynamic_cast<::value *>(positional_vals->at(2));
 
 		if (!L2 || !ANY1 && !VAR1 && !NUM1) {
@@ -7281,7 +4986,7 @@ public:
 				_dummy->free();
 			}
 			if (v) t->free();
-			::list * LL = new ::list(L, NULL);
+			::_list * LL = new ::_list(L, NULL);
 			frame_item * ff = f->copy(CTX);
 			if (positional_vals->at(2)->unify(CTX, ff, LL))
 				result->push_back(ff);
@@ -7829,7 +5534,7 @@ public:
 		quoted->add_arg(CTX, ff, new term("true"));
 		stack_container<value *> LL;
 		LL.push_back(quoted);
-		::list * LQ = new ::list(LL, NULL);
+		::_list * LQ = new ::_list(LL, NULL);
 		if (!d1 || !d2 || positional_vals->size() == 3 &&
 					!positional_vals->at(2)->defined()) {
 			std::cout << "write_term(A,[opts])/write(S,A,[opts]) indeterminated!" << endl;
@@ -7887,7 +5592,7 @@ public:
 		quoted->add_arg(CTX, ff, new term("true"));
 		stack_container<value *> LL;
 		LL.push_back(quoted);
-		::list * LQ = new ::list(LL, NULL);
+		::_list * LQ = new ::_list(LL, NULL);
 		if (!d2 || !d3) {
 			std::cout << "write_term_to_atom(A,What,[opts]) indeterminated!" << endl;
 			exit(-3);
@@ -8938,7 +6643,7 @@ public:
 			exit(-3);
 		}
 		nnet* in = dynamic_cast<nnet*>(positional_vals->at(0));
-		::list* x = dynamic_cast<::list*>(positional_vals->at(1));
+		::_list* x = dynamic_cast<::_list*>(positional_vals->at(1));
 		if (x) {
 			if (x->size() == in->nX()) {
 				int i = 0;
@@ -8960,13 +6665,27 @@ public:
 				x = NULL;
 			}
 		}
-		float_number* out = x ? new float_number(in->sim()) : NULL;
-		if (!x || !in || !out || !positional_vals->at(2)->unify(CTX, ff, out)) {
+		if (x && in) {
+			long double res[8192];
+			in->sim(res);
+			stack_container<value*> r;
+			for (unsigned int i = 0; i < in->nY(); i++) {
+				float_number* v = new float_number(in->getY(i));
+				r.push_back(v);
+			}
+			::_list* out = new ::_list(r, NULL);
+			if (!positional_vals->at(2)->unify(CTX, ff, out)) {
+				delete result;
+				result = NULL;
+				delete ff;
+			}
+			if (out) out->free();
+		}
+		else {
 			delete result;
 			result = NULL;
 			delete ff;
 		}
-		if (out) out->free();
 		return result;
 	}
 };
@@ -8980,8 +6699,8 @@ public:
 	virtual const string get_id() { return "nsimplify"; }
 
 	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
-		if (positional_vals->size() != 2 && positional_vals->size() != 3) {
-			std::cout << "nsimplify(IN,OUT) or nsimplify(IN,to_chain,OUT): incorrect number of arguments!" << endl;
+		if (positional_vals->size() != 2 && positional_vals->size() != 3 && positional_vals->size() != 4) {
+			std::cout << "nsimplify(IN,OUT[,maxN]) or nsimplify(IN,to_chain,OUT[,maxN]): incorrect number of arguments!" << endl;
 			exit(-3);
 		}
 		generated_vars* result = new generated_vars();
@@ -8991,27 +6710,92 @@ public:
 
 		bool d1 = positional_vals->at(0)->defined();
 		if (!d1) {
-			std::cout << "nsimplify(IN,OUT) or nsimplify(IN,to_chain,OUT) indeterminated!" << endl;
+			std::cout << "nsimplify(IN,OUT[,maxN]) or nsimplify(IN,to_chain,OUT[,maxN]) indeterminated!" << endl;
 			exit(-3);
 		}
 		nnet* in = dynamic_cast<nnet*>(positional_vals->at(0));
 		if (!in) {
-			std::cout << "nsimplify(IN,OUT) or nsimplify(IN,to_chain,OUT) : IN is not a neural net!" << endl;
+			std::cout << "nsimplify(IN,OUT[,maxN]) or nsimplify(IN,to_chain,OUT[,maxN]) : IN is not a neural net!" << endl;
 			exit(-3);
 		}
 		term* t2 = dynamic_cast<term*>(positional_vals->at(1));
-		bool to_chain = positional_vals->size() == 3 && positional_vals->at(1)->defined() && t2 && t2->get_name() == "to_chain";
+		bool to_chain = positional_vals->size() >= 3 && positional_vals->at(1)->defined() && t2 && t2->get_name() == "to_chain";
 		size_t n3 = positional_vals->size() - 1;
+		int_number* nn = dynamic_cast<int_number*>(positional_vals->at(n3));
+		int maxN = 4;
+		if (nn) {
+			maxN = (int)(0.5 + nn->get_value());
+			n3--;
+		}
 		vector<string> Vars;
 		vector<string> BEST;
 		size_t p = 0;
 		ITEM* r = static_cast<SUM*>(prolog->deserialize_symbolic(in->get_name(), p, Vars));
-		if (r)
-			BEST = in->simplify(to_chain);
+		if (r) {
+			set<std::string> defined;
+			BEST = in->simplify(to_chain, maxN, defined);
+			string preface =
+				"inline auto nsqrt(int * err, double x) {\n"
+				"   if (x < 0.0) { *err = 1; return sqrt(-x); } else return sqrt(x);\n"
+				"}\n"
+				"inline constexpr auto npow(double a, int p) {\n"
+				"	if (p == 0)\n"
+				"		return 1.0;\n"
+				"	else if (p == 1)\n"
+				"		return a;\n"
+				"	else if (p == 2)\n"
+				"		return a * a;\n"
+				"	else if (p == 3)\n"
+				"		return a * a * a;\n"
+				"	else if (p == 4)\n"
+				"		return a * a * a * a;\n"
+				"	else if (p == 5)\n"
+				"		return a * a * a * a * a;\n"
+				"	else if (p == 6)\n"
+				"		return a * a * a * a * a * a;\n"
+				"	else if (p == 7)\n"
+				"		return a * a * a * a * a * a * a;\n"
+				"	else if (p == 8)\n"
+				"		return a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 9)\n"
+				"		return a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 10)\n"
+				"		return a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 11)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 12)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 13)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 14)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 15)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 16)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 17)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 18)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 19)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else if (p == 20)\n"
+				"		return a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a * a;\n"
+				"	else\n"
+				"		return ::pow(a, p);\n"
+				"}\n"
+				"int err = 0;\n";
+			for (const string& var : defined) {
+				preface += "double ";
+				preface += var;
+				preface += ";\n";
+			}
+			BEST[0] = preface + BEST[0];
+		}
 		stack_container<value*> OUT_LIST;
 		for (string V : BEST)
 			OUT_LIST.push_back(new term(V));
-		::list* _out = new ::list(OUT_LIST, NULL);
+		::_list* _out = new ::_list(OUT_LIST, NULL);
 		if (!positional_vals->at(n3)->unify(CTX, ff, _out)) {
 			delete result;
 			result = NULL;
@@ -9032,7 +6816,7 @@ public:
 
 	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
 		if (positional_vals->size() != 5) {
-			std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],Ycol,OUT_FILE): incorrect number of arguments!" << endl;
+			std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],(Ycol|[Ycol1,...,YcolM]),OUT_FILE): incorrect number of arguments!" << endl;
 			exit(-3);
 		}
 		generated_vars* result = new generated_vars();
@@ -9042,19 +6826,35 @@ public:
 
 		for (int i = 0; i < 5; i++)
 			if (!positional_vals->at(i)->defined()) {
-				std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],Ycol,OUT_FILE) indeterminated!" << endl;
+				std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],(Ycol|[Ycol1,...,YcolM]),OUT_FILE) indeterminated!" << endl;
 				exit(-3);
 			}
-		::list* layers = dynamic_cast<::list*>(positional_vals->at(0));
+		::_list* layers = dynamic_cast<::_list*>(positional_vals->at(0));
 		term* dat_file = dynamic_cast<term*>(positional_vals->at(1));
-		::list* inps = dynamic_cast<::list*>(positional_vals->at(2));
+		::_list* inps = dynamic_cast<::_list*>(positional_vals->at(2));
 		int_number* out = dynamic_cast<int_number*>(positional_vals->at(3));
+		::_list* outn = dynamic_cast<::_list*>(positional_vals->at(3));
 		term* out_file = dynamic_cast<term*>(positional_vals->at(4));
-		if (!layers || !dat_file || !inps || !out || !out_file) {
-			std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],Ycol,OUT_FILE) : incorrect arguments types!" << endl;
+		if (!layers || !dat_file || !inps || (!out && !outn) || !out_file) {
+			std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],(Ycol|[Ycol1,...,YcolM]),OUT_FILE) : incorrect arguments types!" << endl;
 			exit(-3);
 		}
-		std::string content = network::create(*layers, dat_file->get_name(), *inps, ((int)(0.5 + out->get_value())));
+		vector<int> outnn;
+		if (out)
+			outnn.push_back(((int)(0.5 + out->get_value())));
+		else
+			outn->iterate(
+				[&](value* v) {
+					int_number* item = dynamic_cast<int_number*>(v);
+					if (item)
+						outnn.push_back(((int)(0.5 + item->get_value())));
+					else {
+						std::cout << "nnetff([N1,...,Nn],DAT_FILE,[Xcol1,...XcolK],(Ycol|[Ycol1,...,YcolM]),OUT_FILE) : [Ycol1,...,YcolK] must contain only in numbers!" << endl;
+						exit(-3);
+					}
+				}
+			);
+		std::string content = network::create(*layers, dat_file->get_name(), *inps, outnn);
 		ofstream _out(out_file->get_name());
 		if (!_out || content.length() == 0) {
 			delete result;
@@ -9063,6 +6863,44 @@ public:
 		}
 		_out << content;
 		_out.close();
+		return result;
+	}
+};
+
+class predicate_item_granularize : public predicate_item {
+public:
+	predicate_item_granularize(bool _neg, bool _once, bool _call, int num, clause* c, interpreter* _prolog) : predicate_item(_neg, _once, _call, num, c, _prolog) {
+		determined = false;
+	}
+
+	virtual const string get_id() { return "granularize"; }
+
+	virtual generated_vars* generate_variants(context* CTX, frame_item* f, vector<value*>*& positional_vals) {
+		if (positional_vals->size() != 2) {
+			std::cout << "granularize(IN, OUT): incorrect number of arguments!" << endl;
+			exit(-3);
+		}
+		generated_vars* result = new generated_vars();
+		frame_item* ff = f->copy(CTX);
+
+		result->push_back(ff);
+
+		if (!positional_vals->at(0)->defined()) {
+			std::cout << "granularize(IN, OUT) indeterminated!" << endl;
+			exit(-3);
+		}
+		nnet* in = dynamic_cast<nnet*>(positional_vals->at(0));
+		nnet* out = dynamic_cast<nnet*>(positional_vals->at(1));
+		if (!in || !out && positional_vals->at(1)->defined()) {
+			std::cout << "granularize(IN, OUT) : incorrect arguments types!" << endl;
+			exit(-3);
+		}
+		nnet * _out = in->granularize();
+		if (!_out || !positional_vals->at(1)->unify(CTX, ff, _out)) {
+			delete result;
+			result = NULL;
+			delete ff;
+		}
 		return result;
 	}
 };
@@ -9511,7 +7349,7 @@ public:
 };
 
 class predicate_item_join : public predicate_item {
-	predicate_item * starred; // Generating predicate
+	predicate_item * starred; // Generating _predicate
 	value* k;
 	bool ending;
 public:
@@ -9933,7 +7771,7 @@ value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex
 				result = new indicator(unescape(st), n);
 		}
 		else if (s[p] == '[') {
-			result = new ::list(stack_container<value *>(), NULL);
+			result = new ::_list(stack_container<value *>(), NULL);
 			p++;
 			bypass_spaces(s, p);
 			size_t oldp = p;
@@ -9947,7 +7785,7 @@ value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex
 					else
 						return NULL;
 				}
-				((::list *)result)->add(CTX, v);
+				((::_list *)result)->add(CTX, v);
 				if (!bypass_spaces(s, p)) {
 					if (exit_on_error) {
 						std::cout << "[" << s.substr(oldp, (size_t)(p - oldp)) << "] : incorrect list!" << endl;
@@ -9977,7 +7815,7 @@ value * interpreter::parse(context * CTX, bool exit_on_error, bool parse_complex
 					else
 						return NULL;
 				}
-				((::list *)result)->set_tag(t);
+				((::_list *)result)->set_tag(t);
 				t->free();
 				if (bypass_spaces(s, p) && s[p] == ']') p++;
 				else {
@@ -10222,7 +8060,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 		frame_item * f, vector<value *> ** positional_vals) {
 	predicate_item_user * user = dynamic_cast<predicate_item_user *>(p);
 
-	predicate* user_p = user ? user->get_user_predicate() : NULL;
+	_predicate* user_p = user ? user->get_user_predicate() : NULL;
 
 	bool context_locals = CONTEXT && CONTEXT->locals_in_forked;
 
@@ -10237,7 +8075,7 @@ bool interpreter::process(context * CONTEXT, bool neg, clause * this_clause, pre
 		CONTEXT->SEQ_END.push(p->get_parent()->get_item(p->get_starred_end()));
 	}
 
-	predicate* pp = this_clause ? this_clause->get_predicate() : NULL;
+	_predicate* pp = this_clause ? this_clause->get_predicate() : NULL;
 	if (pp) pp->mark_runned();
 
 	auto seqDone = [&]() {
@@ -10934,7 +8772,7 @@ string interpreter::parse_clause(context * CTX, vector<string> & renew, frame_it
 
 	result = id;
 
-	predicate * pr = PREDICATES[id];
+	_predicate * pr = PREDICATES[id];
 
 	vector<string>::iterator itr = find(renew.begin(), renew.end(), id);
 	if (itr != renew.end()) {
@@ -10945,7 +8783,7 @@ string interpreter::parse_clause(context * CTX, vector<string> & renew, frame_it
 	}
 
 	if (pr == NULL)
-		PREDICATES[id] = pr = new predicate(id);
+		PREDICATES[id] = pr = new _predicate(id);
 
 	clause * cl = new clause(pr);
 	pr->add_clause(cl);
@@ -11631,6 +9469,9 @@ string interpreter::parse_clause(context * CTX, vector<string> & renew, frame_it
 							else if (_iid == id_nsimplify) {
 								pi = new predicate_item_nsimplify(neg, once, call, num, cl, this);
 							}
+							else if (_iid == id_granularize) {
+								pi = new predicate_item_granularize(neg, once, call, num, cl, this);
+								}
 							else if (_iid == id_nnetff) {
 								pi = new predicate_item_nnetff(neg, once, call, num, cl, this);
 							}
@@ -12009,7 +9850,7 @@ void interpreter::consult(const string & fname, bool renew) {
 
 	vector<string> _renew;
 	if (renew) {
-		map<string, predicate *>::iterator it = PREDICATES.begin();
+		map<string, _predicate *>::iterator it = PREDICATES.begin();
 		while (it != PREDICATES.end()) {
 			_renew.push_back(it->first);
 			it++;
@@ -12021,7 +9862,7 @@ void interpreter::consult(const string & fname, bool renew) {
 }
 
 void interpreter::bind() {
-	map<string, predicate *>::iterator it = PREDICATES.begin();
+	map<string, _predicate *>::iterator it = PREDICATES.begin();
 	while (it != PREDICATES.end()) {
 		it->second->bind(false);
 		it++;
@@ -12098,7 +9939,7 @@ interpreter::~interpreter() {
 		delete ins;
 	}
 
-	map<string, predicate *>::iterator it = PREDICATES.begin();
+	map<string, _predicate *>::iterator it = PREDICATES.begin();
 	while (it != PREDICATES.end()) {
 		delete it->second;
 		it++;
@@ -12184,14 +10025,14 @@ std::basic_fstream<char> & interpreter::get_file(const string & obj, int & fn) {
 bool interpreter::check_consistency(set<string> & dynamic_prefixes) {
 	bool result = true;
 
-	map<string, predicate *>::iterator pit = PREDICATES.begin();
+	map<string, _predicate *>::iterator pit = PREDICATES.begin();
 	while (pit != PREDICATES.end()) {
 		for (int c = 0; c < pit->second->num_clauses(); c++) {
 			clause * cl = pit->second->get_clause(c);
 			for (int i = 0; i < cl->num_items(); i++) {
 				predicate_item_user * pp = dynamic_cast<predicate_item_user *>(cl->get_item(i));
 				if (pp) {
-					map<string, predicate *>::iterator ppit = PREDICATES.find(pp->get_id());
+					map<string, _predicate *>::iterator ppit = PREDICATES.find(pp->get_id());
 					if (ppit == PREDICATES.end() || pp->get_args()->size() != ppit->second->get_clause(0)->get_args()->size()) {
 						set<string>::iterator pref_it = dynamic_prefixes.end();
 						string ppid = pp->get_id();
@@ -12815,33 +10656,6 @@ void clause::add_export(string& result, bool introduce_new_parallelism) {
 		result += ".\n";
 }
 
-#ifndef _MSC_VER
-unsigned long long getTotalSystemMemory()
-{
-	long pages = sysconf(_SC_PHYS_PAGES);
-	long page_size = sysconf(_SC_PAGE_SIZE);
-	return (long long)pages * page_size;
-}
-unsigned int getTotalProcs()
-{
-	return sysconf(_SC_NPROCESSORS_ONLN);
-}
-#else
-unsigned long long getTotalSystemMemory()
-{
-	MEMORYSTATUSEX status = { 0 };
-	status.dwLength = sizeof(status);
-	GlobalMemoryStatusEx(&status);
-	return status.ullTotalPhys;
-}
-unsigned int getTotalProcs()
-{
-	SYSTEM_INFO sysinfo = { 0 };
-	GetSystemInfo(&sysinfo);
-	return sysinfo.dwNumberOfProcessors;
-}
-#endif
-
 int main(int argc, char ** argv) {
 #ifndef _MSC_VER
 	struct rlimit rl = { RLIM_INFINITY, RLIM_INFINITY };
@@ -12889,7 +10703,7 @@ int main(int argc, char ** argv) {
 			frame_item * f = new frame_item();
 			string body;
 
-			map<string, predicate *>::iterator it = prolog.PREDICATES.begin();
+			map<string, _predicate *>::iterator it = prolog.PREDICATES.begin();
 			while (it != prolog.PREDICATES.end()) {
 				renew.push_back(it->first);
 				it++;
@@ -12968,7 +10782,7 @@ int main(int argc, char ** argv) {
 
 		frame_item * f = new frame_item();
 
-		map<string, predicate *>::iterator it = _prolog->PREDICATES.begin();
+		map<string, _predicate *>::iterator it = _prolog->PREDICATES.begin();
 		while (it != _prolog->PREDICATES.end()) {
 			renew.push_back(it->first);
 			it++;

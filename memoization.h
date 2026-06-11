@@ -362,9 +362,11 @@ public:
 #define min(A,B) ((A) < (B) ? (A) : (B))
 #endif
 
+#ifndef _MSC_VER
 bool _isnan(double x) {
 	return std::isnan(x);
 }
+#endif
 
 namespace solve {
    /* LU - разложение  с выбором максимального элемента по диагонали */

@@ -1,5 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
+#include "../prolog_micro_brain.dir/prolog_micro_brain.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -22,8 +24,6 @@
 #endif
 
 using namespace std;
-
-#include "../prolog_micro_brain.dir/prolog_micro_brain.h"
 
 #pragma comment(linker, "/STACK:500000000")
 
@@ -49,8 +49,8 @@ extern "C" {
 		int result = setrlimit(RLIMIT_STACK, &rl);
 		if (result != 0) {
 			std::cout << "setrlimit returned result = " << result << endl;
+			exit(1000);
 		}
-#if defined(__unix__) || defined(__linux__)
 		pthread_attr_t attr;
 		pthread_attr_init(&attr);
 		size_t default_stack_size;
@@ -58,7 +58,6 @@ extern "C" {
 
 		pthread_attr_setstacksize(&attr, 16 * default_stack_size);
 		pthread_setattr_default_np(&attr);
-#endif
 #endif
 
 		setlocale(LC_ALL, "en_US.UTF-8");
@@ -72,7 +71,7 @@ extern "C" {
 
 		frame_item * f = new frame_item();
 
-		map<string, predicate *>::iterator it = _prolog->PREDICATES.begin();
+		map<string, _predicate *>::iterator it = _prolog->PREDICATES.begin();
 		while (it != _prolog->PREDICATES.end()) {
 			renew.push_back(it->first);
 			it++;
@@ -162,7 +161,7 @@ extern "C" {
 			frame_item * f = new frame_item();
 			string body;
 
-			map<string, predicate *>::iterator it = _prolog->PREDICATES.begin();
+			map<string, _predicate *>::iterator it = _prolog->PREDICATES.begin();
 			while (it != _prolog->PREDICATES.end()) {
 				renew.push_back(it->first);
 				it++;

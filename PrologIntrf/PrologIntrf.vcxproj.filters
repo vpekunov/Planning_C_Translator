@@ -27,6 +27,9 @@
     <ClCompile Include="..\prolog_micro_brain.dir\tinyxml2.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\prolog_micro_brain.dir\values.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\prolog_micro_brain.dir\elements.h">
@@ -36,6 +39,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\prolog_micro_brain.dir\tinyxml2.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\prolog_micro_brain.dir\values.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

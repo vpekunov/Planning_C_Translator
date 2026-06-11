@@ -38,19 +38,19 @@ chmod +x *.sh
 cd ./prolog_micro_brain.dir
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Running on a Mac"
-   `ls /opt/homebrew/bin/g++*` -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fopenmp -fpermissive
-   `ls /opt/homebrew/bin/g++*` -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fPIC -fopenmp -fpermissive
+   /opt/homebrew/opt/llvm/bin/clang++ -o prolog_micro_brain values.cpp tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fpermissive -I/opt/homebrew/include -L/opt/homebrew/lib -lmlx -fopenmp
+   /opt/homebrew/opt/llvm/bin/clang++ -c values.cpp tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fPIC -fpermissive -I/opt/homebrew/include -L/opt/homebrew/lib -lmlx -fopenmp
 else
-   g++ -o prolog_micro_brain tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fopenmp -fpermissive
-   g++ -c tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fPIC -fopenmp -fpermissive
+   g++ -o prolog_micro_brain values.cpp tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fopenmp -fpermissive
+   g++ -c values.cpp tinyxml2.cpp elements.cpp prolog_micro_brain.cpp -std=c++17 -O4 -lm -ldl -fPIC -fopenmp -fpermissive
 fi
 cp ./prolog_micro_brain ../
 cd ..
 cd ./PrologIntrf
 if [[ "$OSTYPE" == "darwin"* ]]; then
     echo "Running on a Mac"
-    `ls /opt/homebrew/bin/g++*` -o main.o -c main.cpp -fPIC -O4 -std=c++17 -fpermissive -fopenmp
-    `ls /opt/homebrew/bin/g++*` -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -ldl -fopenmp
+   /opt/homebrew/opt/llvm/bin/clang++ -o main.o main.cpp -fPIC -std=c++17 -O4 -fpermissive -I/opt/homebrew/include -L/opt/homebrew/lib -fopenmp
+   /opt/homebrew/opt/llvm/bin/clang++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -ldl -I/opt/homebrew/include -L/opt/homebrew/lib -lmlx -fopenmp
 else
     g++ -o main.o -c main.cpp -fPIC -O4 -std=c++17 -fpermissive -fopenmp
     g++ -shared -o libPrologIntrf.so main.o ../prolog_micro_brain.dir/*.o -lm -ldl -Wl,--allow-multiple-definition -fopenmp

@@ -25,18 +25,7 @@
 #include <string>
 #include <chrono>
 
-#ifdef _OPENMP
 #include <omp.h>
-#else
-typedef int omp_lock_t;
-void omp_init_lock(omp_lock_t *) { }
-void omp_set_lock(omp_lock_t *) { }
-void omp_unset_lock(omp_lock_t *) { }
-void omp_destroy_lock(omp_lock_t *) { }
-int omp_get_thread_num() { return 0; }
-int omp_get_num_procs() { return 1; }
-double omp_get_wtime() { return std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count(); }
-#endif
 
 static int NPROCS = 1;
 
@@ -1218,20 +1207,22 @@ void MUL::sprint(char ** Vars, int * maxPows, string * Buf, bool insert_pow_op) 
 			}
 		} else {
 			if (fabs(1.0-pows[i]) > 1E-9) {
-				*Buf += "(";
-				*Buf += Vars[vars[i]];
 				char Num[32] = "";
 				_sprintf1(Num, 32, "%Lf", fabs(pows[i]));
 				STRIP(Num);
-				if (insert_pow_op)
-					*Buf += "^";
 				if (!strchr(Num, '.') && !strchr(Num, ','))
 					if (fabs(pows[i]) - maxPows[vars[i]] > 1E-9)
 						maxPows[vars[i]] = (int)(0.5 + fabs(pows[i]));
-				if (pows[i] >= 0.0)
-					_sprintf1(_Buf, 16384*64*16, "%s)", Num);
+				if (insert_pow_op)
+					if (pows[i] >= 0.0)
+						_sprintf2(_Buf, 16384 * 64 * 16, "pow(%s,%s)", Vars[vars[i]], Num);
+					else
+						_sprintf2(_Buf, 16384 * 64 * 16, "(1.0/pow(%s,%s))", Vars[vars[i]], Num);
 				else
-					_sprintf1(_Buf, 16384*64*16, "1.0/(%s))", Num);
+					if (pows[i] >= 0.0)
+						_sprintf2(_Buf, 16384 * 64 * 16, "((%s)^(%s))", Vars[vars[i]], Num);
+					else
+						_sprintf2(_Buf, 16384 * 64 * 16, "(1.0/((%s)^(%s)))", Vars[vars[i]], Num);
 				*Buf += _Buf;
 			} else
 				*Buf += Vars[vars[i]];
