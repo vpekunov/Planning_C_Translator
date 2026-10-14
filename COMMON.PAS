@@ -214,6 +214,7 @@ begin
        S := StringReplace(Copy(Files.Strings[FileIdx[F]],2,255),'"','*',[rfReplaceAll]);
        If (Length(S) > 0) And (S[Length(S)] = '\') Then
           System.Delete(S, Length(S), 1);
+       S := StringReplace(S, '\', '/', [rfReplaceAll]);
        Result := Result + '#line '+IntToStr(LineNum[F])+' "'+S+'"' + CRLF
      End
 end;
