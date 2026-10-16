@@ -1,0 +1,21 @@
+# Planning C Translator temporary files
+_.*
+_*.*
+*.out
+*.info
+*.tmp
+*.temp
+*.log
+
+# Compiler build outputs
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.idb
+
+# OS and Editor files
+.vs/
+.vscode/
+Thumbs.db
+Desktop.ini
